@@ -39,7 +39,7 @@ def _pick(rng: random.Random, seq, used: dict, key: str):
 
 DEFAULT_FRAMING = {"close": {"shot": "Extreme close-up portrait", "lens": "on a wide-angle lens very close to the face",
                              "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word "
-                                     "clearly with wide open mouth movements and jaw motion, natural breathing. No microphone."}}
+                                     "clearly with wide open mouth movements and jaw motion, natural breathing. Both hands stay below the frame."}}
 
 
 def _frame(c: dict, size: str) -> dict:
@@ -87,12 +87,12 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         f = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("angle", "light", "background", "wear")}
         f["light"] = f["light"][:1].upper() + f["light"][1:]
         edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
-        sing = fr["sing"].format(who=c.get("who", "the singer"))
+        sing = fr["sing"].format(who=c.get("who", "the person"))
         sing = sing[0].upper() + sing[1:]
         # the twin of this performer: same person, a different look
         g = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("light", "background", "wear")}
         twin_prompt = " ".join(c["twin"].format(**g).split())
-        out.append({"id": i, "portrait": edit, "artist_edit": True, "sing": sing, "who": c.get("who", "the singer"),
+        out.append({"id": i, "portrait": edit, "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
                     "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],
                                                          "light": g["light"], "background": g["background"]},
                     "size": size, "seed": seed * 1000 + i * 7 + 1})

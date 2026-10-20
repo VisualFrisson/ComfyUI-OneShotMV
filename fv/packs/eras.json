@@ -5,7 +5,7 @@
  "about": "Invented people from every era and corner of the world sing the song in their own setting. Wider shots, glowing bloom, oval gate. Inspired by the Everyone All at Once edit; archetypes only, never real or famous people.",
  "casting": {
   "template": "Cinematic medium close-up of {who}, singing passionately toward the camera with the mouth open mid-word, {background}, {light}, shot on a wide-angle lens slightly below eye level, shallow depth of field. Photorealistic film still, an invented person, natural colour, subtle film grain.",
-  "sing": "{who} sings passionately toward the camera. The lips form each word clearly with open mouth movements and jaw motion, natural breathing, expressive eyebrows and small head movements on the beat. The camera pushes in very slowly. No microphone.",
+  "sing": "{who} sings passionately toward the camera. The lips form each word clearly with open mouth movements and jaw motion, natural breathing, expressive eyebrows and small head movements on the beat. The camera pushes in very slowly. Both hands stay below the frame.",
   "negative": "modern clothing in a period scene, text, watermark, blurry, deformed face, deformed teeth, closed mouth, still frame, microphone, celebrity likeness",
   "people": [
    [
