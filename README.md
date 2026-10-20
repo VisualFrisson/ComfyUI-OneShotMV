@@ -109,7 +109,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
 ## Use it
 
-**In ComfyUI.** Open one of the workflows in `workflows/`:
+**In ComfyUI.** Open one of the example workflows (Workflow → Browse Templates → Frisson Vision, or `example_workflows/`):
 - `FrissonVision_Voice.json`: a song in, the crowd or artist cut out. For the artist pack, un-bypass the Load Image node.
 - `FrissonVision_Motion.json`: a song and a dance clip in.
 - `FrissonVision_Recut.json`: re-cut a finished run with different FX intensity.

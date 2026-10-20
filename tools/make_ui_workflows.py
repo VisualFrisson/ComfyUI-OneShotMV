@@ -4,7 +4,7 @@ import os
 import uuid
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(HERE, "workflows")
+OUT = os.path.join(HERE, "example_workflows")
 
 VOICE_NOTE = """## Frisson Vision: voice
 
