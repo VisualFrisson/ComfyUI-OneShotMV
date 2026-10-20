@@ -161,6 +161,7 @@ def main():
     ap.add_argument("--fx", type=float, default=1.0)
     ap.add_argument("--clips", default="", help="folder holding the run's clips if not run_dir")
     ap.add_argument("--pack", default="", help="override the pack (name or .json path)")
+    ap.add_argument("--delay", type=float, default=None, help="override the lip-sync delay (s)")
     a = ap.parse_args()
     run = a.run_dir
     plan = json.load(open(os.path.join(run, "plan.json"), encoding="utf-8"))
@@ -188,10 +189,20 @@ def main():
     cfg["intensity"] = cfg.get("intensity", 1.0) * a.fx
     for k in ("rgb", "shake"):
         cfg[k] = cfg[k] * sc  # pixel-sized effects scale with the preview
-    if plan.get("mode") == "voice" and plan.get("shots"):
-        beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
-        plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps, plan.get("seed", 1))
+    delay = float(plan.get("sync_delay", formats.PRESETS.get(plan["preset"], {}).get("sync_delay", 0.0))) \
+        if a.delay is None else a.delay
     clipdir = a.clips or run
+    if plan.get("mode") == "voice" and plan.get("shots"):
+        faces = None
+        if pack["edit"].get("match_cut", False):
+            from fv import faces as fz
+            faces = fz.tracks_for_run(clipdir, plan["renders"])
+            print("face tracks:", len(faces))
+        beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
+        plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps,
+                                        plan.get("seed", 1), faces=faces, delay=delay)
+    else:
+        delay = 0.0
     renders = {r["id"]: r for r in plan["renders"]}
     readers = {rid: Reader(os.path.join(clipdir, os.path.basename(r.get("path", "").replace("\\", "/"))), (RW, RH))
                for rid, r in renders.items()}
@@ -201,7 +212,16 @@ def main():
         if r is None or not rd.n:
             alt = r.get("twin_of") if r else None
             return frame_for(alt, t) if alt is not None and readers[alt].n else None
-        return rd.get(int(round((t - r["t_start"]) * r["fps"])))
+        return rd.get(int(round((t - r["t_start"] - delay) * r["fps"])))
+
+    def warp(x, al):
+        if not al:
+            return x
+        sc, ddx, ddy = al
+        h, w = x.shape[:2]
+        cxp, cyp = w / 2, h / 2
+        M = np.array([[1 / sc, 0, cxp - (cxp + ddx * w) / sc], [0, 1 / sc, cyp - (cyp + ddy * h) / sc]], np.float32)
+        return cv2.warpAffine(x, M, (w, h), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REFLECT)
 
     samples = [rd.get(rd.n // 2) for rd in readers.values() if rd.n]
     src = None
@@ -235,9 +255,12 @@ def main():
             j = f - starts[key]
         img = frame_for(ev["render"], t + ev.get("dt", 0.0)) if ev else None
         x = prev if img is None and prev is not None else (img if img is not None else np.zeros((RH, RW, 3), np.float32))
+        if img is not None and ev is not None and ev.get("align"):
+            x = warp(x, ev["align"])
         if ev is not None and ev["kind"] == "ghost" and ev.get("from") is not None:
             other = frame_for(ev["from"], t + ev.get("from_dt", 0.0))
             if other is not None:
+                other = warp(other, ev.get("from_align"))
                 al = cfg.get("ghost", 0.6) * (1 - j / max(1, ev["f1"] - ev["f0"]))
                 x = x * (1 - al) + other * al
         p = fx.fx_params(f, ev, ctl, loud_at(f), cfg, f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps)

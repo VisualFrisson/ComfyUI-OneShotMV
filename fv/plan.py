@@ -135,14 +135,22 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
 
 
 def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: dict, out_fps: float,
-              seed: int) -> list[dict]:
+              seed: int, faces: dict | None = None, delay: float = 0.0) -> list[dict]:
     """The cut. Every shot plays its lead performer (A). Loud shots get the edamame flicker:
     on most beats (and many off-beats) a 3-5 frame insert of another face, then a 2-3 frame
     ghost back to A. Inserts alternate between the shot's pose-matched twin (B: same pose,
     same words) and other performers' clips (sampled mid-clip; at 3-5 frames lip sync is
     invisible, the face change is what reads). Some loud shots hand the second half to B.
 
+    MATCH CUTS (when face tracks are given): every insert is chosen so its face sits where the
+    lead's face is (centre and size), and the assembler nudges it into place (`align`). An insert
+    with no good match is dropped, so fast passages stay readable: fewer flashes, all of them
+    match cuts. `delay` is the clip-to-song sync offset the assembler applies.
+
     Older packs with only `insert_every_beats` keep the original sparse pattern."""
+    import importlib
+    from . import faces as fz
+    fz = importlib.reload(fz)
     rng = random.Random(seed * 7919 + 3)
     edl = []
     dense = "insert_on_beat" in ed
@@ -178,21 +186,32 @@ def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: di
                 if fb < last_end or fb + n > f1 - 1:
                     continue
                 lead = s["B"] if (half is not None and t >= half) else s["A"]
-                use_twin = has_b and lead != s.get("B") and (not same or rng.random() < ed.get("insert_twin_share", 0.5))
-                if use_twin:
-                    src, dt = s["B"], 0.0
-                elif same:
-                    o = rng.choice(same)
-                    o_t0 = o["t_start"] + 0.2
-                    o_t1 = o["t_start"] + o["frames"] / o["fps"] - 0.25
-                    dt = round(o_t0 + (o_t1 - o_t0) * rng.uniform(0.2, 0.8) - fb / out_fps, 4)
-                    src = o["id"]
+                tf = fb / out_fps
+                al = None
+                if faces is not None:
+                    pick = _match_insert(fz, faces, by_id, lead, tf, s, same, has_b, delay, ed, rng)
+                    if pick is None:
+                        continue
+                    src, dt, al = pick
                 else:
-                    continue
-                events.append({"f0": fb, "f1": fb + n, "render": src, "kind": "insert", "dt": dt})
-                g1 = min(f1, fb + n + ghost_n)
-                events.append({"f0": fb + n, "f1": g1, "render": lead, "kind": "ghost", "from": src, "from_dt": dt})
-                last_end = g1
+                    use_twin = has_b and lead != s.get("B") and (not same or rng.random() < ed.get("insert_twin_share", 0.5))
+                    if use_twin:
+                        src, dt = s["B"], 0.0
+                    elif same:
+                        o = rng.choice(same)
+                        o_t0 = o["t_start"] + 0.2
+                        o_t1 = o["t_start"] + o["frames"] / o["fps"] - 0.25
+                        dt = round(o_t0 + (o_t1 - o_t0) * rng.uniform(0.2, 0.8) - tf, 4)
+                        src = o["id"]
+                    else:
+                        continue
+                ins = {"f0": fb, "f1": fb + n, "render": src, "kind": "insert", "dt": dt}
+                gh = {"f0": fb + n, "f1": min(f1, fb + n + ghost_n), "render": lead, "kind": "ghost",
+                      "from": src, "from_dt": dt}
+                if al is not None:
+                    ins["align"] = gh["from_align"] = al
+                events += [ins, gh]
+                last_end = gh["f1"]
         elif has_b:
             hits = [b for b in sb if (beats.index(b) % every) == (every - 1)]
             for b in hits:
@@ -207,6 +226,48 @@ def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: di
             events.append({"f0": fh, "f1": f1, "render": s["B"], "kind": "switch"})
         edl.extend(events)
     return edl
+
+
+def _match_insert(fz, faces, by_id, lead, tf, shot, same, has_b, delay, ed, rng):
+    """(source render, dt, align) for an insert at window time tf, or None if nothing lines up."""
+    lr = by_id[lead]
+    lf = fz.face_at(faces.get(lead), tf - lr["t_start"] - delay)
+    if lf is None:
+        return None
+    thr = ed.get("match_threshold", 0.16)
+    cands = []
+    twin = shot.get("B") if has_b and lead != shot.get("B") else None
+    if twin is not None:
+        tr = by_id[twin]
+        bf = fz.face_at(faces.get(twin), tf - tr["t_start"] - delay)
+        if bf is not None:  # the twin shares the lead's pose by construction: a looser bar
+            cands.append((fz.match_cost(lf, bf) / ed.get("twin_tolerance", 2.0), twin, 0.0, bf, True))
+    for o in same:
+        tr = faces.get(o["id"])
+        if not tr:
+            continue
+        lo = o["t_start"] + 0.25
+        hi = o["t_start"] + o["frames"] / o["fps"] - 0.3
+        best = None
+        x = lo
+        while x <= hi:
+            bf = fz.face_at(tr, x - o["t_start"] - delay)
+            c = fz.match_cost(lf, bf)
+            if best is None or c < best[0]:
+                best = (c, o["id"], round(x - tf, 4), bf, False)
+            x += 0.08
+        if best is not None:
+            cands.append(best)
+    good = [c for c in cands if c[0] <= thr]
+    if not good:
+        return None
+    twins = [c for c in good if c[4]]
+    others = sorted([c for c in good if not c[4]], key=lambda c: c[0])[:3]
+    if twins and (not others or rng.random() < ed.get("insert_twin_share", 0.5)):
+        c = twins[0]
+    else:
+        c = rng.choice(others) if others else twins[0]
+    return c[1], c[2], fz.align(lf, c[3])
 
 
 def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "9:16",

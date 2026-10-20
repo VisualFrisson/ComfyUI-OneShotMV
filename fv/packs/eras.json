@@ -134,7 +134,9 @@
   "pingpong": 0.2,
   "insert_on_beat": 0.5,
   "insert_off_beat": 0.1,
-  "insert_twin_share": 0.5
+  "insert_twin_share": 0.5,
+  "match_cut": true,
+  "match_threshold": 0.16
  },
  "fx": {
   "intensity": 0.85,

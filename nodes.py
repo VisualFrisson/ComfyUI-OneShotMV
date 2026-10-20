@@ -12,10 +12,10 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, finish, formats, fx, graphs, plan, qc, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, plan, qc, stems, dsplan
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, plan, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
 
 
 def _reload():

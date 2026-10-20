@@ -21,9 +21,12 @@ FORMAT_NAMES = list(FORMATS)
 PRESETS = {
     # quality = the user's R8 LTX lip-sync recipe: LTX-2.3 22B dev + distilled LoRA 0.45,
     # three stages (1/4 -> 1/2 -> full), 50 fps.
-    "quality": {"stages": 3, "fps": 50, "engine": "ltx23_r8"},
+    # sync_delay: LTX lip movements lead their audio; measured -0.22 s (n3) and -0.26 s (n8)
+    # peak mouth/vocal cross-correlation over 38 clips. Lips naturally open ~60-80 ms before the
+    # sound, so the clips are shown 0.16 s later to land on the beat of the syllable.
+    "quality": {"stages": 3, "fps": 50, "engine": "ltx23_r8", "sync_delay": 0.16},
     # fast = LTX-2.5 22B distilled, two stages (1/2 -> full), 25 fps.
-    "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled"},
+    "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled", "sync_delay": 0.16},
 }
 PRESET_NAMES = list(PRESETS)
 

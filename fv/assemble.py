@@ -127,11 +127,21 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
 
     # ---- the cut: re-derived from the shots with the pack's current edit settings, so a
     # re-assemble picks up edit changes without re-rendering
+    # lip-sync offset: LTX's mouths lead its audio slightly; show each clip `delay` seconds later
+    delay = float(plan.get("sync_delay", formats.PRESETS.get(plan["preset"], {}).get("sync_delay", 0.0)))
     if plan.get("mode") == "voice" and plan.get("shots") and not plan.get("edl_locked"):
         from . import plan as planner
+        faces = None
+        if pack["edit"].get("match_cut", False):
+            import importlib
+            from . import faces as fz
+            fz = importlib.reload(fz)  # nodes.py's hot reload predates this module
+            faces = fz.tracks_for_run(run_dir, plan["renders"])
         beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
         plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps,
-                                        plan.get("seed", 1))
+                                        plan.get("seed", 1), faces=faces, delay=delay)
+    if plan.get("mode") != "voice":
+        delay = 0.0  # motion clips carry no lip sync
 
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}
@@ -146,7 +156,19 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             if alt is not None and readers[alt].ok:
                 return frame_for(alt, t)
             return None
-        return rd.get(int(round((t - r["t_start"]) * r["fps"])))
+        return rd.get(int(round((t - r["t_start"] - delay) * r["fps"])))
+
+    def warp(x, al):
+        """Scale/shift a frame so its face lands where the lead's face is (see faces.align)."""
+        if not al:
+            return x
+        sc, ddx, ddy = al
+        th = torch.tensor([[[1 / sc, 0.0, -2 * ddx / sc], [0.0, 1 / sc, -2 * ddy / sc]]], dtype=x.dtype,
+                          device=x.device)
+        t4 = x.permute(2, 0, 1)[None]
+        grid = F.affine_grid(th, t4.shape, align_corners=False)
+        return F.grid_sample(t4, grid, mode="bilinear", padding_mode="reflection",
+                             align_corners=False)[0].permute(1, 2, 0)
 
     shots = plan.get("shots", [])
     shot_starts = {int(round(s["t0"] * fps)) for s in shots}
@@ -196,12 +218,15 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             x = prev
         else:
             x = torch.from_numpy(np.ascontiguousarray(img if img is not None else black)).to(device).float() / 255
+            if img is not None and ev is not None and ev.get("align"):
+                x = warp(x, ev["align"])
         if ev is not None and ev["kind"] == "ghost" and ev.get("from") is not None:
             other = frame_for(ev["from"], t + ev.get("from_dt", 0.0))
             if other is not None:
                 n = max(1, ev["f1"] - ev["f0"])
                 a = cfg.get("ghost", 0.6) * (1 - j / n)
                 xo = torch.from_numpy(np.ascontiguousarray(other)).to(device).float() / 255
+                xo = warp(xo, ev.get("from_align"))
                 x = x * (1 - a) + xo * a
         p = fx.fx_params(f, ev, ctl, loud_at(f), cfg, f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps)
         y = fx.apply_fx(x, p, prev)
