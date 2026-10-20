@@ -117,6 +117,10 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
         drums = np.pad(drums, ((0, 0), (pad, 0)))
         vocals = np.pad(vocals, ((0, 0), (pad, 0)))
     ctl = audiofx.controls(mix, sr, plan["song_t0"], plan["song_t1"], fps, drums, vocals, ssr)
+    tlw = plan.get("timeline", {})
+    ctl["beatpulse"] = audiofx.beat_pulses(tlw.get("beats", []), n_out, fps)
+    bar_s = 4 * 60.0 / max(1.0, float(plan.get("tempo") or 120.0))
+    ctl["drop"] = audiofx.drop_mask((tlw.get("drop") or {}).get("time"), bar_s, n_out, fps)
     cfg = dict(pack["fx"])
     cfg["intensity"] = cfg.get("intensity", 1.0) * fx_intensity
 

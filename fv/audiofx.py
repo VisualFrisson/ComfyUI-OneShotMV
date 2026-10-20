@@ -81,6 +81,25 @@ def _smooth_level(x, sr, n_frames, fps, t0, win_s=0.25):
     return np.clip((db - lo) / max(1e-3, hi - lo), 0.0, 1.0)
 
 
+def beat_pulses(beats: list[float], n: int, fps: float, frames: int = 3) -> np.ndarray:
+    """1.0 on the frame of each beat, decaying over `frames` frames (window-relative beats)."""
+    out = np.zeros(n, np.float32)
+    for b in beats:
+        f0 = int(round(b * fps))
+        for k in range(frames):
+            if 0 <= f0 + k < n:
+                out[f0 + k] = max(out[f0 + k], 1.0 - k / frames)
+    return out
+
+
+def drop_mask(drop_t: float | None, bar_s: float, n: int, fps: float, bars: int = 2) -> np.ndarray:
+    out = np.zeros(n, np.float32)
+    if drop_t is not None:
+        a, b = int(round(drop_t * fps)), int(round((drop_t + bars * bar_s) * fps))
+        out[max(0, a):min(n, b)] = 1.0
+    return out
+
+
 def controls(mix: np.ndarray, sr: int, t0: float, t1: float, fps: float,
              drums: np.ndarray | None = None, vocals: np.ndarray | None = None,
              stem_sr: int | None = None) -> dict[str, np.ndarray]:

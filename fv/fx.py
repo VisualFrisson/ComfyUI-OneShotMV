@@ -23,12 +23,18 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
     snare = float(ctl["snare"][f]) if f < len(ctl["snare"]) else 0.0
     hat = float(ctl["hat"][f]) if f < len(ctl["hat"]) else 0.0
     lv = float(ctl["loud"][f]) if f < len(ctl["loud"]) else 0.5
-    flash = 0.18 * cfg["flash"] * snare * lv
-    rgb = 0.45 * cfg["rgb"] * snare
+    pulse = float(ctl["beatpulse"][f]) if "beatpulse" in ctl and f < len(ctl["beatpulse"]) else 0.0
+    drop = float(ctl["drop"][f]) if "drop" in ctl and f < len(ctl["drop"]) else 0.0
+    flash = 0.3 * cfg["flash"] * snare * lv
+    rgb = 0.5 * cfg["rgb"] * snare
     zoom = cfg["zoom"] * kick
     shake = cfg["shake"] * max(kick, snare) * lv
-    bloom = 0.25 * snare * lv
+    bloom = 0.35 * snare * lv
     echo = 0.0
+    if drop > 0 and pulse > 0:  # strobe on every beat right after the drop
+        flash = max(flash, 0.75 * cfg["flash"] * pulse)
+        rgb = max(rgb, cfg["rgb"] * pulse)
+        zoom = max(zoom, cfg["zoom"] * 1.3 * pulse)
     kind = ev["kind"] if ev else "main"
     if kind == "insert":
         n = max(1, ev["f1"] - ev["f0"])
@@ -42,9 +48,10 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
         rgb = max(rgb, cfg["rgb"] * 0.4)
     if shot_start and j < 3:
         a = 1.0 - j / 3.0
-        flash = max(flash, 0.55 * cfg["flash"] * a)
-        rgb = max(rgb, cfg["rgb"] * 0.7 * a)
-        bloom = max(bloom, 0.5 * a)
+        flash = max(flash, 0.9 * cfg["flash"] * a)
+        rgb = max(rgb, cfg["rgb"] * a)
+        bloom = max(bloom, 0.6 * a)
+        zoom = max(zoom, cfg["zoom"] * 0.8 * a)
     if hat > 0.6 and loud:
         echo = max(echo, 0.2 * hat)
     ang = 2 * math.pi * _hash01(f, 1)
