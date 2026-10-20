@@ -159,13 +159,13 @@ def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: di
     ghost_n = int(ed.get("ghost_frames", 3))
     every = max(1, int(ed.get("insert_every_beats", 2)))
     by_id = {r["id"]: r for r in renders}
-    a_pool = [r for r in renders if r["role"] == "A"]
+    a_pool = [r for r in renders if r["role"] == "A" and not r.get("unusable")]
     beat_len = (beats[1] - beats[0]) if len(beats) > 1 else 0.5
     for s in shots:
         f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
         events = [{"f0": f0, "f1": f1, "render": s["A"], "kind": "main"}]
         sb = [b for b in beats if s["t0"] + 0.05 < b < s["t1"] - 0.15]
-        has_b = "B" in s
+        has_b = "B" in s and not by_id.get(s["B"], {}).get("unusable")
         pp = has_b and rng.random() < ed.get("pingpong", 0.0) and len(sb) >= 4
         half = sb[len(sb) // 2] if pp else None
         if dense and s["loud"]:
@@ -328,11 +328,13 @@ def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt:
             "switch_every": switch_every, "performers": n_cast}
 
 
-def motion_edl(shots: list[dict], beats: list[float], ed: dict, out_fps: float, seed: int) -> list[dict]:
+def motion_edl(shots: list[dict], beats: list[float], ed: dict, out_fps: float, seed: int,
+               renders: list[dict] | None = None) -> list[dict]:
     """Motion cut: each segment plays its character; segments with a twin flicker to it on
     beats and off-beats (3-4 frames, then a short ghost back). Same dance, same moment, so
     every flicker is a match cut."""
     rng = random.Random(seed * 104729 + 11)
+    bad = {r["id"] for r in renders or [] if r.get("unusable")}  # twins QC could not save
     fr = ed.get("insert_frames", [3, 4])
     lo, hi = (fr, fr) if isinstance(fr, (int, float)) else (int(fr[0]), int(fr[1]))
     ghost_n = int(ed.get("ghost_frames", 2))
@@ -341,7 +343,7 @@ def motion_edl(shots: list[dict], beats: list[float], ed: dict, out_fps: float, 
     for s in shots:
         f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
         edl.append({"f0": f0, "f1": f1, "render": s["A"], "kind": "main"})
-        if "B" not in s:
+        if "B" not in s or s["B"] in bad:
             continue
         slots = []
         for b in beats:

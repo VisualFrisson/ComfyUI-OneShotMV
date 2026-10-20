@@ -256,8 +256,14 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
         takes = r.setdefault("takes", [])
-        if not any(t["path"] == res["path"] for t in takes):
-            takes.append({k: v for k, v in res.items() if k != "ok"})
+        entry = {k: v for k, v in res.items() if k != "ok"}
+        for t in takes:  # a re-check (new checks, e.g. `cut`) replaces the old verdict on a take
+            if t["path"] == res["path"]:
+                t.clear()
+                t.update(entry)
+                break
+        else:
+            takes.append(entry)
         report.append({"id": r["id"], "role": r["role"], **res})
         if not res["ok"]:
             redo.append(r)
@@ -310,7 +316,14 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
             if takes:
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
-                r["path"] = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]["path"]
+                best = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]
+                r["path"] = best["path"]
+                # a twin only ever appears as a flash, so one that still fails is left out of the
+                # cut rather than flashing a wrong person in (a lead clip has no stand-in and stays)
+                if r["role"] in ("B", "MB") and best.get("fail"):
+                    r["unusable"] = sorted(best["fail"])
+                else:
+                    r.pop("unusable", None)
         if queue and then_assemble and queue_rerolls:
             from . import graphs
             queued = queue_chain_front([graphs.free_memory("before assembly").nodes,

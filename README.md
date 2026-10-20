@@ -20,7 +20,7 @@ The cut, the effects and the finish come from the song itself.
 | Mode | Input | What you get |
 |---|---|---|
 | **Voice** | a song (optionally one photo of the artist) | A crowd of strangers, people from every era, or one artist in a new look every shot. Each sings their line straight to camera. Loud sections flicker between faces on the beat; quiet sections breathe on clean bar cuts. |
-| **Motion** | a song and a dance clip | One choreography, a new character on the beat, faster as the section builds. Every cut is pose-aligned, so it reads as a transformation, not a jump. |
+| **Motion** | a song and a dance clip | One choreography, a new character on the beat, faster as the section builds. Every cut is pose-aligned, so it reads as a transformation, not a jump. A crew dancing behind the lead stays out of it: only the lead dancer's pose guides the render. |
 
 The Director does the whole run from one press of Queue:
 
@@ -90,6 +90,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 | **Frisson Vision: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
 | **Frisson Vision: Finish** | A pack's finish on any frames. |
 | **Frisson Vision: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
+| **Frisson Vision: Lead Dancer Pose** | Keeps only the lead dancer in a DWPose guide (queued by the Director for motion runs). |
 | Load Image / Video / Audio (path), Free Memory | Helpers the Director's jobs use. |
 
 ## Install
