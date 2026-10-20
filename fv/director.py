@@ -1,0 +1,168 @@
+"""The Director: song (+ dance clip) -> analysis, stems, plan, casting -> a queue of ComfyUI jobs.
+
+Jobs are queued grouped by model so each model loads once per run:
+  voice : Krea 2 portraits -> LTX lip-sync renders (A) -> twin keys -> LTX twin renders (B) -> assemble
+  motion: Klein character keys -> LTX pose-guided renders -> assemble
+Every job is also written to <run>/jobs/ so a single shot can be re-rolled by re-queueing it."""
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import os
+import re
+import urllib.request
+
+import numpy as np
+
+from . import beat, casting, formats, graphs, plan as planner, stems
+
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", s).strip("-")[:80]
+
+
+def server_url() -> str:
+    try:
+        from comfy.cli_args import args
+        port = args.port
+    except Exception:
+        port = 8188
+    return f"http://127.0.0.1:{port}"
+
+
+def queue_prompt(graph: dict, url: str | None = None, client_id: str = "frissonvision") -> str:
+    data = json.dumps({"prompt": graph, "client_id": client_id}).encode()
+    req = urllib.request.Request((url or server_url()) + "/prompt", data=data,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read().decode()).get("prompt_id", "")
+
+
+def clip_info(path: str) -> tuple[int, float]:
+    import cv2
+    cap = cv2.VideoCapture(path)
+    n, fps = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
+    cap.release()
+    return n, fps
+
+
+def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pack: str = "crowd",
+           fmt: str = "9:16", preset: str = "quality", seconds: float = 30.0, start: float = -1.0,
+           seed: int = 1, twins: str = "auto", dance_path: str = "", run_name: str = "",
+           queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
+           do_stems: bool = True, queue_assemble: bool = True, log=print) -> dict:
+    stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
+    rel = f"frissonvision/runs/{run_id}"
+    run_dir = os.path.join(out_root, *rel.split("/"))
+    os.makedirs(os.path.join(run_dir, "jobs"), exist_ok=True)
+    stems.write_wav(os.path.join(run_dir, "song.wav"), audio, sr)
+
+    tl = beat.analyze(audio, sr)
+    pk = casting.load_pack(pack)
+    if mode == "voice":
+        p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
+                               twins=None if twins == "auto" else twins)
+    else:
+        if not dance_path or not os.path.exists(dance_path):
+            raise ValueError("motion mode needs a dance clip (dance_video_path)")
+        n, cfps = clip_info(dance_path)
+        p = planner.plan_motion(tl, pk, clip_frames=n, clip_fps=cfps, fmt=fmt, preset=preset,
+                                seconds=seconds, start=start, seed=seed)
+        p["dance_path"] = dance_path
+    log(f"[FrissonVision] {mode} plan: {len(p['renders'])} renders, window {p['song_t0']:.2f}-{p['song_t1']:.2f}s, "
+        f"tempo {p['tempo']}")
+
+    # stems for the window (+1 s margins): vocals drive lip sync, drums drive the FX
+    p["stems_t0"] = max(0.0, p["song_t0"] - 1.0)
+    if do_stems:
+        a0, a1 = int(p["stems_t0"] * sr), int(min(len(audio[0]), (p["song_t1"] + 1.0) * sr))
+        st = stems.separate(audio[:, a0:a1], sr)
+        stems.write_wav(os.path.join(run_dir, "vocals.wav"), st["vocals"], st["sr"])
+        stems.write_wav(os.path.join(run_dir, "drums.wav"), st["drums"], st["sr"])
+        vocal_path = os.path.join(run_dir, "vocals.wav")
+    else:
+        vocal_path = os.path.join(run_dir, "song.wav")
+        p["stems_t0"] = 0.0
+
+    rsize = formats.render_size(fmt, preset)
+    jobs: list[tuple[str, dict]] = []
+    if mode == "voice":
+        cast = casting.cast_voice(pk, p["performers"], seed)
+        s1, s2 = formats.portrait_size(fmt)
+        port = {}
+        need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A" or editor == "qwen"}
+        for c in cast:
+            if c["id"] not in need_portrait:
+                continue
+            name = f"p{c['id']:03d}"
+            jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
+                                                       prefix=f"{rel}/{name}", size1=s1, size2=s2).nodes))
+            port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
+        jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
+        neg = pk["casting"]["negative"]
+        by_id = {r["id"]: r for r in p["renders"]}
+        for r in p["renders"]:
+            r["path"] = os.path.join(run_dir, f"r{r['id']:03d}{r['role']}_00001_.mp4")
+        seek = lambda r: round(r["t_start"] + p["song_t0"] - p["stems_t0"], 4)
+        for r in [r for r in p["renders"] if r["role"] == "A"]:
+            c = cast[r["performer"]]
+            jobs.append((f"r{r['id']:03d}A", graphs.ltx_render(
+                preset=preset, fmt=fmt, key_path=port[r["performer"]], prompt=c["sing"], negative=neg,
+                frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}A",
+                audio_path=vocal_path, audio_seek=seek(r)).nodes))
+        twins_ = [r for r in p["renders"] if r["role"] == "B"]
+        for r in twins_:
+            a = by_id[r["twin_of"]]
+            r["key"] = os.path.join(run_dir, f"k{r['id']:03d}_00001_.png")
+            c = cast[r["performer"]]
+            jobs.append((f"k{r['id']:03d}", graphs.twin_key(
+                video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
+                size=rsize, seed=seed + r["id"], editor=editor,
+                prompt=" ".join(graphs.TWIN_TEXT.format(**c["twin"]).split()) if editor != "qwen" else None).nodes))
+        for r in twins_:
+            a = by_id[r["twin_of"]]
+            c = cast[r["performer"]]
+            jobs.append((f"r{r['id']:03d}B", graphs.ltx_render(
+                preset=preset, fmt=fmt, key_path=r["key"], prompt=c["sing"], negative=neg,
+                frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B",
+                audio_path=vocal_path, audio_seek=seek(r), guide_video=a["path"],
+                guide_strength=guide_strength, guide_face=True).nodes))
+    else:
+        cast = casting.cast_motion(pk, len(pk["casting"]["cast"]), seed)
+        neg = pk["casting"]["negative"]
+        for r in p["renders"]:
+            c = cast[r["performer"] % len(cast)]
+            r["key"] = os.path.join(run_dir, f"k{r['id']:03d}_00001_.png")
+            r["path"] = os.path.join(run_dir, f"r{r['id']:03d}M_00001_.mp4")
+            jobs.append((f"k{r['id']:03d}", graphs.motion_key(
+                video_path=dance_path, start_s=r["src_start"], prompt=c["edit"],
+                prefix=f"{rel}/k{r['id']:03d}", size=rsize, seed=c["seed"]).nodes))
+        for r in p["renders"]:
+            c = cast[r["performer"] % len(cast)]
+            jobs.append((f"r{r['id']:03d}M", graphs.ltx_render(
+                preset=preset, fmt=fmt, key_path=r["key"], prompt=c["video"], negative=neg,
+                frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}M",
+                guide_video=dance_path, guide_start=r["src_start"], guide_strength=guide_strength,
+                guide_face=False, key_strengths=(1.0, 1.0, 1.0) if preset == "quality" else (1.0, 1.0)).nodes))
+    jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
+    assemble_job = ("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes)
+    jobs.append(assemble_job)
+
+    p["cast"] = cast
+    p["run_dir"], p["run_rel"] = run_dir, rel
+    json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
+    for i, (name, g) in enumerate(jobs):
+        json.dump(g, open(os.path.join(run_dir, "jobs", f"{i:03d}_{name}.json"), "w", encoding="utf-8"), indent=1)
+    ids = []
+    if queue:
+        url = server_url()
+        for name, g in jobs:
+            if name == "zz_assemble" and not queue_assemble:
+                continue
+            ids.append(queue_prompt(g, url))
+    summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {preset}\n"
+               f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
+               f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
+               f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
+    return {"run_dir": run_dir, "run_id": run_id, "jobs": len(jobs), "prompt_ids": ids, "summary": summary}

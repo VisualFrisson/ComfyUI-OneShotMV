@@ -1,0 +1,31 @@
+{
+ "1": {
+  "class_type": "LoadAudio",
+  "inputs": {
+   "audio": "song.mp3"
+  }
+ },
+ "2": {
+  "class_type": "FVDirector",
+  "inputs": {
+   "audio": [
+    "1",
+    0
+   ],
+   "mode": "voice",
+   "pack": "crowd",
+   "format": "9:16",
+   "preset": "quality",
+   "seconds": 30.0,
+   "start": -1.0,
+   "seed": 1,
+   "twins": "auto",
+   "queue_renders": true,
+   "dance_video_path": "",
+   "run_name": "",
+   "twin_editor": "qwen",
+   "guide_strength": 1.0,
+   "queue_assemble": true
+  }
+ }
+}

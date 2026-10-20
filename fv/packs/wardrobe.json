@@ -1,0 +1,32 @@
+{
+ "name": "wardrobe",
+ "label": "Wardrobe (one dance, many dancers)",
+ "mode": "motion",
+ "about": "One choreography performed by a new character on every beat: bold outfits, seamless studio colour, hard light. Inspired by the Eat It edit.",
+ "casting": {
+  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
+  "cast": [
+   ["a woman with a sleek black bob wearing an oversized silver puffer jacket and wide black cargo pants", "an empty grey photo studio lit by a hard top light"],
+   ["a young man with long red braids wearing a bright yellow hoodie and baggy orange track pants", "a saturated orange seamless studio backdrop"],
+   ["a tall woman with a shaved head wearing a white tracksuit with red side stripes", "a dim concrete room lit by a single spotlight"],
+   ["a woman wearing a glossy red latex jumpsuit and chunky white sneakers", "a deep red wall with a pink neon light strip"],
+   ["a person with short pink hair wearing a fluffy electric blue faux-fur coat and silver boots", "a dark studio filled with blue haze"],
+   ["a man wearing a black leather jacket, silver chains and baggy light denim", "a white seamless studio with a soft shadow on the floor"],
+   ["a stylized 3D animated cartoon character with big expressive eyes wearing a teal tracksuit", "a colorful toy-like 3D animated room"],
+   ["a woman wearing a sculptural white ruffled dress and black platform boots", "a pale blue studio with low fog on the floor"],
+   ["a man with bleached hair wearing a camo-print oversized jacket and black combat boots", "a black studio with a single red rim light"],
+   ["a woman with long silver hair wearing a mirrored sequin bodysuit", "a purple studio with a disco light reflection on the walls"],
+   ["a dancer in a chrome full-face helmet and a white boiler suit", "an empty white cyclorama lit like a music video"],
+   ["a woman with box braids wearing a lime green windbreaker and baggy black trousers", "a lime green seamless backdrop"],
+   ["a man with a mullet wearing a vintage red track suit and white socks", "a wood-floored dance studio with mirrors behind"],
+   ["a woman wearing a black hooded cloak over a neon pink bodysuit", "a dark warehouse with smoke and a cold top light"],
+   ["a claymation character dancer made of plasticine in a striped sweater", "a handmade miniature clay set"],
+   ["a woman with a red buzz cut wearing a cream knit two-piece and white platform sneakers", "a warm beige studio with a hard sun spot on the wall"]
+  ],
+  "video": "{who} dances energetically, {where}. Same choreography, crisp motion, full body in frame.",
+  "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
+ },
+ "edit": {"switch_every": "2 beats", "twins": "off"},
+ "fx": {"intensity": 1.0, "flash": 0.5, "rgb": 10, "zoom": 0.03, "shake": 4, "ghost": 0.55, "quiet_scale": 0.4},
+ "finish": {"grade_mean": [32.0, 4.0, 2.0], "grade_std": [20.0, 11.0, 12.0], "grade_amount": 0.5, "glow": 0.15, "halation": 0.45, "contrast": 0.35, "saturation": 1.12, "lift": 0.03, "vignette": 0.6, "vignette_shape": 4.0, "grain": 0.05}
+}

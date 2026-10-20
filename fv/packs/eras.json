@@ -1,0 +1,163 @@
+{
+ "name": "eras",
+ "label": "Eras (everyone, all at once)",
+ "mode": "voice",
+ "about": "Invented people from every era and corner of the world sing the song in their own setting. Wider shots, glowing bloom, oval gate. Inspired by the Everyone All at Once edit; archetypes only, never real or famous people.",
+ "casting": {
+  "template": "Cinematic medium close-up of {who}, singing passionately toward the camera with the mouth open mid-word, {background}, {light}, shot on a wide-angle lens slightly below eye level, shallow depth of field. Photorealistic film still, an invented person, natural colour, subtle film grain.",
+  "sing": "{who} sings passionately toward the camera. The lips form each word clearly with open mouth movements and jaw motion, natural breathing, expressive eyebrows and small head movements on the beat. The camera pushes in very slowly. No microphone.",
+  "negative": "modern clothing in a period scene, text, watermark, blurry, deformed face, deformed teeth, closed mouth, still frame, microphone, celebrity likeness",
+  "people": [
+   [
+    "a Roman market trader in a linen tunic with a weathered tan face and short grey hair",
+    "a bustling ancient Roman market with clay amphorae behind",
+    "harsh midday sun"
+   ],
+   [
+    "a medieval queen in an embroidered velvet gown and a simple gold circlet, auburn braids",
+    "a candle-lit stone hall with tapestries behind",
+    "flickering candle light"
+   ],
+   [
+    "a 1920s factory worker in a flat cap and soot-smudged shirt, thick mustache",
+    "a dusty brick factory floor with machinery behind",
+    "shafts of window light through dust"
+   ],
+   [
+    "a Viking sailor with braided blond beard and a wool cloak",
+    "a stormy grey sea and a longship behind",
+    "cold stormy light"
+   ],
+   [
+    "a desert caravan leader in an indigo turban and robes, kohl-lined eyes",
+    "golden sand dunes and camels behind",
+    "low golden-hour sun"
+   ],
+   [
+    "an Edo-period merchant in a dark kimono with a topknot",
+    "a lantern-lit wooden street with paper screens behind",
+    "warm lantern light at dusk"
+   ],
+   [
+    "a 1960s office clerk with a beehive hairdo and cat-eye glasses",
+    "a mid-century office with typewriters behind",
+    "flat fluorescent office light"
+   ],
+   [
+    "a Victorian lamplighter in a bowler hat and long coat with sideburns",
+    "a foggy cobblestone street with gas lamps behind",
+    "blue dusk with warm gas-lamp glow"
+   ],
+   [
+    "a West African griot in a patterned boubou holding a kora",
+    "a village courtyard with mud-brick walls behind",
+    "warm late-afternoon sun"
+   ],
+   [
+    "a 1940s pilot in a leather flight jacket and goggles on the forehead",
+    "a propeller plane on a grass airfield behind",
+    "bright overcast daylight"
+   ],
+   [
+    "a Mughal court poet in a silk jama and jewelled turban",
+    "a carved marble courtyard with arches behind",
+    "soft reflected sunlight"
+   ],
+   [
+    "a Renaissance painter's apprentice with paint-stained hands and curly hair",
+    "a workshop full of canvases and easels behind",
+    "north window light"
+   ],
+   [
+    "a 1980s synth musician with a bleached mullet and shoulder-padded jacket",
+    "a smoky stage with neon tubes behind",
+    "magenta and cyan stage light"
+   ],
+   [
+    "a polar explorer in fur-lined hood with frost in the beard",
+    "a white ice field and a canvas tent behind",
+    "cold blue polar daylight"
+   ],
+   [
+    "a Maasai herder in a red shuka with beaded collars",
+    "a golden savanna with acacia trees behind",
+    "dawn light"
+   ],
+   [
+    "a 1950s diner waitress with a paper cap and red lipstick",
+    "a chrome diner counter with a jukebox behind",
+    "warm neon and tungsten light"
+   ],
+   [
+    "a samurai in lacquered armour without a helmet, hair tied back",
+    "a misty bamboo forest behind",
+    "soft misty morning light"
+   ],
+   [
+    "a Sherpa mountain guide in a bright down jacket, sunburnt cheeks",
+    "snowy Himalayan peaks and prayer flags behind",
+    "crisp high-altitude sun"
+   ],
+   [
+    "a 1970s disco dancer in a sequin halter top with a big afro",
+    "a mirror-ball dance floor behind",
+    "colourful disco spotlights"
+   ],
+   [
+    "an Inca weaver in a woven lliclla shawl and montera hat",
+    "terraced green mountains behind",
+    "bright mountain sunlight"
+   ],
+   [
+    "a 1890s circus ringmaster in a red tailcoat and top hat with a waxed mustache",
+    "a striped big-top tent interior behind",
+    "warm spotlight and haze"
+   ],
+   [
+    "a Byzantine mosaic artist with a dark beard and a simple tunic",
+    "a half-finished gold mosaic wall behind",
+    "glinting candle light on gold"
+   ]
+  ]
+ },
+ "edit": {
+  "loud_threshold": 0.45,
+  "shot_bars_loud": 2,
+  "shot_bars_quiet": 2,
+  "twins": "loud",
+  "insert_every_beats": 2,
+  "insert_frames": 4,
+  "ghost_frames": 4,
+  "pingpong": 0.2
+ },
+ "fx": {
+  "intensity": 0.85,
+  "flash": 0.65,
+  "rgb": 6,
+  "zoom": 0.02,
+  "shake": 2,
+  "ghost": 0.7,
+  "quiet_scale": 0.35
+ },
+ "finish": {
+  "grade_mean": [
+   30.0,
+   2.0,
+   6.0
+  ],
+  "grade_std": [
+   19.0,
+   9.0,
+   12.0
+  ],
+  "grade_amount": 0.7,
+  "glow": 0.3,
+  "halation": 0.6,
+  "contrast": 0.3,
+  "saturation": 1.1,
+  "lift": 0.03,
+  "vignette": 0.75,
+  "vignette_shape": 2.0,
+  "grain": 0.045
+ }
+}

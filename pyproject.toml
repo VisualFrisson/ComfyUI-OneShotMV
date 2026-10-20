@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-frissonvision"
+description = "Frisson Vision: one performance, many performers. Song or dance clip in, beat-cut audio-reactive music video out (Krea 2 + LTX)."
+version = "0.1.0"
+license = { file = "LICENSE" }
+dependencies = ["numpy", "opencv-python", "imageio-ffmpeg"]
+
+[project.urls]
+Repository = "https://github.com/VisualFrisson/frisson-vision"
+
+[tool.comfy]
+PublisherId = "visualfrisson"
+DisplayName = "Frisson Vision"
+Icon = ""

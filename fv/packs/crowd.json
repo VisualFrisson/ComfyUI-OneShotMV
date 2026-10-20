@@ -1,0 +1,148 @@
+{
+ "name": "crowd",
+ "label": "Crowd (close-up faces)",
+ "mode": "voice",
+ "about": "A different stranger sings every line straight into the lens: extreme close-ups, wide lens, flash and practical light against saturated walls. Measured from the edamame AI edit.",
+ "casting": {
+  "template": "Extreme close-up portrait of {who_full}, {detail}, singing straight into the lens with the mouth open mid-word, shot from {angle} on a wide-angle lens very close to the face, {light}, {background}, {wear}, visible pores and natural skin texture. Candid {time} photograph, natural colour, subtle film grain.",
+  "who": [
+   "a young woman",
+   "a young man",
+   "a woman in her thirties",
+   "a man in his thirties",
+   "a young adult woman",
+   "a woman in her forties",
+   "a man in his forties",
+   "an androgynous young person",
+   "a man in his twenties with a thin mustache",
+   "a woman in her twenties"
+  ],
+  "skin": [
+   "pale freckled skin",
+   "olive skin",
+   "deep brown skin",
+   "light brown skin",
+   "warm tan skin",
+   "rosy fair skin",
+   "dark brown skin",
+   "golden brown skin"
+  ],
+  "hair": [
+   "a choppy platinum blonde bob",
+   "dark curly hair",
+   "a shaved head",
+   "long red braids",
+   "a messy black shag cut",
+   "short pink hair",
+   "a slick black ponytail",
+   "a bleached buzz cut",
+   "long wavy brown hair",
+   "tight coils with a bandana",
+   "a wet-look undercut",
+   "copper curls",
+   "blue-black bangs",
+   "a high bun with loose strands"
+  ],
+  "detail": [
+   "tiny silver glitter under the eyes",
+   "gold glitter on the cheekbones",
+   "smudged black eyeliner",
+   "a small silver nose ring",
+   "freckles and a septum ring",
+   "glossy lips and blush",
+   "tiny rhinestones by the eyes",
+   "a gap-toothed grin",
+   "a faint scar on the eyebrow",
+   "pastel blue eyeshadow"
+  ],
+  "angle": [
+   "slightly below",
+   "a low angle",
+   "slightly above",
+   "eye level, tilted",
+   "a high angle looking down"
+  ],
+  "light": [
+   "direct on-camera flash with hard shadows",
+   "warm red practical light from one side",
+   "green-tinted fluorescent light",
+   "a single hot tungsten bulb",
+   "teal and magenta club light",
+   "harsh afternoon sun",
+   "flash mixed with warm ambient light",
+   "blue neon light from below"
+  ],
+  "background": [
+   "saturated teal painted wall behind",
+   "dark red wall behind",
+   "saturated lime green wall behind",
+   "a blurred party crowd behind",
+   "a cracked pastel wall behind",
+   "a bathroom with glossy tiles behind",
+   "a night street with bokeh behind",
+   "a deep blue painted wall behind",
+   "a sticker-covered dorm wall behind",
+   "a mustard yellow wall behind"
+  ],
+  "wear": [
+   "faded denim jacket collar",
+   "a black tank top and thin chain necklace",
+   "a fluffy faux-fur collar",
+   "a vintage track jacket",
+   "an oversized knit sweater",
+   "a mesh top and layered chains",
+   "a leather jacket",
+   "a satin slip top and gold hoops",
+   "a band-free plain black tee",
+   "a sports jersey"
+  ],
+  "time": [
+   "party",
+   "night",
+   "afternoon",
+   "late-night"
+  ],
+  "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. No microphone. No one else in frame.",
+  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
+ },
+ "edit": {
+  "loud_threshold": 0.45,
+  "shot_bars_loud": 2,
+  "shot_bars_quiet": 1,
+  "twins": "loud",
+  "insert_every_beats": 2,
+  "insert_frames": 4,
+  "ghost_frames": 3,
+  "pingpong": 0.35
+ },
+ "fx": {
+  "intensity": 1.0,
+  "flash": 0.55,
+  "rgb": 9,
+  "zoom": 0.035,
+  "shake": 4,
+  "ghost": 0.6,
+  "quiet_scale": 0.25
+ },
+ "finish": {
+  "grade_mean": [
+   27.565,
+   8.682,
+   10.187
+  ],
+  "grade_std": [
+   18.084,
+   12.688,
+   12.765
+  ],
+  "grade_amount": 0.85,
+  "glow": 0.18,
+  "halation": 0.55,
+  "contrast": 0.35,
+  "saturation": 1.15,
+  "lift": 0.035,
+  "vignette": 0.55,
+  "vignette_shape": 4.0,
+  "grain": 0.05
+ }
+}

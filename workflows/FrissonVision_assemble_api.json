@@ -1,0 +1,11 @@
+{
+ "1": {
+  "class_type": "FVAssemble",
+  "inputs": {
+   "run_dir": "",
+   "filename_prefix": "frissonvision/final",
+   "fx_intensity": 1.0,
+   "finish": true
+  }
+ }
+}
