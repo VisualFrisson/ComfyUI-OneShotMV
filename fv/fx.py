@@ -100,7 +100,10 @@ def apply_fx(img, p: dict, prev=None):
     if p["flash"] > 0.01:
         # a hot, warm over-exposure like an on-camera flash: blacks stay deep (no milky
         # white-out), highlights roll off softly and bloom, colour gets a little richer
-        f = p["flash"]
+        # high-key frames (white sets, pale walls) are already near the top: flash them less,
+        # or they burn to a blank white frame
+        lum = float(t.mean())
+        f = p["flash"] * min(1.0, max(0.15, (0.75 - lum) / 0.35))
         t = t * (1 + 1.5 * f)
         t = t * torch.tensor([1 + 0.12 * f, 1 + 0.02 * f, 1 - 0.10 * f], dtype=t.dtype,
                              device=t.device).view(1, 3, 1, 1)

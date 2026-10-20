@@ -71,7 +71,7 @@ def apply_fx(t, p, prev=None):
         hi = np.clip((t.mean(-1, keepdims=True) - 0.55) / 0.45, 0, 1) * t
         t = 1 - (1 - t) * (1 - blur(hi) * p["bloom"] * 1.4)
     if p["flash"] > 0.01:
-        f = p["flash"]
+        f = p["flash"] * min(1.0, max(0.15, (0.75 - float(t.mean())) / 0.35))  # high-key frames: less
         t = t * (1 + 1.5 * f) * np.array([1 + 0.12 * f, 1 + 0.02 * f, 1 - 0.10 * f], np.float32)
         knee = 0.72
         t = np.where(t < knee, t, knee + (1 - knee) * np.tanh((t - knee) / (1 - knee)))
