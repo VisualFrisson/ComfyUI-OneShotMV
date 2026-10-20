@@ -110,14 +110,14 @@
     "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. No microphone. No one else in frame."
    },
    "medium": {
-    "shot": "Medium waist-up shot",
-    "lens": "on a 35mm lens at chest height with the arms and hands visible",
-    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders, arms and hands move with the rhythm, natural breathing. The camera sways gently. Both hands stay empty, holding nothing: no microphone, no props."
+    "shot": "Medium chest-up shot",
+    "lens": "on a 35mm lens at chest height",
+    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders and head move with the rhythm, natural breathing, hands below the frame. The camera sways gently."
    },
    "wide": {
     "shot": "Wide full-body shot",
     "lens": "on a 24mm lens a few meters away",
-    "sing": "Wide handheld shot of {who} singing and moving to the beat, the lips forming the words, body swaying and arms moving with the rhythm. The camera drifts slowly. Both hands stay empty, holding nothing: no microphone, no props."
+    "sing": "Wide handheld shot of {who} singing and dancing loosely to the beat, the lips forming the words, both hands open with fingers spread, arms swinging freely with the rhythm. The camera drifts slowly."
    }
   }
  },
