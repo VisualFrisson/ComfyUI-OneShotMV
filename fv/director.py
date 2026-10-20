@@ -97,7 +97,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 continue
             name = f"p{c['id']:03d}"
             jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
-                                                       prefix=f"{rel}/{name}", size1=s1, size2=s2).nodes))
+                                                       prefix=f"{rel}/{name}", size1=s1, size2=s2,
+                                                       turbo_only=(preset == "fast")).nodes))
             port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
         jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
         neg = pk["casting"]["negative"]

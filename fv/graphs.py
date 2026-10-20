@@ -49,11 +49,16 @@ def _save_video(g, images, fps, prefix, audio=None):
 
 
 # ------------------------------------------------------------------ Krea 2 W5
-def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.40):
+def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.40, turbo_only=False):
+    """Krea 2 W5 hybrid (Turbo composes, RAW + Turbo LoRA redetails). turbo_only=True uses the
+    Turbo model for both passes: one model to load instead of two (the fast preset)."""
     g = Graph()
     turbo = g.add("UNETLoader", unet_name=M["krea_turbo"], weight_dtype="default")
-    raw = g.add("UNETLoader", unet_name=M["krea_raw"], weight_dtype="default")
-    lora = g.add("LoraLoaderModelOnly", model=O(raw), lora_name=M["krea_turbo_lora"], strength_model=0.6)
+    if turbo_only:
+        lora = turbo
+    else:
+        raw = g.add("UNETLoader", unet_name=M["krea_raw"], weight_dtype="default")
+        lora = g.add("LoraLoaderModelOnly", model=O(raw), lora_name=M["krea_turbo_lora"], strength_model=0.6)
     clip = g.add("CLIPLoader", clip_name=M["krea_te"], type="krea2", device="default")
     vae = g.add("VAELoader", vae_name=M["krea_vae"])
     pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
