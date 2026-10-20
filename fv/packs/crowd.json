@@ -112,12 +112,12 @@
    "medium": {
     "shot": "Medium waist-up shot",
     "lens": "on a 35mm lens at chest height with the arms and hands visible",
-    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders, arms and hands move with the rhythm, natural breathing. The camera sways gently. No microphone."
+    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders, arms and hands move with the rhythm, natural breathing. The camera sways gently. Both hands stay empty, holding nothing: no microphone, no props."
    },
    "wide": {
     "shot": "Wide full-body shot",
     "lens": "on a 24mm lens a few meters away",
-    "sing": "Wide handheld shot of {who} singing and moving to the beat, the lips forming the words, body swaying and arms moving with the rhythm. The camera drifts slowly. No microphone."
+    "sing": "Wide handheld shot of {who} singing and moving to the beat, the lips forming the words, body swaying and arms moving with the rhythm. The camera drifts slowly. Both hands stay empty, holding nothing: no microphone, no props."
    }
   }
  },
