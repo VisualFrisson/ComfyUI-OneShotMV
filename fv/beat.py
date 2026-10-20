@@ -281,7 +281,8 @@ def bar_feature_matrix(bar_starts: np.ndarray, end_time: float, feats: Features)
     edges = list(bar_starts) + [end_time]
     rows = []
     for a, b in zip(edges[:-1], edges[1:]):
-        fa, fb = feats.t2f(a), max(feats.t2f(a) + 1, feats.t2f(b))
+        fa = max(0, feats.t2f(a))  # a pickup bar can start before 0 s
+        fb = max(fa + 1, feats.t2f(b))
         fa, fb = min(fa, feats.n - 1), min(fb, feats.n)
         sl = slice(fa, fb)
         rows.append(np.concatenate([
@@ -456,10 +457,12 @@ def analyze(samples, sr: int, beats_per_bar: int = 4, min_section_bars: int = 4,
             sections[di]["is_drop"] = True
             drop = {"section": di, "time": sections[di]["start"], "bar": sections[di]["bar_start"]}
         label_sections(sections)
+        # energy 0..1 on an absolute dB scale below the loudest section (12 dB down = 0), so
+        # two equally loud halves of a song stay "loud" (a min-max scale would call one quiet)
         e = np.array([s["energy"] for s in sections])
-        rng = (e.max() - e.min()) or 1.0
         for s in sections:
-            s["energy"] = round((s["energy"] - e.min()) / rng, 3)
+            s["energy_db"] = round(float(s["energy"] - e.max()), 2)
+            s["energy"] = round(float(np.clip(1.0 + (s["energy"] - e.max()) / 12.0, 0.0, 1.0)), 3)
             s.pop("low", None)
     return {
         "version": 1,

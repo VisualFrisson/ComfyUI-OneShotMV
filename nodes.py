@@ -49,6 +49,37 @@ def _file_ref(path: str) -> dict:
     return {"filename": name, "subfolder": sub.replace(os.sep, "/"), "type": "output"}
 
 
+def _inputs_dir() -> str:
+    d = os.path.join(folder_paths.get_output_directory(), "frissonvision", "inputs")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _save_image_input(image) -> str:
+    """IMAGE tensor -> PNG under output/frissonvision/inputs (named by content, so reruns reuse it)."""
+    import hashlib
+    from PIL import Image
+    arr = (image[0].detach().cpu().float().clamp(0, 1).numpy() * 255 + 0.5).astype(np.uint8)
+    path = os.path.join(_inputs_dir(), f"artist_{hashlib.sha1(arr.tobytes()).hexdigest()[:12]}.png")
+    if not os.path.exists(path):
+        Image.fromarray(arr).save(path)
+    return path
+
+
+def _video_input_path(video) -> str:
+    """VIDEO input -> a file path the render graphs can read."""
+    try:
+        src = video.get_stream_source()
+        if isinstance(src, str) and os.path.exists(src):
+            return src
+    except Exception:
+        pass
+    import time
+    path = os.path.join(_inputs_dir(), f"dance_{int(time.time())}.mp4")
+    video.save_to(path)
+    return path
+
+
 # ------------------------------------------------------------------ loaders
 class FVLoadImagePath:
     """Load an image from a path. Unlike Load Image it does not check the file when the job is
@@ -196,6 +227,10 @@ class FVDirector:
                         "tooltip": "close = close-ups only; mixed = medium and wide shots in quiet stretches"}),
             "artist_image_path": ("STRING", {"default": "",
                                   "tooltip": "One-artist mode: a photo of the singer (uses the artist pack)"}),
+            "artist_image": ("IMAGE", {"tooltip": "One-artist mode: connect a Load Image with the singer's photo "
+                                                  "(instead of artist_image_path)"}),
+            "dance_video": ("VIDEO", {"tooltip": "Motion mode: connect a Load Video with the dance clip "
+                                                 "(instead of dance_video_path)"}),
             "qc_retries": ("INT", {"default": 1, "min": 0, "max": 3,
                            "tooltip": "Check every take (frozen / dead mouth / blown / missing) and re-roll bad ones "
                                       "this many times before the cut; 0 = off"}),
@@ -213,8 +248,12 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="close", artist_image_path="", qc_retries=1):
+            framing="close", artist_image_path="", qc_retries=1, artist_image=None, dance_video=None):
         _reload()
+        if artist_image is not None:
+            artist_image_path = _save_image_input(artist_image)
+        if dance_video is not None:
+            dance_video_path = _video_input_path(dance_video)
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
                               mode=mode, pack=pack, fmt=format, preset=preset, seconds=seconds, start=start,

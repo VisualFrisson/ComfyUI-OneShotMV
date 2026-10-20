@@ -54,6 +54,8 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
         zoom = max(zoom, cfg["zoom"] * 0.8 * a)
     if hat > 0.6 and loud:
         echo = max(echo, 0.2 * hat)
+    if cfg.get("trail"):  # motion trails: the last frames linger behind every move
+        echo = max(echo, cfg["trail"] * (0.6 + 0.4 * max(kick, snare)) * (1.0 if loud else 0.5))
     ang = 2 * math.pi * _hash01(f, 1)
     return {"flash": min(1.0, flash * I), "bloom": min(1.0, bloom * I), "rgb": rgb * I,
             "zoom": zoom * I, "dx": shake * I * math.cos(ang), "dy": shake * I * math.sin(ang),

@@ -69,7 +69,7 @@
   "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
  },
  "edit": {
-  "loud_threshold": 0.45,
+  "loud_threshold": 0.6,
   "shot_bars_loud": 2,
   "shot_bars_quiet": 1,
   "twins": "loud",

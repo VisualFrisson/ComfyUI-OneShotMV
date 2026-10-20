@@ -1,0 +1,113 @@
+{
+ "name": "spotlight",
+ "label": "Spotlight (one stage, costume changes)",
+ "mode": "motion",
+ "about": "One choreography on one dark stage under a single spotlight; the dancer's outfit and identity change on the beat, faster as the section builds, with motion trails. Modelled on the Eat It edit.",
+ "edit": {
+  "switch_every": "accelerate",
+  "twins": "off",
+  "loud_threshold": 0.6
+ },
+ "fx": {
+  "intensity": 1.0,
+  "flash": 0.45,
+  "rgb": 12,
+  "zoom": 0.04,
+  "shake": 3,
+  "ghost": 0.55,
+  "quiet_scale": 0.45,
+  "trail": 0.5
+ },
+ "finish": {
+  "grade_mean": [
+   33.755,
+   2.051,
+   0.841
+  ],
+  "grade_std": [
+   26.451,
+   9.949,
+   14.512
+  ],
+  "grade_amount": 0.7,
+  "glow": 0.14,
+  "halation": 0.5,
+  "contrast": 0.4,
+  "saturation": 1.08,
+  "lift": 0.02,
+  "vignette": 0.65,
+  "vignette_shape": 4.0,
+  "grain": 0.05
+ },
+ "casting": {
+  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
+  "cast": [
+   [
+    "a woman in an oversized white hooded puffer coat and white cargo pants",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a glossy red latex jacket and wide red trousers",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a black leather trench coat and knee-high boots",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a silver metallic bomber jacket and black joggers",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a red sequin bodysuit and black opera gloves",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in an all-black tactical suit with a hood",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a white satin slip dress and chunky black boots",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a long crimson hooded cloak over black clothes",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a chrome mirrored jacket and black leggings",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a black and red motocross suit",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a black mesh top and baggy black parachute pants",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a white quilted jumpsuit and white sneakers",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a ruby red puffer jacket and black shorts",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in a black velvet suit with no shirt",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a woman in a black hooded bodysuit with red stitching",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ],
+   [
+    "a man in an oversized grey hoodie with the hood up and black trousers",
+    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+   ]
+  ],
+  "video": "{who} dances energetically on {where}. Same choreography, crisp motion, full body in frame, hard top light.",
+  "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
+ }
+}

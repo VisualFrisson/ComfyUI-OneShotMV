@@ -121,7 +121,7 @@
   ]
  },
  "edit": {
-  "loud_threshold": 0.45,
+  "loud_threshold": 0.6,
   "shot_bars_loud": 2,
   "shot_bars_quiet": 2,
   "twins": "loud",

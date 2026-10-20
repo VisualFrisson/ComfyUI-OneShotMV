@@ -74,7 +74,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
     if not bars or bars[0] > 0.05:
         bars = [0.0] + bars
     beats = sorted(set(round(b, 4) for b in w["beats"] if 0 <= b < dur))
-    secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.45))
+    secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.6))
     sec_starts = sorted(s["start"] for s in secs)
     rfps = formats.PRESETS[preset]["fps"]
     rng = random.Random(seed)
@@ -221,7 +221,7 @@ def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt:
                               clip_offset=clip_offset)
     t0, t1 = p["window"]
     w = p["timeline"]
-    secs = _sections_with_loudness(w, 0.45)
+    secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.6))
     rfps = formats.PRESETS[preset]["fps"]
     renders = []
     for r in p["renders"]:
