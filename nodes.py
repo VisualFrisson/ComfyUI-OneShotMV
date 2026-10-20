@@ -366,6 +366,26 @@ class FVFinish:
         return (torch.stack(out),)
 
 
+class FVOffloadToCPU:
+    """Keeps a model's weight backups (made when LoRAs are patched in) in system RAM instead of
+    VRAM. With --highvram ComfyUI parks them on the GPU, which doubles a 22B LTX model's
+    footprint once LoRAs are applied; on a 96 GB card that spills into shared memory and
+    sampling runs ~30x slower."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"model": ("MODEL",)}}
+
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, model):
+        m = model.clone()
+        m.offload_device = torch.device("cpu")
+        return (m,)
+
+
 class FVFreeMemory:
     """Unloads every model and clears ComfyUI's cache after this job (asks the server through its
     own /free endpoint). The Director queues one between model groups so RAM stays bounded."""
@@ -406,6 +426,7 @@ class FVFreeMemory:
 
 NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
+    "FVOffloadToCPU": FVOffloadToCPU,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
@@ -417,6 +438,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FVDirector": "Frisson Vision: Director",
     "FVFreeMemory": "Frisson Vision: Free Memory",
+    "FVOffloadToCPU": "Frisson Vision: Weight Backups to RAM",
     "FVAssemble": "Frisson Vision: Assemble",
     "FVFinish": "Frisson Vision: Finish",
     "FVQC": "Frisson Vision: Take QC",

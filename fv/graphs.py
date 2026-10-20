@@ -89,9 +89,20 @@ def artist_portrait(*, artist_path, prompt, seed, prefix, size2, resolution=1024
 
 
 # ------------------------------------------------------------------ LTX models
+def _ram_backups(g, model):
+    """LoRA weight backups to system RAM (see FVOffloadToCPU); skipped on servers without it."""
+    try:
+        import nodes as _comfy_nodes
+        if "FVOffloadToCPU" not in _comfy_nodes.NODE_CLASS_MAPPINGS:
+            return model
+    except Exception:
+        pass
+    return O(g.add("FVOffloadToCPU", model=model))
+
+
 def _ltx23(g, union=False):
     ck = g.add("CheckpointLoaderSimple", ckpt_name=M["ltx23_ckpt"])
-    model = O(ck, 0)
+    model = _ram_backups(g, O(ck, 0))
     if M.get("ltx23_sage"):
         model = O(g.add("PathchSageAttentionKJ", model=model, sage_attention=M["ltx23_sage"],
                         allow_compile=False))
@@ -101,7 +112,7 @@ def _ltx23(g, union=False):
         vs, as_, a2v, v2a = M["ltx23_av_tuner"]
         model = O(g.add("LTX2AttentionTunerPatch", model=model, blocks="", video_scale=vs,
                         audio_scale=as_, audio_to_video_scale=a2v, video_to_audio_scale=v2a,
-                        triton_kernels=True))
+                        triton_kernels=False))
     dsf = 1.0
     if union:
         lo = g.add("LTXICLoRALoaderModelOnly", model=model, lora_name=M["ltx_union_lora"], strength_model=1.0)
@@ -114,7 +125,7 @@ def _ltx23(g, union=False):
 
 def _ltx25(g, union=False):
     unet = g.add("UNETLoader", unet_name=M["ltx25_unet"], weight_dtype="default")
-    model, dsf = O(unet), 1.0
+    model, dsf = _ram_backups(g, O(unet)), 1.0
     if union:
         lo = g.add("LTXICLoRALoaderModelOnly", model=model, lora_name=M["ltx_union_lora"], strength_model=1.0)
         model, dsf = O(lo), O(lo, 1)
