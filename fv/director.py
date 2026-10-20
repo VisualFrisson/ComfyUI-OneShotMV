@@ -235,6 +235,21 @@ def _job_file(run_dir: str, name: str) -> str | None:
     return os.path.join(run_dir, "jobs", hits[0]) if hits else None
 
 
+def _refresh_prompt(g: dict) -> None:
+    """Bring a saved LTX job's prompt up to date before re-rolling it (jobs queued before the
+    continuity sentence existed would otherwise re-roll with the prompt that cut away)."""
+    from . import graphs
+    for node in g.values():
+        if node.get("class_type") != "LTXVConditioning":
+            continue
+        ref = node.get("inputs", {}).get("positive")
+        enc = g.get(str(ref[0])) if isinstance(ref, list) and ref else None
+        if enc and enc.get("class_type") == "CLIPTextEncode":
+            t = enc["inputs"].get("text", "")
+            if isinstance(t, str) and graphs.CONTINUITY not in t:
+                enc["inputs"]["text"] = f"{t.rstrip()} {graphs.CONTINUITY}"
+
+
 def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool = True,
             then_assemble: bool = True, queue_rerolls: bool = True, log=print) -> dict:
     """Check every render of a run; re-roll the bad ones (new seeds) and queue the next QC pass,
@@ -288,6 +303,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             if not jf:
                 continue
             g = _bump(json.load(open(jf, encoding="utf-8")), pass_idx + 1)
+            _refresh_prompt(g)
             tag = f"{name}_t{pass_idx + 1}"
             for node in g.values():
                 ins = node.get("inputs", {})
@@ -314,6 +330,16 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     else:
         for r in p["renders"]:  # best take of each shot
             takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
+            for t in takes:  # takes judged before the cut check existed: judge them again
+                if "jump" not in t and t.get("frames"):
+                    try:
+                        seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
+                        res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
+                                            vocal=vocal, sr=sr or 44100, seek=seek)
+                        t.clear()
+                        t.update({k: v for k, v in res.items() if k != "ok"})
+                    except Exception:
+                        pass
             if takes:
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
                 best = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]

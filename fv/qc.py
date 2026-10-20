@@ -8,6 +8,9 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
              place mid-take (one consecutive-frame difference far above the clip's own typical
              motion; calibrated on n5/n11, where the bad takes jump to 0.24-0.30 and good ones stay
              below 0.16)
+  drift    - voice renders: the shot slides into another one (LTX dissolving from the close-up
+             into a wide shot, often of someone else); over the second half of the clip the face
+             is under 55% of its starting size (bad takes 0.25-0.49, good ones 0.59 and up on n11)
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
@@ -21,7 +24,7 @@ import os
 import numpy as np
 
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
-          "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0}
+          "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55}
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -69,6 +72,29 @@ def _faces(gray):
         return []
     h, w = gray.shape
     return _CASCADE.detectMultiScale(gray, 1.1, 4, minSize=(int(0.12 * min(h, w)),) * 2)
+
+
+def face_widths(frames, n: int = 16) -> list:
+    """Largest face width (fraction of the frame width) at n evenly spaced frames, None if none."""
+    import cv2
+    out = []
+    for k in np.linspace(0, len(frames) - 1, n).round().astype(int):
+        g = cv2.cvtColor(frames[k], cv2.COLOR_BGR2GRAY)
+        fs = _faces(g)
+        out.append(float(max(b[2] for b in fs)) / g.shape[1] if len(fs) else None)
+    return out
+
+
+def drift(widths) -> float | None:
+    """Face size over the second half of the clip relative to its start, or None when there is
+    too little to tell. Needs a face early on and at least three detections in the second half:
+    a face the detector loses (an extreme close-up pushing in, a head turn) is not a drift."""
+    q = max(2, len(widths) // 4)
+    first = [w for w in widths[:q + 1] if w]
+    last = [w for w in widths[len(widths) // 2:] if w]
+    if len(first) < 2 or len(last) < 3:
+        return None
+    return float(np.median(last) / np.median(first))
 
 
 def face_box(frames):
@@ -150,6 +176,11 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     if voice:
         box = face_box(frames)
         r["face"] = box is not None
+        dr = drift(face_widths(frames)) if _CASCADE is not False else None
+        if dr is not None:
+            r["drift"] = round(dr, 3)
+            if dr < THRESH["drift"]:
+                r["fail"].append("drift")
         if box is not None:
             ms = mouth_series(frames, box)
             if ms is not None:
