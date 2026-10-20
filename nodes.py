@@ -185,6 +185,10 @@ class FVDirector:
             "guide_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05}),
             "queue_assemble": ("BOOLEAN", {"default": True,
                                "tooltip": "Also queue the final Assemble (off when a script assembles itself)"}),
+            "framing": (["close", "mixed"], {"default": "close",
+                        "tooltip": "close = close-ups only; mixed = medium and wide shots in quiet stretches"}),
+            "artist_image_path": ("STRING", {"default": "",
+                                  "tooltip": "One-artist mode: a photo of the singer (uses the artist pack)"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -198,14 +202,16 @@ class FVDirector:
         return random.random()
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
-            dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True):
+            dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
+            framing="close", artist_image_path=""):
         _reload()
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
                               mode=mode, pack=pack, fmt=format, preset=preset, seconds=seconds, start=start,
                               seed=seed, twins=twins, dance_path=_resolve(dance_video_path), run_name=run_name,
                               queue=queue_renders, editor=twin_editor, guide_strength=guide_strength,
-                              queue_assemble=queue_assemble)
+                              queue_assemble=queue_assemble, framing=framing,
+                              artist_path=_resolve(artist_image_path) if artist_image_path else "")
         return {"ui": {"text": [res["summary"]]}, "result": (res["summary"], res["run_dir"])}
 
 

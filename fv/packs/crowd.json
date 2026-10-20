@@ -4,7 +4,7 @@
  "mode": "voice",
  "about": "A different stranger sings every line straight into the lens: extreme close-ups, wide lens, flash and practical light against saturated walls. Measured from the edamame AI edit.",
  "casting": {
-  "template": "Extreme close-up portrait of {who_full}, {detail}, singing straight into the lens with the mouth open mid-word, shot from {angle} on a wide-angle lens very close to the face, {light}, {background}, {wear}, visible pores and natural skin texture. Candid {time} photograph, natural colour, subtle film grain.",
+  "template": "{shot} of {who_full}, {detail}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}, {light}, {background}, {wear}, visible pores and natural skin texture. Candid {time} photograph, natural colour, subtle film grain.",
   "who": [
    "a young woman",
    "a young man",
@@ -102,8 +102,24 @@
    "afternoon",
    "late-night"
   ],
-  "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. No microphone. No one else in frame.",
-  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
+  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles",
+  "framing": {
+   "close": {
+    "shot": "Extreme close-up portrait",
+    "lens": "on a wide-angle lens very close to the face",
+    "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. No microphone. No one else in frame."
+   },
+   "medium": {
+    "shot": "Medium waist-up shot",
+    "lens": "on a 35mm lens at chest height with the arms and hands visible",
+    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders, arms and hands move with the rhythm, natural breathing. The camera sways gently. No microphone."
+   },
+   "wide": {
+    "shot": "Wide full-body shot",
+    "lens": "on a 24mm lens a few meters away",
+    "sing": "Wide handheld shot of {who} singing and moving to the beat, the lips forming the words, body swaying and arms moving with the rhythm. The camera drifts slowly. No microphone."
+   }
+  }
  },
  "edit": {
   "loud_threshold": 0.45,

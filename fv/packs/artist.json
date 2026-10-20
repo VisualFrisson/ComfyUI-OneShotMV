@@ -1,0 +1,111 @@
+{
+ "name": "artist",
+ "label": "One artist (from a photo)",
+ "mode": "voice",
+ "about": "The same person sings every line: each shot puts the artist from one reference photo in a new outfit, setting and light (Qwen-Image identity edit); the flash twins are the same artist in a different look, like quick costume changes.",
+ "casting": {
+  "artist": true,
+  "framing": {
+   "close": {
+    "shot": "Extreme close-up portrait",
+    "lens": "on a wide-angle lens very close to the face",
+    "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. No microphone. No one else in frame."
+   },
+   "medium": {
+    "shot": "Medium waist-up shot",
+    "lens": "on a 35mm lens at chest height with the arms and hands visible",
+    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders, arms and hands move with the rhythm, natural breathing. The camera sways gently. No microphone."
+   },
+   "wide": {
+    "shot": "Wide full-body shot",
+    "lens": "on a 24mm lens a few meters away",
+    "sing": "Wide handheld shot of {who} singing and moving to the beat, the lips forming the words, body swaying and arms moving with the rhythm. The camera drifts slowly. No microphone."
+   }
+  },
+  "edit": "Photo of the same person as in image 1. {shot}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}. Wearing {wear}. {light}, {background}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
+  "twin": "Change the outfit to {wear}, the lighting to {light} and the background to {background}. Keep the exact same person with the same face, identity and hair, and the same camera angle, framing, head position, mouth shape and expression. Photorealistic photo.",
+  "who": "the singer",
+  "angle": [
+   "slightly below",
+   "a low angle",
+   "slightly above",
+   "eye level, tilted",
+   "a high angle looking down"
+  ],
+  "light": [
+   "direct on-camera flash with hard shadows",
+   "warm red practical light from one side",
+   "green-tinted fluorescent light",
+   "a single hot tungsten bulb",
+   "teal and magenta club light",
+   "harsh afternoon sun",
+   "flash mixed with warm ambient light",
+   "blue neon light from below"
+  ],
+  "background": [
+   "saturated teal painted wall behind",
+   "dark red wall behind",
+   "saturated lime green wall behind",
+   "a blurred party crowd behind",
+   "a cracked pastel wall behind",
+   "a bathroom with glossy tiles behind",
+   "a night street with bokeh behind",
+   "a deep blue painted wall behind",
+   "a sticker-covered dorm wall behind",
+   "a mustard yellow wall behind"
+  ],
+  "wear": [
+   "faded denim jacket collar",
+   "a black tank top and thin chain necklace",
+   "a fluffy faux-fur collar",
+   "a vintage track jacket",
+   "an oversized knit sweater",
+   "a mesh top and layered chains",
+   "a leather jacket",
+   "a satin slip top and gold hoops",
+   "a band-free plain black tee",
+   "a sports jersey"
+  ],
+  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
+ },
+ "edit": {
+  "loud_threshold": 0.45,
+  "shot_bars_loud": 2,
+  "shot_bars_quiet": 1,
+  "twins": "loud",
+  "insert_every_beats": 2,
+  "insert_frames": 4,
+  "ghost_frames": 3,
+  "pingpong": 0.35
+ },
+ "fx": {
+  "intensity": 1.0,
+  "flash": 0.55,
+  "rgb": 9,
+  "zoom": 0.05,
+  "shake": 4,
+  "ghost": 0.6,
+  "quiet_scale": 0.25
+ },
+ "finish": {
+  "grade_mean": [
+   27.565,
+   8.682,
+   10.187
+  ],
+  "grade_std": [
+   18.084,
+   12.688,
+   12.765
+  ],
+  "grade_amount": 0.85,
+  "glow": 0.18,
+  "halation": 0.55,
+  "contrast": 0.35,
+  "saturation": 1.15,
+  "lift": 0.035,
+  "vignette": 0.55,
+  "vignette_shape": 4.0,
+  "grain": 0.05
+ }
+}

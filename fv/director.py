@@ -50,7 +50,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            fmt: str = "9:16", preset: str = "quality", seconds: float = 30.0, start: float = -1.0,
            seed: int = 1, twins: str = "auto", dance_path: str = "", run_name: str = "",
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
-           do_stems: bool = True, queue_assemble: bool = True, log=print) -> dict:
+           do_stems: bool = True, queue_assemble: bool = True, framing: str = "close",
+           artist_path: str = "", log=print) -> dict:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     rel = f"frissonvision/runs/{run_id}"
@@ -61,8 +62,14 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     tl = beat.analyze(audio, sr)
     pk = casting.load_pack(pack)
     if mode == "voice":
+        if artist_path and pack != "artist":
+            pk = casting.load_pack("artist")
+            pack = "artist"
+        if pk["casting"].get("artist") and not (artist_path and os.path.exists(artist_path)):
+            raise ValueError("the artist pack needs artist_image_path (one photo of the artist)")
         p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
-                               twins=None if twins == "auto" else twins)
+                               twins=None if twins == "auto" else twins, framing=framing)
+        p["artist_path"] = artist_path
     else:
         if not dance_path or not os.path.exists(dance_path):
             raise ValueError("motion mode needs a dance clip (dance_video_path)")
@@ -88,7 +95,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     rsize = formats.render_size(fmt, preset)
     jobs: list[tuple[str, dict]] = []
     if mode == "voice":
-        cast = casting.cast_voice(pk, p["performers"], seed)
+        sizes = ["close"] * p["performers"]
+        for r in p["renders"]:
+            sizes[r["performer"]] = r.get("size", "close")
+        cast = casting.cast_voice(pk, p["performers"], seed, sizes)
         s1, s2 = formats.portrait_size(fmt)
         port = {}
         need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A" or editor == "qwen"}
@@ -96,9 +106,13 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             if c["id"] not in need_portrait:
                 continue
             name = f"p{c['id']:03d}"
-            jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
-                                                       prefix=f"{rel}/{name}", size1=s1, size2=s2,
-                                                       turbo_only=(preset == "fast")).nodes))
+            if c.get("artist_edit"):
+                jobs.append((name, graphs.artist_portrait(artist_path=artist_path, prompt=c["portrait"],
+                                                          seed=c["seed"], prefix=f"{rel}/{name}", size2=s2).nodes))
+            else:
+                jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
+                                                           prefix=f"{rel}/{name}", size1=s1, size2=s2,
+                                                           turbo_only=(preset == "fast")).nodes))
             port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
         jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
         neg = pk["casting"]["negative"]
@@ -120,7 +134,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             jobs.append((f"k{r['id']:03d}", graphs.twin_key(
                 video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
                 size=rsize, seed=seed + r["id"], editor=editor,
-                prompt=" ".join(graphs.TWIN_TEXT.format(**c["twin"]).split()) if editor != "qwen" else None).nodes))
+                prompt=(cast[a["performer"]].get("twin_prompt") if c.get("artist_edit") else
+                        " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None).nodes))
         for r in twins_:
             a = by_id[r["twin_of"]]
             c = cast[r["performer"]]

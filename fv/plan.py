@@ -43,10 +43,28 @@ def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
     return beat.choose_window(tl, seconds, drop_at=0.25, start=start if start >= 0 else None)
 
 
+def assign_framing(shots: list[dict], framing: str, seed: int) -> None:
+    """'close': every shot a close-up (the edamame look). 'mixed': quiet stretches lean wide and
+    medium, loud ones punch in close (with an occasional medium), never the same size twice in
+    a row in quiet sections."""
+    rng = random.Random(seed * 31 + 7)
+    prev = None
+    for k, s in enumerate(shots):
+        if framing != "mixed":
+            s["size"] = "close"
+            continue
+        if s["loud"]:
+            size = "medium" if (rng.random() < 0.25 and prev == "close") else "close"
+        else:
+            size = rng.choice([x for x in ("wide", "medium") if x != prev] or ["wide"])
+        s["size"] = size
+        prev = size
+
+
 def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "quality",
                seconds: float = 30.0, start: float = -1.0, seed: int = 1,
                twins: str | None = None, preroll: float = 0.2, tail: float = 0.12,
-               out_fps: float = 24.0) -> dict:
+               out_fps: float = 24.0, framing: str = "close") -> dict:
     ed = pack["edit"]
     twins = twins or ed.get("twins", "loud")
     t0, t1 = choose(tl, seconds, start)
@@ -82,6 +100,8 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
     if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
         shots[-2]["t1"] = shots.pop()["t1"]
 
+    assign_framing(shots, framing, seed)
+
     # ---- performers + renders
     renders, performers = [], 0
     for si, s in enumerate(shots):
@@ -89,7 +109,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
         r0 = max(-t0, s["t0"] - preroll)  # can't start before the song
         length = formats.ltx_frames(s["t1"] - r0 + tail, rfps)
         a = {"id": len(renders), "shot": si, "role": "A", "performer": performers,
-             "t_start": round(r0, 4), "frames": length, "fps": rfps}
+             "t_start": round(r0, 4), "frames": length, "fps": rfps, "size": s["size"]}
         renders.append(a)
         s["A"] = a["id"]
         performers += 1
@@ -127,7 +147,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
             "seed": seed, "song_t0": t0, "song_t1": t1, "duration": round(dur, 4),
             "out_fps": out_fps, "render_fps": rfps, "tempo": w["tempo"], "timeline": w,
             "sections": secs, "shots": shots, "renders": renders, "edl": edl,
-            "performers": performers, "twins": twins}
+            "performers": performers, "twins": twins, "framing": framing}
 
 
 def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "9:16",

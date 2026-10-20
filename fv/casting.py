@@ -37,29 +37,64 @@ def _pick(rng: random.Random, seq, used: dict, key: str):
     return v
 
 
-def cast_voice(pack: dict, n: int, seed: int) -> list[dict]:
-    """n performers for a voice pack: portrait prompt + singing (video) prompt."""
+DEFAULT_FRAMING = {"close": {"shot": "Extreme close-up portrait", "lens": "on a wide-angle lens very close to the face",
+                             "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word "
+                                     "clearly with wide open mouth movements and jaw motion, natural breathing. No microphone."}}
+
+
+def _frame(c: dict, size: str) -> dict:
+    fr = c.get("framing") or DEFAULT_FRAMING
+    return fr.get(size) or fr.get("close") or next(iter(fr.values()))
+
+
+def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None) -> list[dict]:
+    """n performers for a voice pack: portrait prompt + singing (video) prompt.
+    sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close)."""
     c = pack["casting"]
+    sizes = sizes or ["close"] * n
+    if c.get("artist"):
+        return _cast_artist(c, n, seed, sizes)
     if "people" in c:  # packs of coherent archetypes (who, setting, light)
         return _cast_people(c, n, seed)
     rng, used, out = random.Random(seed), {}, []
     for i in range(n):
+        fr = _frame(c, sizes[i] if i < len(sizes) else "close")
         who = _pick(rng, c["who"], used, "who")
         skin = _pick(rng, c.get("skin", [""]), used, "skin")
         f = {k: _pick(rng, c.get(k, [""]), used, k) for k in
              ("hair", "detail", "angle", "light", "background", "wear", "time")}
         traits = [t for t in (skin, f["hair"]) if t]
         who_full = who + (" with " + " and ".join(traits) if traits else "")
-        portrait = c["template"].format(who_full=who_full, who=who, **f)
+        portrait = c["template"].format(who_full=who_full, who=who, shot=fr["shot"], lens=fr["lens"], **f)
         portrait = " ".join(portrait.replace(" ,", ",").replace(",,", ",").split())
         short = who + (" with " + f["hair"] if f["hair"] else "")
-        sing = c["sing"].format(who=short)
+        sing = (c.get("sing") or fr["sing"]).format(who=short)
         sing = sing[0].upper() + sing[1:]
         twin = {"who": who_full, "detail": (f["detail"][:1].upper() + f["detail"][1:] + ".") if f["detail"] else "",
                 "wear": ("Wearing " + f["wear"] + ".") if f["wear"] else "", "light": f["light"],
                 "background": f["background"]}
         out.append({"id": i, "portrait": portrait, "sing": sing, "who": short, "twin": twin,
-                    "seed": seed * 1000 + i * 7 + 1})
+                    "size": sizes[i] if i < len(sizes) else "close", "seed": seed * 1000 + i * 7 + 1})
+    return out
+
+
+def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
+    """Same person every shot: the portrait is an identity edit of the artist photo."""
+    rng, used, out = random.Random(seed), {}, []
+    for i in range(n):
+        size = sizes[i] if i < len(sizes) else "close"
+        fr = _frame(c, size)
+        f = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("angle", "light", "background", "wear")}
+        edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
+        sing = fr["sing"].format(who=c.get("who", "the singer"))
+        sing = sing[0].upper() + sing[1:]
+        # the twin of this performer: same person, a different look
+        g = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("light", "background", "wear")}
+        twin_prompt = " ".join(c["twin"].format(**g).split())
+        out.append({"id": i, "portrait": edit, "artist_edit": True, "sing": sing, "who": c.get("who", "the singer"),
+                    "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],
+                                                         "light": g["light"], "background": g["background"]},
+                    "size": size, "seed": seed * 1000 + i * 7 + 1})
     return out
 
 

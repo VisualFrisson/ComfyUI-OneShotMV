@@ -78,6 +78,16 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.40, turbo_on
     return g
 
 
+def artist_portrait(*, artist_path, prompt, seed, prefix, size2, resolution=1024):
+    """One-artist mode: the artist photo re-staged by Qwen-Image 2.1 (identity kept)."""
+    g = Graph()
+    ref = g.add("FVLoadImagePath", path=artist_path)
+    out = _qwen21(g, O(ref), prompt, seed=seed, resolution=resolution)
+    out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size2[0], height=size2[1], crop="center"))
+    g.add("SaveImage", images=out, filename_prefix=prefix)
+    return g
+
+
 # ------------------------------------------------------------------ LTX models
 def _ltx23(g, union=False):
     ck = g.add("CheckpointLoaderSimple", ckpt_name=M["ltx23_ckpt"])
