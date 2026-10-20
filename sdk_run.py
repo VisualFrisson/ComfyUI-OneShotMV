@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DIRECTOR = HERE / "workflows" / "FrissonVision_director_api.json"
+DIRECTOR = HERE / "api" / "FrissonVision_director_api.json"
 
 
 def node_id(wf, class_type: str) -> str:
