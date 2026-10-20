@@ -42,6 +42,13 @@ def _resolve(path: str) -> str:
     return os.path.join(folder_paths.get_input_directory(), path)
 
 
+def _file_ref(path: str) -> dict:
+    """A file under the output folder as a ComfyUI ui entry (so API / SDK clients can fetch it)."""
+    rel = os.path.relpath(path, folder_paths.get_output_directory())
+    sub, name = os.path.split(rel)
+    return {"filename": name, "subfolder": sub.replace(os.sep, "/"), "type": "output"}
+
+
 # ------------------------------------------------------------------ loaders
 class FVLoadImagePath:
     """Load an image from a path. Unlike Load Image it does not check the file when the job is
@@ -216,7 +223,9 @@ class FVDirector:
                               queue_assemble=queue_assemble, framing=framing,
                               artist_path=_resolve(artist_image_path) if artist_image_path else "",
                               qc_retries=qc_retries)
-        return {"ui": {"text": [res["summary"]]}, "result": (res["summary"], res["run_dir"])}
+        ui = {"text": [res["summary"]]}
+        ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
+        return {"ui": ui, "result": (res["summary"], res["run_dir"])}
 
 
 class FVAssemble:
@@ -273,7 +282,10 @@ class FVQC:
         return {"required": {"run_dir": ("STRING", {"default": ""}),
                              "pass_index": ("INT", {"default": 0, "min": 0, "max": 9}),
                              "max_passes": ("INT", {"default": 1, "min": 0, "max": 9})},
-                "optional": {"then_assemble": ("BOOLEAN", {"default": True})}}
+                "optional": {"then_assemble": ("BOOLEAN", {"default": True}),
+                             "queue_rerolls": ("BOOLEAN", {"default": True,
+                                               "tooltip": "off = return the re-roll jobs (qcN.json) for an "
+                                                          "SDK client to submit"})}}
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("report",)
@@ -285,11 +297,11 @@ class FVQC:
     def IS_CHANGED(cls, **kw):
         return random.random()
 
-    def run(self, run_dir, pass_index, max_passes, then_assemble=True):
+    def run(self, run_dir, pass_index, max_passes, then_assemble=True, queue_rerolls=True):
         _reload()
         res = director.qc_pass(_resolve(run_dir), pass_idx=pass_index, max_passes=max_passes,
-                               then_assemble=then_assemble)
-        return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
+                               then_assemble=then_assemble, queue_rerolls=queue_rerolls)
+        return {"ui": {"text": [res["message"], _file_ref(res["bundle"])]}, "result": (res["message"],)}
 
 
 class FVFinish:

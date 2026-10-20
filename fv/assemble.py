@@ -125,6 +125,14 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     cfg = dict(pack["fx"])
     cfg["intensity"] = cfg.get("intensity", 1.0) * fx_intensity
 
+    # ---- the cut: re-derived from the shots with the pack's current edit settings, so a
+    # re-assemble picks up edit changes without re-rendering
+    if plan.get("mode") == "voice" and plan.get("shots") and not plan.get("edl_locked"):
+        from . import plan as planner
+        beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
+        plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps,
+                                        plan.get("seed", 1))
+
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}
     readers = {rid: ClipReader(r.get("path", ""), (rw, rh)) for rid, r in renders.items()}
@@ -183,13 +191,13 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
         else:
             j = 0
         rid = ev["render"] if ev else None
-        img = frame_for(rid, t) if rid is not None else None
+        img = frame_for(rid, t + (ev.get("dt", 0.0) if ev else 0.0)) if rid is not None else None
         if img is None and prev is not None:
             x = prev
         else:
             x = torch.from_numpy(np.ascontiguousarray(img if img is not None else black)).to(device).float() / 255
         if ev is not None and ev["kind"] == "ghost" and ev.get("from") is not None:
-            other = frame_for(ev["from"], t)
+            other = frame_for(ev["from"], t + ev.get("from_dt", 0.0))
             if other is not None:
                 n = max(1, ev["f1"] - ev["f0"])
                 a = cfg.get("ghost", 0.6) * (1 - j / n)

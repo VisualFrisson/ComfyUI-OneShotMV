@@ -127,9 +127,15 @@
   "shot_bars_quiet": 1,
   "twins": "loud",
   "insert_every_beats": 2,
-  "insert_frames": 4,
-  "ghost_frames": 3,
-  "pingpong": 0.35
+  "insert_frames": [
+   3,
+   5
+  ],
+  "ghost_frames": 2,
+  "pingpong": 0.35,
+  "insert_on_beat": 0.85,
+  "insert_off_beat": 0.45,
+  "insert_twin_share": 0.5
  },
  "fx": {
   "intensity": 1.0,

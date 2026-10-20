@@ -30,8 +30,13 @@ def server_url() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def queue_prompt(graph: dict, url: str | None = None, client_id: str = "frissonvision") -> str:
-    data = json.dumps({"prompt": graph, "client_id": client_id}).encode()
+def queue_prompt(graph: dict, url: str | None = None, client_id: str = "frissonvision", front: bool = False) -> str:
+    """front=True jumps the queue. ComfyUI runs the *latest* front-queued prompt first, so queue
+    a chain that must run in order with queue_chain_front()."""
+    body = {"prompt": graph, "client_id": client_id}
+    if front:
+        body["front"] = True
+    data = json.dumps(body).encode()
     req = urllib.request.Request((url or server_url()) + "/prompt", data=data,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -44,6 +49,13 @@ def _node_available(name: str) -> bool:
         return name in _comfy_nodes.NODE_CLASS_MAPPINGS
     except Exception:
         return False
+
+
+def queue_chain_front(graphs: list[dict], url: str | None = None) -> list[str]:
+    """Queue graphs at the front of the queue so they run next, in the given order (follow-ups
+    of a run finish before the next run's renders start)."""
+    ids = [queue_prompt(g, url, front=True) for g in reversed(graphs)]
+    return ids[::-1]
 
 
 def clip_info(path: str) -> tuple[int, float]:
@@ -186,6 +198,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"{i:03d}_{name}.json"), "w", encoding="utf-8"), indent=1)
+    # the whole run as one file: an SDK client can submit these itself (renders only; the
+    # client then runs FVQC / FVAssemble), see sdk_run.py
+    json.dump({"run_id": run_id, "run_dir": run_dir, "run_rel": rel,
+               "jobs": [{"name": n, "graph": g} for n, g in jobs if not n.startswith("zz_")]},
+              open(os.path.join(run_dir, "jobs.json"), "w", encoding="utf-8"))
     ids = []
     if queue:
         url = server_url()
@@ -197,7 +214,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
-    return {"run_dir": run_dir, "run_id": run_id, "jobs": len(jobs), "prompt_ids": ids, "summary": summary}
+    return {"run_dir": run_dir, "run_id": run_id, "run_rel": rel, "jobs": len(jobs), "prompt_ids": ids,
+            "summary": summary, "bundle": os.path.join(run_dir, "jobs.json")}
 
 
 # ------------------------------------------------------------------ take QC + re-rolls
@@ -217,7 +235,7 @@ def _job_file(run_dir: str, name: str) -> str | None:
 
 
 def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool = True,
-            then_assemble: bool = True, log=print) -> dict:
+            then_assemble: bool = True, queue_rerolls: bool = True, log=print) -> dict:
     """Check every render of a run; re-roll the bad ones (new seeds) and queue the next QC pass,
     or, when all pass / retries are spent, keep the best take of each shot and queue assembly."""
     from . import qc
@@ -243,7 +261,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if not res["ok"]:
             redo.append(r)
     last = pass_idx >= max_passes or not redo
-    queued = []
+    queued, rerolls = [], []
     if not last:
         by_id = {r["id"]: r for r in p["renders"]}
         redo_ids = {r["id"] for r in redo}
@@ -278,11 +296,12 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                       indent=1)
             jobs.append(g)
         from . import graphs
-        jobs.append(graphs.qc(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes,
-                              then_assemble=then_assemble).nodes)
-        if queue:
-            url = server_url()
-            queued = [queue_prompt(g, url) for g in jobs]
+        rerolls = list(jobs)
+        if queue_rerolls:  # chain the next pass on the server
+            jobs.append(graphs.qc(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes,
+                                  then_assemble=then_assemble).nodes)
+        if queue and queue_rerolls:
+            queued = queue_chain_front(jobs, server_url())
         msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
             f"r{r['id']:03d}{r['role']}" for r in redo)
     else:
@@ -291,11 +310,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             if takes:
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
                 r["path"] = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]["path"]
-        if queue and then_assemble:
+        if queue and then_assemble and queue_rerolls:
             from . import graphs
-            url = server_url()
-            queued = [queue_prompt(graphs.free_memory("before assembly").nodes, url),
-                      queue_prompt(graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes, url)]
+            queued = queue_chain_front([graphs.free_memory("before assembly").nodes,
+                                        graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes],
+                                       server_url())
         bad = [f"r{x['id']:03d}{x['role']}:{'+'.join(x['fail'])}" for x in report if not x["ok"]]
         msg = f"QC pass {pass_idx}: {len(report) - len(bad)}/{len(report)} takes pass" + \
               (f"; kept best take for {', '.join(bad)}" if bad else "") + ("; assembling" if then_assemble else "")
@@ -304,5 +323,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     allq = json.load(open(hist, encoding="utf-8")) if os.path.exists(hist) else []
     allq.append({"pass": pass_idx, "report": report, "message": msg})
     json.dump(allq, open(hist, "w", encoding="utf-8"), indent=1)
+    bundle = os.path.join(run_dir, f"qc{pass_idx}.json")
+    json.dump({"pass": pass_idx, "final": last, "message": msg, "jobs": [{"graph": g} for g in rerolls]},
+              open(bundle, "w", encoding="utf-8"))
     log(f"[FrissonVision] {msg}")
-    return {"message": msg, "report": report, "queued": queued}
+    return {"message": msg, "report": report, "queued": queued, "bundle": bundle, "final": last,
+            "rerolls": len(rerolls)}

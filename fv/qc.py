@@ -118,8 +118,10 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["motion"] = round(motion, 5)
     if motion < THRESH["frozen"]:
         r["fail"].append("frozen")
-    lum = g.reshape(len(g), -1).mean(1)
-    bad = float(((lum > 0.93) | (lum < 0.04)).mean())
+    flat = g.reshape(len(g), -1)
+    lum, det = flat.mean(1), flat.std(1)
+    # blown / black = extreme level AND no picture left (a high-key white-studio shot is fine)
+    bad = float((((lum > 0.93) | (lum < 0.04)) & (det < 0.04)).mean())
     r["exposure_bad"] = round(bad, 3)
     if bad > THRESH["exposure_frac"]:
         r["fail"].append("exposure")

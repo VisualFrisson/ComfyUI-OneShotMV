@@ -23,9 +23,12 @@
    "queue_renders": true,
    "dance_video_path": "",
    "run_name": "",
-   "twin_editor": "qwen",
+   "twin_editor": "klein",
    "guide_strength": 1.0,
-   "queue_assemble": true
+   "queue_assemble": true,
+   "framing": "close",
+   "artist_image_path": "",
+   "qc_retries": 1
   }
  }
 }

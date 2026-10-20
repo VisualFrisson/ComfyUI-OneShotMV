@@ -96,11 +96,19 @@ def apply_fx(img, p: dict, prev=None):
         g = _blur(hi)
         t = 1 - (1 - t) * (1 - g * p["bloom"] * 1.4)
     if p["flash"] > 0.01:
+        # a hot, warm over-exposure like an on-camera flash: blacks stay deep (no milky
+        # white-out), highlights roll off softly and bloom, colour gets a little richer
         f = p["flash"]
-        t = 1 - (1 - t) * (1 - 0.85 * f)          # screen toward white
-        t = t * (1 + 0.6 * f)                     # push exposure
-        g = _blur(t)
-        t = 1 - (1 - t) * (1 - g * f * 0.8)       # glow
+        t = t * (1 + 1.5 * f)
+        t = t * torch.tensor([1 + 0.12 * f, 1 + 0.02 * f, 1 - 0.10 * f], dtype=t.dtype,
+                             device=t.device).view(1, 3, 1, 1)
+        knee = 0.72
+        t = torch.where(t < knee, t, knee + (1 - knee) * torch.tanh((t - knee) / (1 - knee)))
+        hi = torch.clamp((t.mean(1, keepdim=True) - 0.55) / 0.45, 0, 1) * t
+        t = 1 - (1 - t) * (1 - _blur(hi) * 0.9 * f)
+        m = t.mean(1, keepdim=True)
+        t = m + (t - m) * (1 + 0.25 * f)
+        t = 1 - (1 - t) * (1 - 0.06 * f)
     out = torch.clamp(t, 0, 1)[0].permute(1, 2, 0)
     if prev is not None and p["echo"] > 0.01:
         out = torch.maximum(out, prev * p["echo"])

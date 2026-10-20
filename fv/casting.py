@@ -85,6 +85,7 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         size = sizes[i] if i < len(sizes) else "close"
         fr = _frame(c, size)
         f = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("angle", "light", "background", "wear")}
+        f["light"] = f["light"][:1].upper() + f["light"][1:]
         edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
         sing = fr["sing"].format(who=c.get("who", "the singer"))
         sing = sing[0].upper() + sing[1:]

@@ -119,35 +119,87 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
             s["B"] = b["id"]
             performers += 1
 
-    # ---- edit decision list at the output frame rate
-    edl = []
-    ins_n, ghost_n = int(ed.get("insert_frames", 4)), int(ed.get("ghost_frames", 3))
-    every = max(1, int(ed.get("insert_every_beats", 2)))
-    for s in shots:
-        f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
-        events = [{"f0": f0, "f1": f1, "render": s["A"], "kind": "main"}]
-        if "B" in s:
-            sb = [b for b in beats if s["t0"] + 0.05 < b < s["t1"] - 0.15]
-            # beat index within the bar grid of the whole window keeps inserts on a steady pulse
-            hits = [b for b in sb if (beats.index(b) % every) == (every - 1)]
-            pp = rng.random() < ed.get("pingpong", 0.0) and len(sb) >= 4
-            half = sb[len(sb) // 2] if pp else None
-            for b in hits:
-                fb = int(round(b * out_fps))
-                if half is not None and b >= half:
-                    continue
-                events.append({"f0": fb, "f1": min(f1, fb + ins_n), "render": s["B"], "kind": "insert"})
-                events.append({"f0": min(f1, fb + ins_n), "f1": min(f1, fb + ins_n + ghost_n),
-                               "render": s["A"], "kind": "ghost", "from": s["B"]})
-            if half is not None:
-                fh = int(round(half * out_fps))
-                events.append({"f0": fh, "f1": f1, "render": s["B"], "kind": "switch"})
-        edl.extend(events)
+    edl = voice_edl(shots, renders, beats, ed, out_fps, seed)
     return {"version": 1, "mode": "voice", "pack": pack["name"], "format": fmt, "preset": preset,
             "seed": seed, "song_t0": t0, "song_t1": t1, "duration": round(dur, 4),
             "out_fps": out_fps, "render_fps": rfps, "tempo": w["tempo"], "timeline": w,
             "sections": secs, "shots": shots, "renders": renders, "edl": edl,
             "performers": performers, "twins": twins, "framing": framing}
+
+
+def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: dict, out_fps: float,
+              seed: int) -> list[dict]:
+    """The cut. Every shot plays its lead performer (A). Loud shots get the edamame flicker:
+    on most beats (and many off-beats) a 3-5 frame insert of another face, then a 2-3 frame
+    ghost back to A. Inserts alternate between the shot's pose-matched twin (B: same pose,
+    same words) and other performers' clips (sampled mid-clip; at 3-5 frames lip sync is
+    invisible, the face change is what reads). Some loud shots hand the second half to B.
+
+    Older packs with only `insert_every_beats` keep the original sparse pattern."""
+    rng = random.Random(seed * 7919 + 3)
+    edl = []
+    dense = "insert_on_beat" in ed
+    fr = ed.get("insert_frames", 4)
+    ins_lo, ins_hi = (fr, fr) if isinstance(fr, (int, float)) else (int(fr[0]), int(fr[1]))
+    ghost_n = int(ed.get("ghost_frames", 3))
+    every = max(1, int(ed.get("insert_every_beats", 2)))
+    by_id = {r["id"]: r for r in renders}
+    a_pool = [r for r in renders if r["role"] == "A"]
+    beat_len = (beats[1] - beats[0]) if len(beats) > 1 else 0.5
+    for s in shots:
+        f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
+        events = [{"f0": f0, "f1": f1, "render": s["A"], "kind": "main"}]
+        sb = [b for b in beats if s["t0"] + 0.05 < b < s["t1"] - 0.15]
+        has_b = "B" in s
+        pp = has_b and rng.random() < ed.get("pingpong", 0.0) and len(sb) >= 4
+        half = sb[len(sb) // 2] if pp else None
+        if dense and s["loud"]:
+            slots = []
+            for b in sb:
+                if rng.random() < ed["insert_on_beat"]:
+                    slots.append(b)
+                ob = b + beat_len / 2
+                if ob < s["t1"] - 0.15 and rng.random() < ed.get("insert_off_beat", 0.0):
+                    slots.append(ob)
+            # other faces of the same framing read as match cuts
+            same = [r for r in a_pool if r["shot"] != s["index"] and r.get("size") == s.get("size")] or \
+                [r for r in a_pool if r["shot"] != s["index"]]
+            last_end = f0 + 2
+            for t in sorted(slots):
+                fb = int(round(t * out_fps))
+                n = rng.randint(ins_lo, ins_hi)
+                if fb < last_end or fb + n > f1 - 1:
+                    continue
+                lead = s["B"] if (half is not None and t >= half) else s["A"]
+                use_twin = has_b and lead != s.get("B") and (not same or rng.random() < ed.get("insert_twin_share", 0.5))
+                if use_twin:
+                    src, dt = s["B"], 0.0
+                elif same:
+                    o = rng.choice(same)
+                    o_t0 = o["t_start"] + 0.2
+                    o_t1 = o["t_start"] + o["frames"] / o["fps"] - 0.25
+                    dt = round(o_t0 + (o_t1 - o_t0) * rng.uniform(0.2, 0.8) - fb / out_fps, 4)
+                    src = o["id"]
+                else:
+                    continue
+                events.append({"f0": fb, "f1": fb + n, "render": src, "kind": "insert", "dt": dt})
+                g1 = min(f1, fb + n + ghost_n)
+                events.append({"f0": fb + n, "f1": g1, "render": lead, "kind": "ghost", "from": src, "from_dt": dt})
+                last_end = g1
+        elif has_b:
+            hits = [b for b in sb if (beats.index(b) % every) == (every - 1)]
+            for b in hits:
+                fb = int(round(b * out_fps))
+                if half is not None and b >= half:
+                    continue
+                events.append({"f0": fb, "f1": min(f1, fb + int(ins_hi)), "render": s["B"], "kind": "insert"})
+                events.append({"f0": min(f1, fb + int(ins_hi)), "f1": min(f1, fb + int(ins_hi) + ghost_n),
+                               "render": s["A"], "kind": "ghost", "from": s["B"]})
+        if half is not None:
+            fh = int(round(half * out_fps))
+            events.append({"f0": fh, "f1": f1, "render": s["B"], "kind": "switch"})
+        edl.extend(events)
+    return edl
 
 
 def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "9:16",
