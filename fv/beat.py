@@ -488,9 +488,18 @@ def choose_window(tl: dict, length_s: float, drop_at: float = 0.4, start: float 
     elif tl.get("drop"):
         s = tl["drop"]["time"] - drop_at * length_s
     else:
-        # no drop: start at the most energetic section
+        # no drop: the section-start window with the most energy over its whole length
+        # (starting at the loudest section alone can run the clip into the outro)
         secs = tl.get("sections") or []
-        s = max(secs, key=lambda x: x["energy"])["start"] if secs else 0.0
+
+        def mean_energy(a):
+            b, tot = a + length_s, 0.0
+            for x in secs:
+                ov = max(0.0, min(b, x["end"]) - max(a, x["start"]))
+                tot += ov * x["energy"]
+            return tot / max(1e-6, min(b, dur) - a) - (0.5 if b > dur + 0.5 else 0.0)
+        cands = sorted({max(0.0, x["start"]) for x in secs}) or [0.0]
+        s = max(cands, key=lambda a: (round(mean_energy(a), 2), -a))
     bars = tl.get("downbeats") or [0.0]
     # snap to the bar line at or before s (a start within half a beat of a bar line counts
     # as that bar, so a typed start like 7.48 for a bar at 7.49 isn't pushed a bar back)

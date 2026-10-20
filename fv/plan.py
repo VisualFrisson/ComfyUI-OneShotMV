@@ -17,6 +17,8 @@ from __future__ import annotations
 import math
 import random
 
+import numpy as np
+
 from . import beat, dsplan, formats
 
 
@@ -73,6 +75,11 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
     bars = [b for b in w["downbeats"] if 0 <= b < dur - 0.05]
     if not bars or bars[0] > 0.05:
         bars = [0.0] + bars
+    # beat tracking often stops in a fade-out: carry the bar grid on to the end so the last
+    # shot isn't one long take
+    bar_len = float(np.median(np.diff(bars))) if len(bars) > 2 else 4 * 60.0 / max(1.0, w["tempo"])
+    while bars[-1] + 1.5 * bar_len < dur:
+        bars.append(round(bars[-1] + bar_len, 4))
     beats = sorted(set(round(b, 4) for b in w["beats"] if 0 <= b < dur))
     secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.6))
     sec_starts = sorted(s["start"] for s in secs)
