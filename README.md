@@ -40,7 +40,7 @@ The Director does the whole run from one press of Queue:
    4. pose-guided LTX twins;
    5. take QC;
    6. the final cut.
-5. **Checks every take** (`fv/qc.py`). A take that is missing, frozen, blown out, or has a dead mouth is re-rendered with a new seed before the cut. A re-rolled lead clip also re-renders its twins.
+5. **Checks every take** (`fv/qc.py`). A take is re-rendered with a new seed before the cut if it is missing, frozen, blown out, has a dead mouth, or cuts away to another person or place mid-take. LTX sometimes does this, especially the fast model on long clips. A re-rolled lead clip also re-renders its twins.
 6. **Cuts it together** (`fv/assemble.py`):
    - **The edit.** Every shot plays its lead performer. On most beats (and many off-beats) a 3–5 frame insert of another face flashes in: the shot's pose-matched twin, or another performer. Then it ghosts back.
    - **Match cuts.** Fast cutting only works when the eye has somewhere to rest. The assembler tracks every face (`fv/faces.py`) and only flashes in a face that sits where the lead's face is, at about the same size. It then nudges and scales the insert so the two faces line up exactly. An insert with no good match is dropped, so the loud parts read as one face changing, not as chaos. Motion runs get the same effect for free: each segment is rendered twice from the same pose guide, so every flicker lands on the same move.
