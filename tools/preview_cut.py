@@ -160,10 +160,11 @@ def main():
     ap.add_argument("--out", default="")
     ap.add_argument("--fx", type=float, default=1.0)
     ap.add_argument("--clips", default="", help="folder holding the run's clips if not run_dir")
+    ap.add_argument("--pack", default="", help="override the pack (name or .json path)")
     a = ap.parse_args()
     run = a.run_dir
     plan = json.load(open(os.path.join(run, "plan.json"), encoding="utf-8"))
-    pack = casting.load_pack(plan["pack"])
+    pack = casting.load_pack(a.pack or plan["pack"])
     fps, fmt = plan["out_fps"], plan["format"]
     cx, cy, cw, ch = formats.deliver_crop(fmt, plan["preset"])
     rw, rh = formats.render_size(fmt, plan["preset"])

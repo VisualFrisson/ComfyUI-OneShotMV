@@ -133,8 +133,8 @@
   ],
   "ghost_frames": 2,
   "pingpong": 0.35,
-  "insert_on_beat": 0.85,
-  "insert_off_beat": 0.45,
+  "insert_on_beat": 0.75,
+  "insert_off_beat": 0.35,
   "insert_twin_share": 0.5
  },
  "fx": {
@@ -144,7 +144,8 @@
   "zoom": 0.05,
   "shake": 4,
   "ghost": 0.6,
-  "quiet_scale": 0.25
+  "quiet_scale": 0.25,
+  "insert_flash": 0.75
  },
  "finish": {
   "grade_mean": [

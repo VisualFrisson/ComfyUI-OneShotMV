@@ -39,7 +39,7 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
     if kind == "insert":
         n = max(1, ev["f1"] - ev["f0"])
         a = 1.0 - j / n
-        flash = max(flash, cfg["flash"] * (0.6 + 0.4 * a))
+        flash = max(flash, cfg["flash"] * cfg.get("insert_flash", 1.0) * (0.6 + 0.4 * a))
         bloom = max(bloom, 0.7 * a + 0.3)
         rgb = max(rgb, cfg["rgb"] * (0.5 + 0.5 * a))
         zoom = max(zoom, cfg["zoom"] * 1.2)
