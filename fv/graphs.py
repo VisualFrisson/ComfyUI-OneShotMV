@@ -293,3 +293,9 @@ def assemble(*, run_dir, prefix):
     g = Graph()
     g.add("FVAssemble", run_dir=run_dir, filename_prefix=prefix)
     return g
+
+
+def qc(*, run_dir, pass_index=0, max_passes=1, then_assemble=True):
+    g = Graph()
+    g.add("FVQC", run_dir=run_dir, pass_index=pass_index, max_passes=max_passes, then_assemble=then_assemble)
+    return g

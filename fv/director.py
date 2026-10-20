@@ -38,6 +38,14 @@ def queue_prompt(graph: dict, url: str | None = None, client_id: str = "frissonv
         return json.loads(r.read().decode()).get("prompt_id", "")
 
 
+def _node_available(name: str) -> bool:
+    try:
+        import nodes as _comfy_nodes  # ComfyUI's registry (absent outside ComfyUI)
+        return name in _comfy_nodes.NODE_CLASS_MAPPINGS
+    except Exception:
+        return False
+
+
 def clip_info(path: str) -> tuple[int, float]:
     import cv2
     cap = cv2.VideoCapture(path)
@@ -51,9 +59,14 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            seed: int = 1, twins: str = "auto", dance_path: str = "", run_name: str = "",
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "close",
-           artist_path: str = "", log=print) -> dict:
+           artist_path: str = "", qc_retries: int = 1, log=print) -> dict:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
+    base_id, k = run_id, 1
+    while os.path.isdir(os.path.join(out_root, "frissonvision", "runs", run_id)) and \
+            os.listdir(os.path.join(out_root, "frissonvision", "runs", run_id)):
+        k += 1  # never reuse a run folder: ComfyUI's save counters would shift every file name
+        run_id = f"{base_id}-{k}"
     rel = f"frissonvision/runs/{run_id}"
     run_dir = os.path.join(out_root, *rel.split("/"))
     os.makedirs(os.path.join(run_dir, "jobs"), exist_ok=True)
@@ -161,9 +174,12 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}M",
                 guide_video=dance_path, guide_start=r["src_start"], guide_strength=guide_strength,
                 guide_face=False, key_strengths=(1.0, 1.0, 1.0) if preset == "quality" else (1.0, 1.0)).nodes))
-    jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
-    assemble_job = ("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes)
-    jobs.append(assemble_job)
+    use_qc = qc_retries > 0 and queue_assemble and _node_available("FVQC")
+    if use_qc:  # QC re-rolls bad takes, then queues free + assemble itself
+        jobs.append(("zz_qc", graphs.qc(run_dir=run_dir, pass_index=0, max_passes=qc_retries).nodes))
+    else:
+        jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
+    jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
 
     p["cast"] = cast
     p["run_dir"], p["run_rel"] = run_dir, rel
@@ -174,7 +190,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     if queue:
         url = server_url()
         for name, g in jobs:
-            if name == "zz_assemble" and not queue_assemble:
+            if name == "zz_assemble" and (not queue_assemble or use_qc):
                 continue
             ids.append(queue_prompt(g, url))
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {preset}\n"
@@ -182,3 +198,111 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
     return {"run_dir": run_dir, "run_id": run_id, "jobs": len(jobs), "prompt_ids": ids, "summary": summary}
+
+
+# ------------------------------------------------------------------ take QC + re-rolls
+def _bump(graph: dict, k: int) -> dict:
+    """New seeds for every sampler in a job graph."""
+    for node in graph.values():
+        ins = node.get("inputs", {})
+        for key in ("noise_seed", "seed"):
+            if isinstance(ins.get(key), int):
+                ins[key] = (ins[key] + 7919 * k) % (2 ** 31 - 1)
+    return graph
+
+
+def _job_file(run_dir: str, name: str) -> str | None:
+    hits = sorted(f for f in os.listdir(os.path.join(run_dir, "jobs")) if f.endswith(f"_{name}.json"))
+    return os.path.join(run_dir, "jobs", hits[0]) if hits else None
+
+
+def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool = True,
+            then_assemble: bool = True, log=print) -> dict:
+    """Check every render of a run; re-roll the bad ones (new seeds) and queue the next QC pass,
+    or, when all pass / retries are spent, keep the best take of each shot and queue assembly."""
+    from . import qc
+    pj = os.path.join(run_dir, "plan.json")
+    p = json.load(open(pj, encoding="utf-8"))
+    voice = p.get("mode", "voice") == "voice"
+    vocal = sr = None
+    vp = os.path.join(run_dir, "vocals.wav")
+    if voice and os.path.exists(vp):
+        vocal, sr = stems.read_wav(vp)
+    report, redo = [], []
+    for r in p["renders"]:
+        seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
+        try:
+            res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
+                                vocal=vocal, sr=sr or 44100, seek=seek)
+        except Exception as e:  # never let QC block a cut
+            res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
+        takes = r.setdefault("takes", [])
+        if not any(t["path"] == res["path"] for t in takes):
+            takes.append({k: v for k, v in res.items() if k != "ok"})
+        report.append({"id": r["id"], "role": r["role"], **res})
+        if not res["ok"]:
+            redo.append(r)
+    last = pass_idx >= max_passes or not redo
+    queued = []
+    if not last:
+        by_id = {r["id"]: r for r in p["renders"]}
+        redo_ids = {r["id"] for r in redo}
+        # a re-rolled lead clip invalidates its pose-matched twins: re-render them on the new lead
+        for r in list(redo):
+            for t in p["renders"]:
+                if t.get("twin_of") == r["id"] and t["id"] not in redo_ids:
+                    redo.append(t)
+                    redo_ids.add(t["id"])
+        redo.sort(key=lambda r: (r["role"] == "B", r["id"]))
+        new_paths = {}
+        rel = p.get("run_rel", "")
+        jobs = []
+        for r in redo:
+            name = f"r{r['id']:03d}{r['role']}"
+            jf = _job_file(run_dir, name)
+            if not jf:
+                continue
+            g = _bump(json.load(open(jf, encoding="utf-8")), pass_idx + 1)
+            tag = f"{name}_t{pass_idx + 1}"
+            for node in g.values():
+                ins = node.get("inputs", {})
+                if node.get("class_type") == "SaveVideo" and str(ins.get("filename_prefix", "")).endswith(name):
+                    ins["filename_prefix"] = f"{rel}/{tag}"
+            if r["role"] == "B" and r.get("twin_of") in new_paths:  # follow the re-rolled lead clip
+                old = by_id[r["twin_of"]]["takes"][0]["path"]
+                s = json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new_paths[r["twin_of"]])[1:-1])
+                g = json.loads(s)
+            new_paths[r["id"]] = os.path.join(run_dir, f"{tag}_00001_.mp4")
+            r["path"] = new_paths[r["id"]]
+            json.dump(g, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{tag}.json"), "w", encoding="utf-8"),
+                      indent=1)
+            jobs.append(g)
+        from . import graphs
+        jobs.append(graphs.qc(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes,
+                              then_assemble=then_assemble).nodes)
+        if queue:
+            url = server_url()
+            queued = [queue_prompt(g, url) for g in jobs]
+        msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
+            f"r{r['id']:03d}{r['role']}" for r in redo)
+    else:
+        for r in p["renders"]:  # best take of each shot
+            takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
+            if takes:
+                # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
+                r["path"] = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]["path"]
+        if queue and then_assemble:
+            from . import graphs
+            url = server_url()
+            queued = [queue_prompt(graphs.free_memory("before assembly").nodes, url),
+                      queue_prompt(graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes, url)]
+        bad = [f"r{x['id']:03d}{x['role']}:{'+'.join(x['fail'])}" for x in report if not x["ok"]]
+        msg = f"QC pass {pass_idx}: {len(report) - len(bad)}/{len(report)} takes pass" + \
+              (f"; kept best take for {', '.join(bad)}" if bad else "") + ("; assembling" if then_assemble else "")
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    hist = os.path.join(run_dir, "qc.json")
+    allq = json.load(open(hist, encoding="utf-8")) if os.path.exists(hist) else []
+    allq.append({"pass": pass_idx, "report": report, "message": msg})
+    json.dump(allq, open(hist, "w", encoding="utf-8"), indent=1)
+    log(f"[FrissonVision] {msg}")
+    return {"message": msg, "report": report, "queued": queued}

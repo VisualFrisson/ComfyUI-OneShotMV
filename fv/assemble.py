@@ -96,6 +96,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     fmt = plan["format"]
     rw, rh = formats.render_size(fmt, plan["preset"])
     dw, dh = formats.deliver_size(fmt)
+    cx, cy, cw, ch = formats.deliver_crop(fmt, plan["preset"]) if rw * rh else (0, 0, rw, rh)
     n_out = int(round(plan["duration"] * fps))
     if device is None:
         try:
@@ -198,7 +199,9 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
         y = fx.apply_fx(x, p, prev)
         prev = y
         z = fin(y, f) if fin is not None else y
-        if (dw, dh) != (rw, rh):
+        if (cw, ch) != (rw, rh):
+            z = z[cy:cy + ch, cx:cx + cw]
+        if (dw, dh) != (cw, ch):
             z = F.interpolate(z.permute(2, 0, 1)[None], size=(dh, dw), mode="bicubic",
                               align_corners=False, antialias=True)[0].permute(1, 2, 0).clamp(0, 1)
         u8 = (z * 255 + 0.5).byte().cpu().numpy()

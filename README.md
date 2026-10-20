@@ -53,9 +53,9 @@ The finish of `crowd` was learned from a reference edit (Lab mean/std of its fra
 
 | Format | Quality render | Fast render | Delivered |
 |---|---|---|---|
-| 9:16 (default) | 640×1152 | 448×768 | 1080×1920 |
-| 1:1 | 1152×1152 | 768×768 | 1080×1080 |
-| 16:9 | 1152×640 | 768×448 | 1920×1080 |
+| 9:16 (default) | 768×1280 | 512×896 | 1080×1920 |
+| 1:1 | 1024×1024 | 768×768 | 1080×1080 |
+| 16:9 | 1280×768 | 896×512 | 1920×1080 |
 
 * **quality** (default): LTX-2.3 22B dev + distilled LoRA, three stages (¼ → ½ → full),
   50 fps, audio-to-video attention boost.

@@ -1,17 +1,20 @@
 """Output formats and render presets.
 
 LTX latents are 1/32 of the pixel size and the multi-stage pipeline upsamples the latent x2
-per stage, so the stage-1 size must be a multiple of 32. Sizes are given as the final
-(last-stage) render size; delivery sizes are what the finished video is scaled to."""
+per stage. The union-control IC-LoRA (pose guides for twins and motion) encodes its guide at
+half the stage-1 size, so the stage-1 size must be a multiple of 64 (an odd stage-1 latent
+crashes the guide encode). Render sizes are therefore a touch wider than the exact aspect;
+the assembler centre-crops to the delivery aspect before scaling.
+Sizes are given as the final (last-stage) render size."""
 from __future__ import annotations
 
 import math
 
 FORMATS = {
     # name: (render w, h at quality), (render w, h at fast), delivery (w, h)
-    "9:16": {"quality": (640, 1152), "fast": (448, 768), "deliver": (1080, 1920)},
-    "1:1": {"quality": (1152, 1152), "fast": (768, 768), "deliver": (1080, 1080)},
-    "16:9": {"quality": (1152, 640), "fast": (768, 448), "deliver": (1920, 1080)},
+    "9:16": {"quality": (768, 1280), "fast": (512, 896), "deliver": (1080, 1920)},
+    "1:1": {"quality": (1024, 1024), "fast": (768, 768), "deliver": (1080, 1080)},
+    "16:9": {"quality": (1280, 768), "fast": (896, 512), "deliver": (1920, 1080)},
 }
 FORMAT_NAMES = list(FORMATS)
 
@@ -35,12 +38,23 @@ def stage_sizes(fmt: str, preset: str) -> list[tuple[int, int]]:
     n = PRESETS[preset]["stages"]
     out = [(w >> (n - 1 - i), h >> (n - 1 - i)) for i in range(n)]
     for (sw, sh) in out[:1]:
-        assert sw % 32 == 0 and sh % 32 == 0, f"stage-1 size {sw}x{sh} not a multiple of 32"
+        assert sw % 64 == 0 and sh % 64 == 0, f"stage-1 size {sw}x{sh} not a multiple of 64"
     return out
 
 
 def deliver_size(fmt: str) -> tuple[int, int]:
     return FORMATS[fmt]["deliver"]
+
+
+def deliver_crop(fmt: str, preset: str) -> tuple[int, int, int, int]:
+    """(x, y, w, h) centre crop of a render frame with the delivery aspect."""
+    rw, rh = render_size(fmt, preset)
+    dw, dh = deliver_size(fmt)
+    if rw * dh > dw * rh:  # render is wider than delivery
+        w = int(round(rh * dw / dh / 2)) * 2
+        return (rw - w) // 2, 0, w, rh
+    h = int(round(rw * dh / dw / 2)) * 2
+    return 0, (rh - h) // 2, rw, h
 
 
 def ltx_frames(seconds: float, fps: float) -> int:

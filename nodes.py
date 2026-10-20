@@ -12,10 +12,10 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, finish, formats, fx, graphs, plan, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, finish, formats, fx, graphs, plan, qc, stems, dsplan
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, plan, graphs, stems, audiofx, fx, finish, export, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, plan, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
 
 
 def _reload():
@@ -189,6 +189,9 @@ class FVDirector:
                         "tooltip": "close = close-ups only; mixed = medium and wide shots in quiet stretches"}),
             "artist_image_path": ("STRING", {"default": "",
                                   "tooltip": "One-artist mode: a photo of the singer (uses the artist pack)"}),
+            "qc_retries": ("INT", {"default": 1, "min": 0, "max": 3,
+                           "tooltip": "Check every take (frozen / dead mouth / blown / missing) and re-roll bad ones "
+                                      "this many times before the cut; 0 = off"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -203,7 +206,7 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="close", artist_image_path=""):
+            framing="close", artist_image_path="", qc_retries=1):
         _reload()
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
@@ -211,7 +214,8 @@ class FVDirector:
                               seed=seed, twins=twins, dance_path=_resolve(dance_video_path), run_name=run_name,
                               queue=queue_renders, editor=twin_editor, guide_strength=guide_strength,
                               queue_assemble=queue_assemble, framing=framing,
-                              artist_path=_resolve(artist_image_path) if artist_image_path else "")
+                              artist_path=_resolve(artist_image_path) if artist_image_path else "",
+                              qc_retries=qc_retries)
         return {"ui": {"text": [res["summary"]]}, "result": (res["summary"], res["run_dir"])}
 
 
@@ -257,6 +261,35 @@ class FVAssemble:
         except ValueError:
             pass
         return {"ui": ui, "result": (prev, res["video"])}
+
+
+class FVQC:
+    """Checks every take of a run (missing, frozen, blown exposure, dead mouth), re-rolls the bad
+    ones with new seeds and queues itself again; when everything passes (or retries run out) it
+    keeps the best take of each shot and queues the final Assemble."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"run_dir": ("STRING", {"default": ""}),
+                             "pass_index": ("INT", {"default": 0, "min": 0, "max": 9}),
+                             "max_passes": ("INT", {"default": 1, "min": 0, "max": 9})},
+                "optional": {"then_assemble": ("BOOLEAN", {"default": True})}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("report",)
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    @classmethod
+    def IS_CHANGED(cls, **kw):
+        return random.random()
+
+    def run(self, run_dir, pass_index, max_passes, then_assemble=True):
+        _reload()
+        res = director.qc_pass(_resolve(run_dir), pass_idx=pass_index, max_passes=max_passes,
+                               then_assemble=then_assemble)
+        return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
 
 
 class FVFinish:
@@ -325,6 +358,7 @@ NODE_CLASS_MAPPINGS = {
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
+    "FVQC": FVQC,
     "FVLoadImagePath": FVLoadImagePath,
     "FVLoadVideoPath": FVLoadVideoPath,
     "FVLoadAudioPath": FVLoadAudioPath,
@@ -334,6 +368,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVFreeMemory": "Frisson Vision: Free Memory",
     "FVAssemble": "Frisson Vision: Assemble",
     "FVFinish": "Frisson Vision: Finish",
+    "FVQC": "Frisson Vision: Take QC",
     "FVLoadImagePath": "Frisson Vision: Load Image (path)",
     "FVLoadVideoPath": "Frisson Vision: Load Video (path)",
     "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",
