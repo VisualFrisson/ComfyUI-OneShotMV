@@ -74,3 +74,21 @@ def only(frames: list[dict], src) -> dict:
     f, i = src
     people = frames[f].get("people") or []
     return {**frames[f], "people": [people[i]] if 0 <= i < len(people) else []}
+
+
+def person_box(person: dict, W: float, H: float, pad_x: float = 0.18, pad_y: float = 0.08):
+    """Normalised (x0, y0, x1, y1) around a person's body and hand keypoints, padded."""
+    pts = []
+    for key in ("pose_keypoints_2d", "hand_left_keypoints_2d", "hand_right_keypoints_2d"):
+        k = person.get(key) or []
+        pts += [(k[i], k[i + 1]) for i in range(0, len(k) - 2, 3) if k[i + 2] > 0]
+    if len(pts) < 3:
+        return None
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    if max(max(xs), max(ys)) > 1.5:
+        xs, ys = [x / max(1.0, W) for x in xs], [y / max(1.0, H) for y in ys]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    w, h = x1 - x0, y1 - y0
+    # the head reaches above the nose/eye keypoints and the feet below the ankles
+    return (max(0.0, x0 - pad_x * w - 0.03), max(0.0, y0 - pad_y * h - 0.06),
+            min(1.0, x1 + pad_x * w + 0.03), min(1.0, y1 + pad_y * h + 0.04))

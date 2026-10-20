@@ -429,6 +429,46 @@ class FVLeadPose:
         return (torch.stack(out).to(image.dtype),)
 
 
+class FVLeadMask:
+    """Greys out everything but the lead dancer in source frames, so an image edit (the motion
+    keyframes) sees one person: backup dancers otherwise come along into the new scene."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, pose_keypoint, image):
+        import cv2
+        _reload()
+        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
+        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
+                                                     if isinstance(f, dict)):
+            return (image,)
+        src = pose.pick_lead(frames)
+        B, H, W = int(image.shape[0]), int(image.shape[1]), int(image.shape[2])
+        out = image.clone()
+        for k, s in enumerate(src):
+            if s is None:
+                continue
+            fr = pose.only(frames, s)
+            box = pose.person_box(fr["people"][0], float(fr.get("canvas_width") or W),
+                                  float(fr.get("canvas_height") or H)) if fr["people"] else None
+            if box is None:
+                continue
+            m = np.zeros((H, W), np.float32)
+            x0, y0, x1, y1 = int(box[0] * W), int(box[1] * H), int(np.ceil(box[2] * W)), int(np.ceil(box[3] * H))
+            m[y0:y1, x0:x1] = 1.0
+            r = max(3, int(0.03 * max(H, W))) | 1
+            m = cv2.GaussianBlur(m, (r * 2 + 1, r * 2 + 1), 0)
+            mt = torch.from_numpy(m).to(image.device, image.dtype)[..., None]
+            out[k] = image[k] * mt + 0.5 * (1 - mt)
+        return (out,)
+
+
 class FVFreeMemory:
     """Unloads every model and clears ComfyUI's cache after this job (asks the server through its
     own /free endpoint). The Director queues one between model groups so RAM stays bounded."""
@@ -471,6 +511,7 @@ NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVOffloadToCPU": FVOffloadToCPU,
     "FVLeadPose": FVLeadPose,
+    "FVLeadMask": FVLeadMask,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
@@ -484,6 +525,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVFreeMemory": "Frisson Vision: Free Memory",
     "FVOffloadToCPU": "Frisson Vision: Weight Backups to RAM",
     "FVLeadPose": "Frisson Vision: Lead Dancer Pose",
+    "FVLeadMask": "Frisson Vision: Lead Dancer Only",
     "FVAssemble": "Frisson Vision: Assemble",
     "FVFinish": "Frisson Vision: Finish",
     "FVQC": "Frisson Vision: Take QC",

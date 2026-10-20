@@ -307,7 +307,13 @@ def motion_key(*, video_path, start_s, prompt, prefix, size, seed=7):
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
                start_seconds=float(start_s), force_fps=0.0)
-    out = _klein(g, O(fr), prompt, seed=seed)
+    img = O(fr)
+    if _has_node("FVLeadMask"):  # grey out backup dancers so the edit keeps one person
+        dw = g.add("DWPreprocessor", image=img, detect_hand="enable", detect_body="enable",
+                   detect_face="disable", resolution=512, bbox_detector=M["dwpose_bbox"],
+                   pose_estimator=M["dwpose_pose"], scale_stick_for_xinsr_cn="disable")
+        img = O(g.add("FVLeadMask", pose_keypoint=O(dw, 1), image=img))
+    out = _klein(g, img, prompt, seed=seed)
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 
