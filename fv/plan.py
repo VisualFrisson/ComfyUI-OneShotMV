@@ -298,17 +298,66 @@ def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt:
         renders.append({"id": r["id"], "role": "M", "performer": int(r["look"][1:]),
                         "t_start": round(ts, 4), "src_start": round(r["src_f0"] / clip_fps, 4),
                         "frames": formats.ltx_frames(dur + pad, rfps), "fps": rfps})
-    edl, shots = [], []
+    shots = []
     for s in p["segments"]:
         f0 = int(round(s["f0"] / clip_fps * out_fps))
         f1 = int(round(s["f1"] / clip_fps * out_fps))
         if f1 <= f0:
             continue
-        edl.append({"f0": f0, "f1": f1, "render": s.get("render"), "kind": "main"})
-        shots.append({"t0": round(f0 / out_fps, 4), "t1": round(f1 / out_fps, 4),
+        shots.append({"index": len(shots), "t0": round(f0 / out_fps, 4), "t1": round(f1 / out_fps, 4),
                       "loud": _loud_at(secs, f0 / out_fps + 0.01), "A": s.get("render")})
+    # motion twins: the same stretch of the dance rendered as a second character, so the fast
+    # flicker inserts are pose-perfect match cuts
+    mt = ed.get("motion_twins", "off")
+    if mt in ("loud", "all"):
+        by_id = {r["id"]: r for r in renders}
+        for sh in shots:
+            a = by_id.get(sh["A"])
+            if a is None or (mt == "loud" and not sh["loud"]):
+                continue
+            other = (a["performer"] + max(1, n_cast // 2) + sh["index"] % 3) % n_cast
+            b = dict(a, id=len(renders), role="MB", performer=other, twin_of=a["id"])
+            renders.append(b)
+            sh["B"] = b["id"]
+    beats = sorted(set(round(b, 4) for b in w["beats"] if 0 <= b < t1 - t0))
+    edl = motion_edl(shots, beats, ed, out_fps, seed)
     return {"version": 1, "mode": "motion", "pack": pack["name"], "format": fmt, "preset": preset,
             "seed": seed, "song_t0": t0, "song_t1": t1, "duration": round(t1 - t0, 4),
             "out_fps": out_fps, "render_fps": rfps, "clip_fps": clip_fps, "tempo": w["tempo"],
             "timeline": w, "sections": secs, "shots": shots, "renders": renders, "edl": edl,
             "switch_every": switch_every, "performers": n_cast}
+
+
+def motion_edl(shots: list[dict], beats: list[float], ed: dict, out_fps: float, seed: int) -> list[dict]:
+    """Motion cut: each segment plays its character; segments with a twin flicker to it on
+    beats and off-beats (3-4 frames, then a short ghost back). Same dance, same moment, so
+    every flicker is a match cut."""
+    rng = random.Random(seed * 104729 + 11)
+    fr = ed.get("insert_frames", [3, 4])
+    lo, hi = (fr, fr) if isinstance(fr, (int, float)) else (int(fr[0]), int(fr[1]))
+    ghost_n = int(ed.get("ghost_frames", 2))
+    beat_len = (beats[1] - beats[0]) if len(beats) > 1 else 0.5
+    edl = []
+    for s in shots:
+        f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
+        edl.append({"f0": f0, "f1": f1, "render": s["A"], "kind": "main"})
+        if "B" not in s:
+            continue
+        slots = []
+        for b in beats:
+            if s["t0"] + 0.1 < b < s["t1"] - 0.12 and rng.random() < ed.get("insert_on_beat", 0.6):
+                slots.append(b)
+            ob = b + beat_len / 2
+            if s["t0"] + 0.1 < ob < s["t1"] - 0.12 and rng.random() < ed.get("insert_off_beat", 0.3):
+                slots.append(ob)
+        last = f0 + 2
+        for t in sorted(slots):
+            fb = int(round(t * out_fps))
+            n = rng.randint(lo, hi)
+            if fb < last or fb + n > f1 - 1:
+                continue
+            edl.append({"f0": fb, "f1": fb + n, "render": s["B"], "kind": "insert"})
+            g1 = min(f1, fb + n + ghost_n)
+            edl.append({"f0": fb + n, "f1": g1, "render": s["A"], "kind": "ghost", "from": s["B"]})
+            last = g1
+    return edl

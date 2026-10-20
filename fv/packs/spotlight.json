@@ -6,7 +6,15 @@
  "edit": {
   "switch_every": "accelerate",
   "twins": "off",
-  "loud_threshold": 0.6
+  "loud_threshold": 0.6,
+  "motion_twins": "all",
+  "insert_on_beat": 0.6,
+  "insert_off_beat": 0.3,
+  "insert_frames": [
+   3,
+   4
+  ],
+  "ghost_frames": 2
  },
  "fx": {
   "intensity": 1.0,
@@ -29,13 +37,13 @@
    9.949,
    14.512
   ],
-  "grade_amount": 0.7,
+  "grade_amount": 0.6,
   "glow": 0.14,
   "halation": 0.5,
   "contrast": 0.4,
   "saturation": 1.08,
-  "lift": 0.02,
-  "vignette": 0.65,
+  "lift": 0.04,
+  "vignette": 0.45,
   "vignette_shape": 4.0,
   "grain": 0.05
  },
@@ -44,70 +52,70 @@
   "cast": [
    [
     "a woman in an oversized white hooded puffer coat and white cargo pants",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a glossy red latex jacket and wide red trousers",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a black leather trench coat and knee-high boots",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a silver metallic bomber jacket and black joggers",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a red sequin bodysuit and black opera gloves",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in an all-black tactical suit with a hood",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a white satin slip dress and chunky black boots",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a long crimson hooded cloak over black clothes",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a chrome mirrored jacket and black leggings",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a black and red motocross suit",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a black mesh top and baggy black parachute pants",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a white quilted jumpsuit and white sneakers",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a ruby red puffer jacket and black shorts",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in a black velvet suit with no shirt",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a woman in a black hooded bodysuit with red stitching",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ],
    [
     "a man in an oversized grey hoodie with the hood up and black trousers",
-    "a dark empty studio stage lit by one hard spotlight from above, glossy black floor, black background"
+    "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ]
   ],
-  "video": "{who} dances energetically on {where}. Same choreography, crisp motion, full body in frame, hard top light.",
+  "video": "{who} dances energetically on {where}. Same choreography, crisp motion, full body in frame, hard top light, both hands empty.",
   "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
  }
 }

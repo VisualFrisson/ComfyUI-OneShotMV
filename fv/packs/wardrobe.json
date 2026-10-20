@@ -71,12 +71,20 @@
     "a warm beige studio with a hard sun spot on the wall"
    ]
   ],
-  "video": "{who} dances energetically, {where}. Same choreography, crisp motion, full body in frame.",
+  "video": "{who} dances energetically, {where}. Same choreography, crisp motion, full body in frame, both hands empty.",
   "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
  },
  "edit": {
   "switch_every": "2 beats",
-  "twins": "off"
+  "twins": "off",
+  "motion_twins": "loud",
+  "insert_on_beat": 0.5,
+  "insert_off_beat": 0.2,
+  "insert_frames": [
+   3,
+   4
+  ],
+  "ghost_frames": 2
  },
  "fx": {
   "intensity": 1.0,

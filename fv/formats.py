@@ -26,7 +26,8 @@ PRESETS = {
     # sound, so the clips are shown 0.16 s later to land on the beat of the syllable.
     "quality": {"stages": 3, "fps": 50, "engine": "ltx23_r8", "sync_delay": 0.16},
     # fast = LTX-2.5 22B distilled, two stages (1/2 -> full), 25 fps.
-    "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled", "sync_delay": 0.16},
+    # fast: LTX-2.5 lips lead by only ~0.12 s (peak over 11 clips), so a small nudge
+    "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled", "sync_delay": 0.05},
 }
 PRESET_NAMES = list(PRESETS)
 

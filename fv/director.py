@@ -175,15 +175,16 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         for r in p["renders"]:
             c = cast[r["performer"] % len(cast)]
             r["key"] = os.path.join(run_dir, f"k{r['id']:03d}_00001_.png")
-            r["path"] = os.path.join(run_dir, f"r{r['id']:03d}M_00001_.mp4")
+            r["path"] = os.path.join(run_dir, f"r{r['id']:03d}{r['role']}_00001_.mp4")
             jobs.append((f"k{r['id']:03d}", graphs.motion_key(
                 video_path=dance_path, start_s=r["src_start"], prompt=c["edit"],
                 prefix=f"{rel}/k{r['id']:03d}", size=rsize, seed=c["seed"]).nodes))
         for r in p["renders"]:
             c = cast[r["performer"] % len(cast)]
-            jobs.append((f"r{r['id']:03d}M", graphs.ltx_render(
+            jobs.append((f"r{r['id']:03d}{r['role']}", graphs.ltx_render(
                 preset=preset, fmt=fmt, key_path=r["key"], prompt=c["video"], negative=neg,
-                frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}M",
+                frames=r["frames"], seed=c["seed"] + 17 * (r["role"] == "MB"),
+                prefix=f"{rel}/r{r['id']:03d}{r['role']}",
                 guide_video=dance_path, guide_start=r["src_start"], guide_strength=guide_strength,
                 guide_face=False, key_strengths=(1.0, 1.0, 1.0) if preset == "quality" else (1.0, 1.0)).nodes))
     use_qc = qc_retries > 0 and queue_assemble and _node_available("FVQC")
@@ -268,7 +269,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         # a re-rolled lead clip invalidates its pose-matched twins: re-render them on the new lead
         for r in list(redo):
             for t in p["renders"]:
-                if t.get("twin_of") == r["id"] and t["id"] not in redo_ids:
+                if t.get("twin_of") == r["id"] and t["id"] not in redo_ids and t["role"] == "B":
                     redo.append(t)
                     redo_ids.add(t["id"])
         redo.sort(key=lambda r: (r["role"] == "B", r["id"]))

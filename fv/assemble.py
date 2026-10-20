@@ -142,6 +142,10 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
                                         plan.get("seed", 1), faces=faces, delay=delay)
     if plan.get("mode") != "voice":
         delay = 0.0  # motion clips carry no lip sync
+        if plan.get("shots") and not plan.get("edl_locked") and any("B" in s for s in plan["shots"]):
+            from . import plan as planner
+            beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
+            plan["edl"] = planner.motion_edl(plan["shots"], beats_w, pack["edit"], fps, plan.get("seed", 1))
 
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}

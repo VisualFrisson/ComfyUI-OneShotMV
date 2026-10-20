@@ -164,7 +164,7 @@
   "contrast": 0.3,
   "saturation": 1.1,
   "lift": 0.03,
-  "vignette": 0.75,
+  "vignette": 0.4,
   "vignette_shape": 2.0,
   "grain": 0.045
  }
