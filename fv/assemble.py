@@ -137,6 +137,10 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             from . import faces as fz
             fz = importlib.reload(fz)  # nodes.py's hot reload predates this module
             faces = fz.tracks_for_run(run_dir, plan["renders"])
+            if not faces:
+                print("[FrissonVision] face tracking unavailable (this OpenCV build has no Haar "
+                      "cascades, e.g. OpenCV 5): flashes will not be face-aligned. "
+                      "pip install \"opencv-python<5\" to enable match cuts.")
         beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
         plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps,
                                         plan.get("seed", 1), faces=faces, delay=delay)

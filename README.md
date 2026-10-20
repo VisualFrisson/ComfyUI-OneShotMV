@@ -43,6 +43,8 @@ The Director does the whole run from one press of Queue:
 5. **Checks every take** (`fv/qc.py`). A take that is missing, frozen, blown out, or has a dead mouth is re-rendered with a new seed before the cut. A re-rolled lead clip also re-renders its twins.
 6. **Cuts it together** (`fv/assemble.py`):
    - **The edit.** Every shot plays its lead performer. On most beats (and many off-beats) a 3–5 frame insert of another face flashes in: the shot's pose-matched twin, or another performer. Then it ghosts back.
+   - **Match cuts.** Fast cutting only works when the eye has somewhere to rest. The assembler tracks every face (`fv/faces.py`) and only flashes in a face that sits where the lead's face is, at about the same size. It then nudges and scales the insert so the two faces line up exactly. An insert with no good match is dropped, so the loud parts read as one face changing, not as chaos. Motion runs get the same effect for free: each segment is rendered twice from the same pose guide, so every flicker lands on the same move.
+   - **Lip sync.** LTX's mouths run slightly ahead of its audio. Measured against the vocal stem, the lead is about 0.24 s on LTX-2.3 and 0.12 s on LTX-2.5. Each preset shows its clips that much later, minus the lead real singers' lips naturally have (`sync_delay` in `fv/formats.py`).
    - **Effects.** Exposure flashes, bloom, zoom punches, shake, RGB split and motion trails, driven by the kick, snare and hat envelopes and the drop (`fv/audiofx.py`, `fv/fx.py`).
    - **The finish** (`fv/finish.py`): a grade learned from a reference edit, halation, glow, contrast, a gate vignette and grain.
    - **Output.** It scales to the delivery size, muxes the song, and writes an EDL so the cut opens in Resolve or Premiere.
@@ -56,8 +58,8 @@ A style pack is one JSON file in `fv/packs/` holding the casting grammar, the ed
 | `crowd` | voice | Extreme close-ups on a wide lens, flash and practical light against saturated walls; warm grade, halation, grain. A new face every shot. |
 | `eras` | voice | Invented people from every era and corner of the world, each in their own setting. |
 | `artist` | voice | **One artist from one photo.** Every shot puts the same person in a new outfit, light and place; the flash inserts are quick costume changes. |
-| `spotlight` | motion | One dark stage under a single spotlight; the dancer's look changes on the beat, faster as the section builds, with motion trails. |
-| `wardrobe` | motion | A new character and a new world on every switch. |
+| `spotlight` | motion | One hazy stage under a single spotlight. The dancer's look flickers on the beat between two characters doing the same move, faster as the section builds, with motion trails. |
+| `wardrobe` | motion | A new character and a new world on every switch, with same-move flickers in the loud parts. |
 
 The `crowd` and `spotlight` finishes were measured from reference edits (the Lab mean and standard deviation of their frames). `Frisson Vision: Finish` applies any pack's finish to any frames.
 
@@ -105,7 +107,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
    - **LTX union-control IC-LoRA.**
    - **FLUX.2 Klein 9B** for twin and character keyframes.
    - **Qwen-Image 2.1** for the artist pack.
-4. `pip install -r requirements.txt` (imageio-ffmpeg for encoding).
+4. `pip install -r requirements.txt`. This installs imageio-ffmpeg for encoding and OpenCV for face tracking. Match cuts use OpenCV 4's Haar cascades, which OpenCV 5 no longer ships. With OpenCV 5 the cut still works, but the flashes aren't face-aligned.
 
 ## Use it
 
@@ -141,7 +143,12 @@ python sdk_run.py --song track.mp3 --mode motion --dance dance.mp4 --pack spotli
 
 ## Performance notes
 
-- A 30 s voice run is about 20–40 jobs. The fast preset takes minutes once the models are warm. Model loads dominate a cold start: about 4 minutes per model from a hard disk.
+- A 30 s voice run is about 20–40 jobs. On an RTX PRO 6000:
+  - quality: about 1 minute per clip, about 45 minutes for a 30 s run;
+  - fast: about 15 s per clip.
+  
+  Model loads dominate a cold start: about 4 minutes per model from a hard disk.
+- **Re-cuts are free.** Face tracks are cached in `<run>/faces.json`, and Assemble re-derives the edit from the pack each time. You can change a pack's edit settings (`match_threshold`, `insert_on_beat`, and so on) and re-queue Recut without re-rendering.
 - **`--highvram` and LoRAs.** In high-VRAM mode ComfyUI keeps the original weights behind every LoRA patch on the GPU. With the quality preset's four LoRAs on a 22B model, that doubles its footprint. On Windows the overflow spills into shared memory, and sampling gets many times slower. The Director inserts **Weight Backups to RAM** after the LTX loaders to prevent this.
 
 ## Licence
