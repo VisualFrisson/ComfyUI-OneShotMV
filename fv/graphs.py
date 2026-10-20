@@ -145,6 +145,12 @@ def _pose(g, video_path, w, h, frames, fps, start_s=0.0, face=True):
                    scale_stick_for_xinsr_cn="disable"))
 
 
+# LTX (the fast LTX-2.5 distilled model especially) sometimes cuts away mid-clip to another
+# person or place, as if editing a music video. At cfg 1 a negative prompt can't stop it, so every
+# clip says, in positive terms, that it is one unbroken take. QC's cut check catches the rest.
+CONTINUITY = "One continuous take with no cuts: the same person in the same place, filmed by the same camera from the first frame to the last."
+
+
 def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
                audio_path=None, audio_seek=0.0, guide_video=None, guide_start=0.0,
                guide_strength=1.0, guide_face=True, save_pose=False, key_strengths=None):
@@ -156,6 +162,8 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     g = Graph()
     union = guide_video is not None
     m = _ltx23(g, union) if pr["engine"] == "ltx23_r8" else _ltx25(g, union)
+    if CONTINUITY not in prompt:
+        prompt = f"{prompt.rstrip()} {CONTINUITY}"
     pos = g.add("CLIPTextEncode", clip=m["clip"], text=prompt)
     neg = g.add("CLIPTextEncode", clip=m["clip"], text=negative)
     cond = g.add("LTXVConditioning", positive=O(pos), negative=O(neg), frame_rate=float(fps))

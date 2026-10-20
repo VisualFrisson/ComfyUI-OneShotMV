@@ -4,6 +4,10 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
   missing  - the file is not there or has far fewer frames than planned
   frozen   - almost no motion (LTX sometimes returns a near-still image)
   exposure - many frames blown to white or crushed to black
+  cut      - a hard scene change inside the clip: LTX sometimes cuts away to another person or
+             place mid-take (one consecutive-frame difference far above the clip's own typical
+             motion; calibrated on n5/n11, where the bad takes jump to 0.24-0.30 and good ones stay
+             below 0.16)
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
@@ -17,7 +21,21 @@ import os
 import numpy as np
 
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
-          "mouth_dark_std": 0.01}
+          "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0}
+
+
+def cut_jump(frames) -> tuple[float, float, int]:
+    """Largest consecutive-frame change (mean abs, 48x80 colour thumbnails), the clip's median
+    change, and where the largest one happens. The first and last two steps are ignored
+    (LTX's first latent and the trailing frame can jump without being a cut)."""
+    import cv2
+    th = [cv2.resize(f, (48, 80), interpolation=cv2.INTER_AREA).astype(np.float32) / 255 for f in frames]
+    d = np.array([np.abs(b - a).mean() for a, b in zip(th, th[1:])])
+    if len(d) < 8:
+        return 0.0, 0.0, -1
+    inner = d[2:-2]
+    i = int(np.argmax(inner))
+    return float(inner[i]), float(np.median(d)), i + 3
 
 
 def _read(path: str, size: int = 256, max_frames: int = 400):
@@ -125,6 +143,10 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["exposure_bad"] = round(bad, 3)
     if bad > THRESH["exposure_frac"]:
         r["fail"].append("exposure")
+    jmax, jmed, jat = cut_jump(frames)
+    r["jump"], r["jump_at"] = round(jmax, 3), jat
+    if jmax > THRESH["cut_abs"] and jmax > THRESH["cut_rel"] * max(jmed, 1e-3):
+        r["fail"].append("cut")
     if voice:
         box = face_box(frames)
         r["face"] = box is not None
