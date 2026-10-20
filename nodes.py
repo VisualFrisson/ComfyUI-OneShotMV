@@ -12,10 +12,10 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, plan, qc, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, plan, pose, qc, stems, dsplan
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
 
 
 def _reload():
@@ -386,6 +386,49 @@ class FVOffloadToCPU:
         return (m,)
 
 
+class FVLeadPose:
+    """Keeps only the lead dancer in a DWPose guide. DWPose draws everyone it finds (backup
+    dancers, people at the back), and LTX's pose guide turns every skeleton into a person. This
+    follows the tallest, most central person and redraws that one pose in DWPose's own style.
+    Frames with a single person pass through unchanged."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, pose_keypoint, image):
+        import cv2
+        _reload()
+        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
+        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
+                                                     if isinstance(f, dict)):
+            return (image,)
+        try:
+            from custom_controlnet_aux.dwpose import decode_json_as_poses, draw_poses
+        except Exception as e:  # controlnet_aux layout changed: leave the guide as it is
+            print(f"[FrissonVision] lead pose unavailable ({e}); guide unchanged")
+            return (image,)
+        src = pose.pick_lead(frames)
+        H_out, W_out = int(image.shape[1]), int(image.shape[2])
+        out = []
+        for k, (fr, s) in enumerate(zip(frames, src)):
+            if not isinstance(fr, dict) or len(fr.get("people") or []) <= 1 and s == (k, 0):
+                out.append(image[k])
+                continue
+            poses, _, H, W = decode_json_as_poses(pose.only(frames, s))
+            canvas = draw_poses(poses, int(H), int(W), draw_body=True, draw_hand=True, draw_face=True)
+            interp = cv2.INTER_CUBIC if W_out > W else cv2.INTER_AREA
+            canvas = cv2.resize(canvas, (W_out, H_out), interpolation=interp)
+            out.append(torch.from_numpy(canvas.astype(np.float32) / 255.0).to(image.device))
+        n_multi = sum(1 for f in frames if isinstance(f, dict) and len(f.get("people") or []) > 1)
+        print(f"[FrissonVision] lead pose: {n_multi}/{len(frames)} frames had extra people")
+        return (torch.stack(out).to(image.dtype),)
+
+
 class FVFreeMemory:
     """Unloads every model and clears ComfyUI's cache after this job (asks the server through its
     own /free endpoint). The Director queues one between model groups so RAM stays bounded."""
@@ -427,6 +470,7 @@ class FVFreeMemory:
 NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVOffloadToCPU": FVOffloadToCPU,
+    "FVLeadPose": FVLeadPose,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
@@ -439,6 +483,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVDirector": "Frisson Vision: Director",
     "FVFreeMemory": "Frisson Vision: Free Memory",
     "FVOffloadToCPU": "Frisson Vision: Weight Backups to RAM",
+    "FVLeadPose": "Frisson Vision: Lead Dancer Pose",
     "FVAssemble": "Frisson Vision: Assemble",
     "FVFinish": "Frisson Vision: Finish",
     "FVQC": "Frisson Vision: Take QC",

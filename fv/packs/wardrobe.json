@@ -4,7 +4,7 @@
  "mode": "motion",
  "about": "One choreography performed by a new character on every beat: bold outfits, seamless studio colour, hard light. Inspired by the Eat It edit.",
  "casting": {
-  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
+  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. This one person is alone in the scene. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
   "cast": [
    [
     "a woman with a sleek black bob wearing an oversized silver puffer jacket and wide black cargo pants",
@@ -71,7 +71,7 @@
     "a warm beige studio with a hard sun spot on the wall"
    ]
   ],
-  "video": "{who} dances energetically, {where}. Same choreography, crisp motion, full body in frame, both hands empty.",
+  "video": "{who} dances energetically, {where}. Same choreography, crisp motion, full body in frame, both hands empty. The dancer is alone, the only person in the scene.",
   "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
  },
  "edit": {

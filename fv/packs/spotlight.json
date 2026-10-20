@@ -48,7 +48,7 @@
   "grain": 0.05
  },
  "casting": {
-  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
+  "keep": "Keep the exact same pose, body position, arm and leg positions, camera angle, framing and proportions. Full body visible. This one person is alone in the scene. Give the person a completely different face and hair from the original. No glasses. Photorealistic.",
   "cast": [
    [
     "a woman in an oversized white hooded puffer coat and white cargo pants",
@@ -115,7 +115,7 @@
     "a dark studio stage with light haze, lit by one hard spotlight from above, glossy dark floor"
    ]
   ],
-  "video": "{who} dances energetically on {where}. Same choreography, crisp motion, full body in frame, hard top light, both hands empty.",
+  "video": "{who} dances energetically on {where}. Same choreography, crisp motion, full body in frame, hard top light, both hands empty. The dancer is alone, the only person in the scene.",
   "negative": "blurry, extra limbs, deformed hands, distorted face, flicker, jitter, watermark, text, glasses"
  }
 }

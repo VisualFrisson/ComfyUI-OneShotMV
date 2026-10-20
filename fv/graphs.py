@@ -89,14 +89,19 @@ def artist_portrait(*, artist_path, prompt, seed, prefix, size2, resolution=1024
 
 
 # ------------------------------------------------------------------ LTX models
-def _ram_backups(g, model):
-    """LoRA weight backups to system RAM (see FVOffloadToCPU); skipped on servers without it."""
+def _has_node(name: str) -> bool:
+    """Whether the server this graph is built on has a node class (True when not inside ComfyUI)."""
     try:
         import nodes as _comfy_nodes
-        if "FVOffloadToCPU" not in _comfy_nodes.NODE_CLASS_MAPPINGS:
-            return model
+        return name in _comfy_nodes.NODE_CLASS_MAPPINGS
     except Exception:
-        pass
+        return True
+
+
+def _ram_backups(g, model):
+    """LoRA weight backups to system RAM (see FVOffloadToCPU); skipped on servers without it."""
+    if not _has_node("FVOffloadToCPU"):
+        return model
     return O(g.add("FVOffloadToCPU", model=model))
 
 
@@ -136,13 +141,18 @@ def _ltx25(g, union=False):
     return dict(model=model, dsf=dsf, vae=O(vae), avae=O(avae), clip=O(clip), ups=O(ups))
 
 
-def _pose(g, video_path, w, h, frames, fps, start_s=0.0, face=True):
+def _pose(g, video_path, w, h, frames, fps, start_s=0.0, face=True, lead_only=False):
+    """DWPose guide frames. lead_only: keep just the lead dancer (FVLeadPose) so backup dancers
+    in the source clip don't turn into extra people."""
     src = g.add("FVLoadVideoPath", path=video_path, width=w, height=h, frame_cap=frames,
                 start_seconds=float(start_s), force_fps=float(fps))
-    return O(g.add("DWPreprocessor", image=O(src), detect_hand="enable", detect_body="enable",
-                   detect_face="enable" if face else "disable", resolution=512,
-                   bbox_detector=M["dwpose_bbox"], pose_estimator=M["dwpose_pose"],
-                   scale_stick_for_xinsr_cn="disable"))
+    dw = g.add("DWPreprocessor", image=O(src), detect_hand="enable", detect_body="enable",
+               detect_face="enable" if face else "disable", resolution=512,
+               bbox_detector=M["dwpose_bbox"], pose_estimator=M["dwpose_pose"],
+               scale_stick_for_xinsr_cn="disable")
+    if lead_only and _has_node("FVLeadPose"):
+        return O(g.add("FVLeadPose", pose_keypoint=O(dw, 1), image=O(dw, 0)))
+    return O(dw)
 
 
 # LTX (the fast LTX-2.5 distilled model especially) sometimes cuts away mid-clip to another
@@ -179,7 +189,7 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     lat_ref = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[0], latent=O(lat),
                       strength=ks[0], bypass=False))
     if union:
-        ctl = _pose(g, guide_video, w1, h1, frames, fps, guide_start, guide_face)
+        ctl = _pose(g, guide_video, w1, h1, frames, fps, guide_start, guide_face, lead_only=not guide_face)
         gd = g.add("LTXAddVideoICLoRAGuide", positive=p_ref, negative=n_ref, vae=m["vae"], latent=lat_ref,
                    image=ctl, frame_idx=0, strength=guide_strength, latent_downscale_factor=m["dsf"],
                    crop="disabled", use_tiled_encode=False, tile_size=256, tile_overlap=64)
