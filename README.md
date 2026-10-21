@@ -13,7 +13,9 @@ Everything runs locally in ComfyUI on open-weights models:
 
 The cut, the effects and the finish come from the song itself.
 
-> Status: work in progress for the Comfy "Open Source Higgsfield" challenge.
+![Twelve of the 84 invented people in one full-song crowd run](media/crowd_grid.jpg)
+
+> Status: work in progress for the Comfy "Open Source Higgsfield" challenge. Every face shown here is invented.
 
 ## What it does
 
@@ -21,6 +23,22 @@ The cut, the effects and the finish come from the song itself.
 |---|---|---|
 | **Voice** | a song (optionally one photo of the artist) | A crowd of strangers, people from every era, or one artist in a new look every shot. Each sings their line straight to camera. Loud sections flicker between faces on the beat; quiet sections breathe on clean bar cuts. |
 | **Motion** | a song and a dance clip | One choreography, a new character on the beat, faster as the section builds. Every cut is pose-aligned, so it reads as a transformation, not a jump. A crew dancing behind the lead stays out of it: only the lead dancer's pose guides the render. |
+
+**Match cuts in the loud parts.** Each flash lands the next face where the last one was:
+
+![Ten frames from a loud passage: the flashes keep the face in place](media/matchcut_strip.jpg)
+
+**One artist, a new look on every line** (from one photo):
+
+![The same invented singer in ten looks across one song](media/artist_strip.jpg)
+
+**Every era, in 16:9:**
+
+![Ten invented people from different eras singing the same song](media/eras_grid.jpg)
+
+**Motion: one dance, a new dancer on the beat**, flickering to a twin doing the same move:
+
+![Ten frames from a spotlight motion run](media/motion_strip.jpg)
 
 The Director does the whole run from one press of Queue:
 
