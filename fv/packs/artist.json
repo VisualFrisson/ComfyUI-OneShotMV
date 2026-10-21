@@ -40,7 +40,15 @@
    "teal and magenta club light",
    "harsh afternoon sun",
    "flash mixed with warm ambient light",
-   "blue neon light from below"
+   "blue neon light from below",
+   "bright overcast daylight",
+   "soft window light from one side",
+   "hot pink gel light",
+   "golden hour sunlight",
+   "orange sodium streetlight",
+   "bright white studio strobes",
+   "UV blacklight with glowing colours",
+   "a ring light reflected in the eyes"
   ],
   "background": [
    "saturated teal painted wall behind",
@@ -52,7 +60,15 @@
    "a night street with bokeh behind",
    "a deep blue painted wall behind",
    "a sticker-covered dorm wall behind",
-   "a mustard yellow wall behind"
+   "a mustard yellow wall behind",
+   "a sunlit rooftop with blue sky behind",
+   "a white tiled wall behind",
+   "a hot pink painted wall behind",
+   "a bright orange painted wall behind",
+   "a laundromat with washing machines behind",
+   "a subway car interior behind",
+   "a chain-link fence and blue sky behind",
+   "a silver glitter curtain behind"
   ],
   "wear": [
    "faded denim jacket collar",
@@ -64,7 +80,13 @@
    "a leather jacket",
    "a satin slip top and gold hoops",
    "a band-free plain black tee",
-   "a plain unbranded sports jersey"
+   "a plain unbranded sports jersey",
+   "a bright orange puffer jacket",
+   "a pastel pink hoodie",
+   "a crisp white button-up shirt",
+   "a metallic silver jacket",
+   "a red turtleneck",
+   "a striped rugby shirt"
   ],
   "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
  },
