@@ -232,7 +232,8 @@ class FVDirector:
             "dance_video": ("VIDEO", {"tooltip": "Motion mode: connect a Load Video with the dance clip "
                                                  "(instead of dance_video_path)"}),
             "qc_retries": ("INT", {"default": 1, "min": 0, "max": 3,
-                           "tooltip": "Check every take (frozen / dead mouth / blown / missing) and re-roll bad ones "
+                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away from the shot) "
+                                      "and re-roll bad ones "
                                       "this many times before the cut; 0 = off"}),
         }}
 

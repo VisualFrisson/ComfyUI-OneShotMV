@@ -38,7 +38,7 @@ Use music you have the rights to."""
 
 MOTION_NOTE = """## Frisson Vision: motion
 
-**One dance, many dancers.** Load a song and a dance clip (one person, full body, steady camera), then press **Queue**. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.
+**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.
 
 **Packs**
 - **spotlight**: one dark stage, costume changes, motion trails.
@@ -53,7 +53,7 @@ RECUT_NOTE = """## Frisson Vision: re-cut
 Re-cuts a finished run without re-rendering anything. Paste the run folder (it is printed by the Director) and set **fx_intensity**:
 - 0 = a clean cut;
 - 1 = the house style;
-- 2 = maximum.
+- 2 to 3 = heavier.
 
 The cut is re-derived from the pack's edit settings each time."""
 

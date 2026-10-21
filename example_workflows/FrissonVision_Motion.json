@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## Frisson Vision: motion\n\n**One dance, many dancers.** Load a song and a dance clip (one person, full body, steady camera), then press **Queue**. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
+    "## Frisson Vision: motion\n\n**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
    ],
    "title": "How it works"
   },
