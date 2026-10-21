@@ -160,7 +160,8 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     g = np.stack([f.mean(2) for f in frames]).astype(np.float32) / 255
     motion = float(np.abs(np.diff(g, axis=0)).mean())
     r["motion"] = round(motion, 5)
-    if motion < THRESH["frozen"]:
+    # frame-to-frame change halves when the frame rate doubles: judge it per 25 fps
+    if motion < THRESH["frozen"] * 25.0 / max(1.0, fps):
         r["fail"].append("frozen")
     flat = g.reshape(len(g), -1)
     lum, det = flat.mean(1), flat.std(1)
