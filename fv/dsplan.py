@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import math
 
-SWITCH_CHOICES = ["1 beat", "2 beats", "1 bar", "2 bars", "4 bars", "accelerate"]
+SWITCH_CHOICES = ["1 beat", "2 beats", "1 bar", "2 bars", "4 bars", "accelerate", "by section"]
+# "by section": calm in the quiet stretches, a bar a look in the build, fast on the drop
+SECTION_STEPS = {"quiet": "2 bars", "build": "1 bar", "drop": "2 beats"}
 RENDER_MODES = ["auto", "layers", "segments"]
 # Fixed cost of one render (keyframe edit, control maps, model passes, decode) in
 # frame-equivalents: a 17-frame LTX render takes roughly a third of a 129-frame one.
@@ -34,7 +36,7 @@ def _slot_beats(choice: str, bpb: int) -> int:
     fixed = {"1 beat": 1, "2 beats": 2, "1 bar": bpb, "2 bars": 2 * bpb, "4 bars": 4 * bpb}
     if choice in fixed:
         return fixed[choice]
-    if choice == "accelerate":
+    if choice in ("accelerate", "by section"):
         return 1
     return bpb * max(1, int(str(choice).split()[0]))  # "3 bars" etc.
 
@@ -48,10 +50,30 @@ def _grid(w: dict) -> tuple[list[float], list[float], float]:
     return beats, bars, dur
 
 
+def section_phase(w: dict, build_bars: float = 4):
+    """quiet / build / drop at a window time: the drop and choruses are drops (loud sections
+    when the analysis has no labels), the last `build_bars` bars before one are the build."""
+    secs = w.get("sections") or []
+    hot = [s for s in secs if s.get("is_drop") or s.get("label") in ("drop", "chorus")]
+    if not hot and not any(s.get("label") for s in secs):
+        hot = [s for s in secs if s.get("energy", 0.0) >= 0.6]
+    bar = 4 * 60.0 / max(1.0, float(w.get("tempo") or 120.0))
+
+    def phase(t: float) -> str:
+        if any(s["start"] - 1e-3 <= t + 0.01 < s["end"] for s in hot):
+            return "drop"
+        nxt = [s["start"] for s in hot if s["start"] > t + 0.01]
+        if nxt and nxt[0] - t <= build_bars * bar + 0.05:
+            return "build"
+        return "quiet"
+    return phase
+
+
 def _switch_times(start: float, end: float, beats: list[float], choice: str,
-                  bpb: int) -> list[float]:
+                  bpb: int, phase=None, steps: dict | None = None) -> list[float]:
     """Cut times from `start` to `end`. 'accelerate' ramps from a new look every bar to
-    every two beats to every beat."""
+    every two beats to every beat; 'by section' takes the step from the song's phase at each
+    cut (SECTION_STEPS: long in quiet stretches, fast on the drop)."""
     grid = [b for b in beats if start - 1e-3 <= b < end - 1e-3]
     if not grid or abs(grid[0] - start) > 1e-3:
         grid = [start] + grid
@@ -61,6 +83,13 @@ def _switch_times(start: float, end: float, beats: list[float], choice: str,
         if choice == "accelerate":
             p = (grid[i] - start) / span
             step = bpb if p < 0.4 else (2 if p < 0.7 else 1)
+        elif choice == "by section" and phase is not None:
+            ph = phase(grid[i])
+            step = _slot_beats((steps or SECTION_STEPS)[ph], bpb)
+            # a phase change cuts on its own bar line, not mid-step
+            nxt = next((j for j in range(i + 1, min(len(grid), i + step)) if phase(grid[j]) != ph), None)
+            if nxt is not None:
+                step = nxt - i
         else:
             step = _slot_beats(choice, bpb)
         i += step
@@ -91,7 +120,7 @@ def _cut_segments(w: dict, fps: float, n_out: int, looks: list[str], mode: str,
         for i, s in enumerate(secs):
             cuts.append((s["start"], looks[i % len(looks)]))
     else:  # "every-n-bars": cycle all looks, real included, from the start
-        for k, t in enumerate(_switch_times(0.0, dur, beats, switch_every, bpb)):
+        for k, t in enumerate(_switch_times(0.0, dur, beats, switch_every, bpb, section_phase(w))):
             cuts.append((t, looks[k % len(looks)]))
     merged = []
     for t, look in sorted(cuts):

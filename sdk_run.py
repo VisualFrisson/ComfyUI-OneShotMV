@@ -17,7 +17,7 @@ What happens:
      drum stems, plans the cut, casts the performers and returns the run as jobs.json.
   2. This script submits every render job (portraits, lip-sync clips, twin keys, pose-matched
      twins; grouped by model) and waits for them.
-  3. Take QC job: checks every clip (missing / frozen / blown / dead mouth) and returns re-roll
+  3. Take QC job: checks every clip (missing / frozen / blown / dead mouth / cut away / lip sync) and returns re-roll
      jobs with new seeds; the script submits those and checks again (--retries times).
   4. Assemble job: cut on the beat, audio-reactive FX, the finish, the song muxed in; the SDK
      downloads the MP4 (plus the EDL for your editor).
@@ -73,14 +73,14 @@ def main() -> int:
     ap.add_argument("--dance", default="", help="motion mode: the dance clip (path on the server)")
     ap.add_argument("--artist", default="", help="one-artist mode: a photo of the singer (path on the server)")
     ap.add_argument("--pack", default="crowd")
-    ap.add_argument("--format", default="9:16", choices=["9:16", "1:1", "16:9"])
+    ap.add_argument("--format", default="16:9", choices=["16:9", "9:16", "1:1"])
     ap.add_argument("--preset", default="quality", choices=["quality", "fast"])
-    ap.add_argument("--framing", default="close", choices=["close", "mixed"])
+    ap.add_argument("--framing", default="mixed", choices=["mixed", "close"])
     ap.add_argument("--seconds", type=float, default=30.0, help="0 = whole song")
     ap.add_argument("--start", type=float, default=-1.0, help="-1 = strongest stretch")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--twins", default="auto", choices=["auto", "loud", "all", "off"])
-    ap.add_argument("--retries", type=int, default=1, help="take-QC re-roll rounds (0 = off)")
+    ap.add_argument("--retries", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
     ap.add_argument("--fx", type=float, default=1.0, help="FX intensity (0 = clean cut)")
     ap.add_argument("--run-name", default="")
     ap.add_argument("--out", default="frissonvision_out")

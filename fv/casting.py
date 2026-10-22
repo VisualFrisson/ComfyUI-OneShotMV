@@ -79,16 +79,30 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None) ->
 
 
 def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
-    """Same person every shot: the portrait is an identity edit of the artist photo."""
+    """Same person every shot: the portrait is an identity edit of the artist photo. Close-ups
+    change outfit, light and wall; medium and wide shots (with `places` / `actions` in the pack)
+    put the artist somewhere new doing something: dancing, walking, sitting on a car hood."""
     rng, used, out = random.Random(seed), {}, []
+    who = c.get("who", "the person")
     for i in range(n):
         size = sizes[i] if i < len(sizes) else "close"
         fr = _frame(c, size)
         f = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("angle", "light", "background", "wear")}
         f["light"] = f["light"][:1].upper() + f["light"][1:]
-        edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
-        sing = fr["sing"].format(who=c.get("who", "the person"))
-        sing = sing[0].upper() + sing[1:]
+        move = _pick(rng, (c.get("moves") or {}).get(size, []), used, "move_" + size) or \
+            "The handheld camera sways gently."
+        action = ""
+        if size != "close" and c.get("places") and c.get("edit_wide"):
+            action = _pick(rng, (c.get("actions") or {}).get(size, ["singing"]), used, "action_" + size)
+            edit = c["edit_wide"].format(shot=fr["shot"][:1].lower() + fr["shot"][1:], lens=fr["lens"],
+                                         angle=_pick(rng, c.get("angle_wide", c["angle"]), used, "angle_wide"),
+                                         action=action, place=_pick(rng, c["places"], used, "place"),
+                                         wear=f["wear"], light=f["light"])
+            edit = " ".join(edit.split())
+        else:
+            edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
+        sing = fr["sing"].format(who=who, move=move, action=action or "singing")
+        sing = " ".join((sing[0].upper() + sing[1:]).split())
         # the twin of this performer: same person, a different look
         g = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("light", "background", "wear")}
         twin_prompt = " ".join(c["twin"].format(**g).split())

@@ -1,5 +1,5 @@
 {
- "id": "18771147-e6ca-452e-914b-f1401e34f24c",
+ "id": "9dcb3706-fe23-4156-a06e-260e2586a69a",
  "revision": 0,
  "last_node_id": 5,
  "last_link_id": 3,
@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## Frisson Vision: voice\n\n**One performance, many performers.** Drop in a song and press **Queue**. The Director:\n1. finds the beats, bars, sections and the drop;\n2. pulls the vocal and drum stems;\n3. plans a cut on the bar lines;\n4. casts a performer per shot (Krea 2 portraits);\n5. queues the jobs and then the final cut.\n\nEach performer lip-syncs the vocal (LTX audio-to-video). Loud shots get pose-matched twins for flash inserts, and every take is checked and re-rolled if it is bad.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 20 to 40 jobs.\n\n**Packs**\n- **crowd**: a new face every shot (the edamame look).\n- **eras**: invented archetypes through the decades.\n- **artist**: one singer from a photo. Un-bypass **Load Image**, pick the photo and set the pack to `artist`.\n\n**framing**\n- **close**: close-ups only.\n- **mixed**: medium and wide shots in the quiet stretches.\n\n**preset**\n- **quality**: LTX-2.3, 3 stages, 50 fps.\n- **fast**: LTX-2.5 distilled, 2 stages, 25 fps.\n\n**seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.\n\nUse music you have the rights to."
+    "## Frisson Vision: voice\n\n**One performance, many performers.** Drop in a song and press **Queue**. The Director:\n1. finds the beats, bars, sections and the drop;\n2. pulls the vocal and drum stems;\n3. plans the cut;\n4. casts a performer per shot (Krea 2 portraits);\n5. queues the jobs and then the final cut.\n\nEach performer lip-syncs the vocal (LTX audio-to-video).\n\n**The edit**\n- Verses hold each shot for about 2 bars.\n- The build tightens to a bar a shot.\n- The drop cuts on the beat through pose-matched looks of the same moment, so every fast cut is a match cut.\n- The cut never goes back to a shot it has left.\n\n**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.\n\n**Packs**\n- **crowd**: a new face every shot.\n- **eras**: invented archetypes through the decades.\n- **artist**: one singer from a photo. Un-bypass **Load Image**, pick the photo and set the pack to `artist`.\n\n**framing**\n- **mixed** (default): wide, medium and close shots in the verses, tighter in the build, close-ups on the drop.\n- **close**: close-ups only.\n\n**preset**\n- **quality**: LTX-2.3, 3 stages, 50 fps.\n- **fast**: the same model at 25 fps with fewer steps.\n\n**seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.\n\nUse music you have the rights to."
    ],
    "title": "How it works"
   },
@@ -153,7 +153,7 @@
    "widgets_values": [
     "voice",
     "crowd",
-    "9:16",
+    "16:9",
     "quality",
     30.0,
     -1.0,
@@ -166,9 +166,9 @@
     "klein",
     1.0,
     true,
-    "close",
+    "mixed",
     "",
-    1
+    2
    ],
    "title": "Frisson Vision: Director"
   },

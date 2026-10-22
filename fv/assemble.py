@@ -165,7 +165,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             if alt is not None and readers[alt].ok:
                 return frame_for(alt, t)
             return None
-        return rd.get(int(round((t - r["t_start"] - delay) * r["fps"])))
+        # per-take lip-sync offset measured by take QC (SyncNet), else the preset's average
+        return rd.get(int(round((t - r["t_start"] - r.get("sync_delay", delay)) * r["fps"])))
 
     def warp(x, al):
         """Scale/shift a frame so its face lands where the lead's face is (see faces.align)."""
@@ -188,6 +189,28 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             if s["start"] - 1e-3 <= t < s["end"]:
                 return s["loud"]
         return True
+
+    # FX level by phase (hold grammar): low in quiet stretches, rising through the build, full on
+    # the drop, so the drop lands as a jump in energy
+    qs = cfg.get("quiet_scale", 0.25)
+    level = None
+    if any("phase" in s for s in shots):
+        level = np.full(n_out, qs, np.float32)
+        k = 0
+        while k < len(shots):
+            s = shots[k]
+            if s.get("phase") == "build":
+                j = k
+                while j + 1 < len(shots) and shots[j + 1].get("phase") == "build":
+                    j += 1
+                a, b = int(round(s["t0"] * fps)), int(round(shots[j]["t1"] * fps))
+                if b > a:
+                    level[a:b] = np.linspace(qs, cfg.get("build_scale", 0.6), b - a)
+                k = j + 1
+                continue
+            if s.get("phase") == "drop":
+                level[int(round(s["t0"] * fps)):int(round(s["t1"] * fps))] = 1.0
+            k += 1
 
     # ---- finish stats from the middle frame of every clip
     fin = None
@@ -237,7 +260,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
                 xo = torch.from_numpy(np.ascontiguousarray(other)).to(device).float() / 255
                 xo = warp(xo, ev.get("from_align"))
                 x = x * (1 - a) + xo * a
-        p = fx.fx_params(f, ev, ctl, loud_at(f), cfg, f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps)
+        p = fx.fx_params(f, ev, ctl, loud_at(f), cfg, f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps,
+                         level=None if level is None else float(level[min(f, n_out - 1)]))
         y = fx.apply_fx(x, p, prev)
         prev = y
         z = fin(y, f) if fin is not None else y

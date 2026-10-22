@@ -14,6 +14,12 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
+  sync     - lead clips: SyncNet says the mouth doesn't follow the words (fv/lipsync.py; needs the
+             SyncNet weights, skipped without them, and on stretches with little singing).
+             Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
+             median confidence of 5.8-7.0, the ones heard as bad 1.4-4.7, with a wide spread
+             inside every run; takes under 4.5, or more than 9 frames off, are re-rolled.
+             The measured offset also sets that take's own lip-sync delay in the cut.
 Mouth-vs-vocal correlation is reported for information only: on continuous singing it is
 too noisy to reject takes with (calibrated on known-good renders).
 """
@@ -24,7 +30,9 @@ import os
 import numpy as np
 
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
-          "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55}
+          "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
+          "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.35}
+VERSION = 2  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -146,9 +154,31 @@ def vocal_env(vocal: np.ndarray | None, sr: int, seek: float, n: int, fps: float
     return out
 
 
+def sync_check(path: str, vocal, sr: int, seek: float) -> dict:
+    """SyncNet verdict for one take: {} when it can't run (no weights / no torch)."""
+    from . import lipsync
+    if vocal is None or not lipsync.available():
+        return {}
+    x = vocal.mean(0) if vocal.ndim == 2 else vocal
+    res = lipsync.score_file(path, x, sr, seek=seek)
+    if not res.get("ok"):
+        return {"sync": res.get("why", "n/a")}
+    out = {"sync_conf": res["conf"], "sync_offset": res["offset"], "sync_dist": res["dist"]}
+    # how much of the take is sung: on mostly instrumental stretches SyncNet has nothing to judge
+    n = res["frames25"]
+    a0 = int(max(0.0, seek) * sr)
+    seg = x[a0:a0 + int(n / 25 * sr)]
+    if len(seg) > sr // 5:
+        hop = sr // 25
+        rms = np.sqrt(np.array([np.mean(seg[i:i + hop] ** 2) for i in range(0, len(seg) - hop + 1, hop)]) + 1e-12)
+        ref = float(np.sqrt(np.mean(x ** 2) + 1e-12))  # the whole vocal stem's level
+        out["singing_frac25"] = round(float((rms > 0.5 * ref).mean()), 2)
+    return out
+
+
 def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, vocal=None, sr: int = 44100,
-               seek: float = 0.0) -> dict:
-    r = {"path": path, "ok": True, "fail": [], "score": 1.0}
+               seek: float = 0.0, sync: bool = False) -> dict:
+    r = {"path": path, "ok": True, "fail": [], "score": 1.0, "v": VERSION}
     if not path or not os.path.exists(path):
         r.update(ok=False, fail=["missing"], score=0.0)
         return r
@@ -197,8 +227,17 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
                     r["singing_frac"] = round(singing, 2)
                 if ratio < THRESH["mouth_ratio"] and dark.std() < THRESH["mouth_dark_std"]:
                     r["fail"].append("mouth")
+        if sync:
+            try:
+                r.update(sync_check(path, vocal, sr, seek))
+            except Exception as e:  # never let the scorer block a cut
+                r["sync"] = f"error: {e}"
+            if "sync_conf" in r and r.get("singing_frac25", 1.0) >= THRESH["sync_singing"]:
+                if r["sync_conf"] < THRESH["sync_conf"] or abs(r["sync_offset"]) > THRESH["sync_offset"]:
+                    r["fail"].append("sync")
     r["fail"] = sorted(set(r["fail"]))
     r["ok"] = not r["fail"]
     r["score"] = (0.0 if "missing" in r["fail"] else 1.0) - 0.4 * len(r["fail"]) \
-        + 0.1 * min(2.0, r.get("mouth_ratio", 1.0)) + 5 * min(0.03, motion)
+        + 0.1 * min(2.0, r.get("mouth_ratio", 1.0)) + 5 * min(0.03, motion) \
+        + 0.08 * min(8.0, max(0.0, r.get("sync_conf", 0.0)))
     return r

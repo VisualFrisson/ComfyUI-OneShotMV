@@ -4,17 +4,19 @@
  "mode": "motion",
  "about": "One choreography on one dark stage under a single spotlight; the dancer's outfit and identity change on the beat, faster as the section builds, with motion trails. Modelled on the Eat It edit.",
  "edit": {
-  "switch_every": "accelerate",
+  "switch_every": "by section",
   "twins": "off",
   "loud_threshold": 0.6,
-  "motion_twins": "all",
+  "motion_twins": "drop",
   "insert_on_beat": 0.6,
   "insert_off_beat": 0.3,
   "insert_frames": [
    3,
    4
   ],
-  "ghost_frames": 2
+  "ghost_frames": 2,
+  "_note": "switch_every 'by section': a new character every 2 bars in quiet stretches, every bar in the build (the last build_bars bars before a drop), every 2 beats on the drop, where the motion twins flicker in. Any fixed rhythm ('2 beats', '1 bar', 'accelerate') still works.",
+  "build_bars": 4
  },
  "fx": {
   "intensity": 1.0,

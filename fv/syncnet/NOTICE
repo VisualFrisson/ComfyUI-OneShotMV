@@ -1,0 +1,11 @@
+fv/syncnet/ holds a vendored copy of the SyncNet lip-sync model and the S3FD face detector,
+taken unchanged from syncnet-python 0.2.3 (https://github.com/nawta/SyncNet_py309_313):
+
+  model.py, s3fd/nets.py, s3fd/box_utils.py
+    MoChaBench (https://github.com/congwei1230/MoChaBench, eval-lipsync/script/),
+    Apache License 2.0 (LICENSE-APACHE), based on the original SyncNet code by
+    Joon Son Chung (https://github.com/joonson/syncnet_python, MIT, LICENSE).
+
+The weights (syncnet_v2.model, sfd_face.pth) are NOT included. They come from the Oxford VGG
+SyncNet page (https://www.robots.ox.ac.uk/~vgg/software/lipsync/), which says: "The model can be
+used for research purposes under Creative Commons Attribution License."

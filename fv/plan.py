@@ -28,7 +28,8 @@ def _sections_with_loudness(w: dict, thr: float) -> list[dict]:
     for s in secs:
         e = float(s.get("energy", 1.0))
         out.append({"start": float(s["start"]), "end": float(s["end"]), "energy": e,
-                    "loud": bool(e >= thr or s.get("is_drop"))})
+                    "loud": bool(e >= thr or s.get("is_drop")), "label": s.get("label", ""),
+                    "is_drop": bool(s.get("is_drop"))})
     return out
 
 
@@ -48,27 +49,97 @@ def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
 def assign_framing(shots: list[dict], framing: str, seed: int) -> None:
     """'close': every shot a close-up (the edamame look). 'mixed': quiet stretches lean wide and
     medium, loud ones punch in close (with an occasional medium), never the same size twice in
-    a row in quiet sections."""
+    a row in quiet sections. With phases (the hold grammar): quiet shots move between wide,
+    medium and close; builds tighten (medium, close); drops are close-ups."""
     rng = random.Random(seed * 31 + 7)
     prev = None
     for k, s in enumerate(shots):
         if framing != "mixed":
             s["size"] = "close"
             continue
-        if s["loud"]:
-            size = "medium" if (rng.random() < 0.25 and prev == "close") else "close"
+        ph = s.get("phase")
+        if ph == "quiet":
+            opts = [x for x in ("wide", "medium", "close") if x != prev]
+            size = rng.choices(opts, weights=[{"wide": 0.4, "medium": 0.4, "close": 0.2}[x] for x in opts])[0]
+        elif ph == "build":
+            size = "close" if prev == "medium" else "medium"
+        elif s["loud"]:
+            size = "medium" if (ph is None and rng.random() < 0.25 and prev == "close") else "close"
         else:
             size = rng.choice([x for x in ("wide", "medium") if x != prev] or ["wide"])
         s["size"] = size
         prev = size
 
 
-def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "quality",
+INTENSE = ("drop", "chorus")
+
+
+def _intense(s: dict) -> bool:
+    """The song's intense parts: the drop and the choruses (by the section analysis). Loudness
+    alone can't tell them apart in songs that stay loud throughout (rap verses are as loud as
+    the hook); without labels, the loud sections count."""
+    if s.get("label"):
+        return s.get("is_drop") or s["label"] in INTENSE
+    return s["loud"]
+
+
+def _phases(secs: list[dict], bar_len: float, build_bars: float):
+    """quiet / build / drop at a time: the intense sections (_intense) are drops; the last
+    `build_bars` bars before one are the build; the rest holds."""
+    hot = [s for s in secs if _intense(s)]
+
+    def phase(t: float) -> str:
+        if any(s["start"] - 1e-3 <= t + 0.01 < s["end"] for s in hot):
+            return "drop"
+        nxt = [s["start"] for s in hot if s["start"] > t + 0.01]
+        if nxt and nxt[0] - t <= build_bars * bar_len + 0.05:
+            return "build"
+        return "quiet"
+    return phase
+
+
+def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_len: float) -> list[dict]:
+    """The hold grammar's shots: long holds in quiet stretches, one bar each in the build,
+    one-bar groups in the drop (cut on the beat inside each group, see _hold_renders)."""
+    phase = _phases(secs, bar_len, ed.get("build_bars", 4))
+    nbars = {"quiet": int(ed.get("shot_bars_quiet", 2)), "build": int(ed.get("shot_bars_build", 1)),
+             "drop": int(ed.get("drop_group_bars", 1))}
+    sec_starts = sorted(s["start"] for s in secs)
+    shots, i = [], 0
+    while i < len(bars):
+        a = bars[i]
+        ph = phase(a)
+        j = i + 1
+        while j < len(bars) and j - i < nbars[ph] and phase(bars[j]) == ph and \
+                not any(abs(bars[j] - s) < 0.3 for s in sec_starts):
+            j += 1
+        b = bars[j] if j < len(bars) else dur
+        shots.append({"t0": round(float(a), 4), "t1": round(float(b), 4), "loud": ph == "drop", "phase": ph})
+        i = j
+    if shots and dur - shots[-1]["t1"] > 0.05:
+        shots[-1]["t1"] = round(dur, 4)
+    # long drops: beat cuts for the first `drop_burst_bars` bars, then every other bar, so a
+    # 30-bar chorus doesn't strobe from end to end
+    burst = int(ed.get("drop_burst_bars", 8))
+    run = 0
+    for s in shots:
+        if s["phase"] != "drop":
+            run = 0
+            continue
+        run += 1
+        s["burst"] = run <= burst or (run - burst) % 2 == 0
+    return shots
+
+
+def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "quality",
                seconds: float = 30.0, start: float = -1.0, seed: int = 1,
-               twins: str | None = None, preroll: float = 0.2, tail: float = 0.12,
-               out_fps: float = 24.0, framing: str = "close") -> dict:
+               twins: str | None = None, preroll: float | None = None, tail: float = 0.12,
+               out_fps: float = 24.0, framing: str = "mixed") -> dict:
     ed = pack["edit"]
     twins = twins or ed.get("twins", "loud")
+    # lead-in before each shot: room for the per-take lip-sync delay (up to ~0.4 s) without
+    # holding a clip's first frame at the cut
+    preroll = preroll if preroll is not None else (0.4 if ed.get("grammar") == "hold" else 0.2)
     t0, t1 = choose(tl, seconds, start)
     w = beat.slice_timeline(tl, t0, t1)
     dur = w["duration"]
@@ -85,6 +156,18 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "9:16", preset: str = "qualit
     sec_starts = sorted(s["start"] for s in secs)
     rfps = formats.PRESETS[preset]["fps"]
     rng = random.Random(seed)
+    if ed.get("grammar") == "hold":
+        shots = _hold_shots(bars, dur, secs, ed, bar_len)
+        if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
+            shots[-2]["t1"] = shots.pop()["t1"]
+        assign_framing(shots, framing, seed)
+        renders, performers = _hold_renders(shots, beats, ed, rfps, t0, preroll, tail)
+        edl = voice_edl(shots, renders, beats, ed, out_fps, seed)
+        return {"version": 2, "mode": "voice", "pack": pack["name"], "format": fmt, "preset": preset,
+                "seed": seed, "song_t0": t0, "song_t1": t1, "duration": round(dur, 4),
+                "out_fps": out_fps, "render_fps": rfps, "tempo": w["tempo"], "timeline": w,
+                "sections": secs, "shots": shots, "renders": renders, "edl": edl,
+                "performers": performers, "twins": "drop", "framing": framing, "grammar": "hold"}
 
     # ---- shots on bar lines; a section start always starts a new shot
     shots, i = [], 0
@@ -147,10 +230,13 @@ def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: di
     with no good match is dropped, so fast passages stay readable: fewer flashes, all of them
     match cuts. `delay` is the clip-to-song sync offset the assembler applies.
 
-    Older packs with only `insert_every_beats` keep the original sparse pattern."""
+    Older packs with only `insert_every_beats` keep the original sparse pattern.
+    Packs with "grammar": "hold" use _hold_edl instead (no flashes back to a shot)."""
     import importlib
     from . import faces as fz
     fz = importlib.reload(fz)
+    if ed.get("grammar") == "hold":
+        return _hold_edl(fz, shots, renders, ed, out_fps, faces, delay)
     rng = random.Random(seed * 7919 + 3)
     edl = []
     dense = "insert_on_beat" in ed
@@ -228,6 +314,86 @@ def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: di
     return edl
 
 
+def _hold_renders(shots: list[dict], beats: list[float], ed: dict, rfps: float, t0: float,
+                  preroll: float, tail: float) -> tuple[list[dict], int]:
+    """One lead (A) per shot, lip-synced to its stretch of the vocal. Each drop group adds a
+    chain of pose-matched looks (B): the lead's clip re-rendered from the lead's own pose and
+    words as someone (or somewhere) new, each covering just its beat. Every cut inside the group
+    then lands on the same face position, pose and syllable. `drop_looks` looks per group
+    (the lead included), one per `drop_cut_beats` beats."""
+    renders, performers = [], 0
+    looks = max(1, int(ed.get("drop_looks", 4)))
+    every = max(1, int(ed.get("drop_cut_beats", 1)))
+    tpre = float(ed.get("twin_preroll", 0.2))
+    for si, s in enumerate(shots):
+        s["index"] = si
+        r0 = max(-t0, s["t0"] - preroll)  # can't start before the song
+        a = {"id": len(renders), "shot": si, "role": "A", "performer": performers,
+             "t_start": round(r0, 4), "frames": formats.ltx_frames(s["t1"] - r0 + tail, rfps), "fps": rfps,
+             "size": s["size"]}
+        renders.append(a)
+        s["A"] = a["id"]
+        performers += 1
+        if s.get("phase") != "drop" or not s.get("burst", True) or looks < 2:
+            continue
+        a_end = r0 + a["frames"] / rfps
+        sb = [b for b in beats if s["t0"] + 0.1 < b < s["t1"] - 0.1]
+        cuts = sb[every - 1::every][:looks - 1]
+        s["chain"] = []
+        for k, c in enumerate(cuts):
+            end = cuts[k + 1] if k + 1 < len(cuts) else s["t1"]
+            ts = max(r0, c - tpre)
+            n = formats.ltx_frames(end - ts + tail, rfps)
+            while n > 9 and ts + n / rfps > a_end + 1e-6:  # the pose guide is the lead's clip
+                n -= 8
+            b = {"id": len(renders), "shot": si, "role": "B", "performer": performers, "twin_of": a["id"],
+                 "t_start": round(ts, 4), "frames": n, "fps": rfps, "size": s["size"],
+                 "guide_start": round(ts - r0, 4), "cut_at": round(c, 4)}
+            renders.append(b)
+            s["chain"].append(b["id"])
+            performers += 1
+    return renders, performers
+
+
+def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: float,
+              faces: dict | None, delay: float) -> list[dict]:
+    """The hold grammar's cut. Each shot plays its lead; a drop group steps through its chain of
+    pose-matched looks on the beat and never returns to an earlier one. A look that QC could
+    not save, or whose face doesn't land on the lead's, is skipped (the look before it plays
+    on), so every fast cut is a match cut."""
+    by_id = {r["id"]: r for r in renders}
+    thr = ed.get("match_threshold", 0.16) * ed.get("twin_tolerance", 2.0)
+    edl = []
+    for s in shots:
+        f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
+        a = by_id[s["A"]]
+        segs = [(s["A"], f0, None)]
+        for rid in s.get("chain", []):
+            r = by_id.get(rid)
+            if r is None or r.get("unusable"):
+                continue
+            fc = int(round(r["cut_at"] * out_fps))
+            if not (segs[-1][1] + 2 <= fc <= f1 - 2):
+                continue
+            al = None
+            if faces is not None:
+                tf = r["cut_at"]
+                lf = fz.face_at(faces.get(s["A"]), tf - a["t_start"] - a.get("sync_delay", delay))
+                bf = fz.face_at(faces.get(rid), tf - r["t_start"] - r.get("sync_delay", delay))
+                if lf is not None and bf is not None:
+                    if fz.match_cost(lf, bf) > thr:
+                        continue
+                    al = fz.align(lf, bf)
+            segs.append((rid, fc, al))
+        for k, (rid, fa, al) in enumerate(segs):
+            fb = segs[k + 1][1] if k + 1 < len(segs) else f1
+            ev = {"f0": fa, "f1": fb, "render": rid, "kind": "main" if k == 0 else "switch"}
+            if al is not None:
+                ev["align"] = al
+            edl.append(ev)
+    return edl
+
+
 def _match_insert(fz, faces, by_id, lead, tf, shot, same, has_b, delay, ed, rng):
     """(source render, dt, align) for an insert at window time tf, or None if nothing lines up."""
     lr = by_id[lead]
@@ -270,7 +436,7 @@ def _match_insert(fz, faces, by_id, lead, tf, shot, same, has_b, delay, ed, rng)
     return c[1], c[2], fz.align(lf, c[3])
 
 
-def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "9:16",
+def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "16:9",
                 preset: str = "quality", seconds: float = 16.0, start: float = -1.0,
                 seed: int = 1, switch_every: str | None = None, clip_offset_s: float = 0.0,
                 pad: float = 0.12, out_fps: float = 24.0) -> dict:
@@ -299,21 +465,23 @@ def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt:
                         "t_start": round(ts, 4), "src_start": round(r["src_f0"] / clip_fps, 4),
                         "frames": formats.ltx_frames(dur + pad, rfps), "fps": rfps})
     shots = []
+    phase = dsplan.section_phase(w, ed.get("build_bars", 4))
     for s in p["segments"]:
         f0 = int(round(s["f0"] / clip_fps * out_fps))
         f1 = int(round(s["f1"] / clip_fps * out_fps))
         if f1 <= f0:
             continue
         shots.append({"index": len(shots), "t0": round(f0 / out_fps, 4), "t1": round(f1 / out_fps, 4),
-                      "loud": _loud_at(secs, f0 / out_fps + 0.01), "A": s.get("render")})
+                      "loud": _loud_at(secs, f0 / out_fps + 0.01), "A": s.get("render"),
+                      "phase": phase(f0 / out_fps + 0.01)})
     # motion twins: the same stretch of the dance rendered as a second character, so the fast
     # flicker inserts are pose-perfect match cuts
     mt = ed.get("motion_twins", "off")
-    if mt in ("loud", "all"):
+    if mt in ("loud", "all", "drop"):
         by_id = {r["id"]: r for r in renders}
         for sh in shots:
             a = by_id.get(sh["A"])
-            if a is None or (mt == "loud" and not sh["loud"]):
+            if a is None or (mt == "loud" and not sh["loud"]) or (mt == "drop" and sh["phase"] != "drop"):
                 continue
             other = (a["performer"] + max(1, n_cast // 2) + sh["index"] % 3) % n_cast
             b = dict(a, id=len(renders), role="MB", performer=other, twin_of=a["id"])

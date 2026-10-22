@@ -9,17 +9,17 @@
    "close": {
     "shot": "Extreme close-up portrait",
     "lens": "on a wide-angle lens very close to the face",
-    "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. The handheld camera stays very close and sways gently. Both hands stay below the frame. No one else in frame."
+    "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the frame. No one else in frame."
    },
    "medium": {
     "shot": "Medium chest-up shot",
     "lens": "on a 35mm lens at chest height",
-    "sing": "Handheld medium shot of {who} singing toward the camera. The lips form each word clearly with open mouth movements, shoulders and head move with the rhythm, natural breathing, hands below the frame. The camera sways gently."
+    "sing": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} No one else in frame."
    },
    "wide": {
     "shot": "Wide full-body shot",
     "lens": "on a 24mm lens a few meters away",
-    "sing": "Wide handheld shot of {who} singing and dancing loosely to the beat, the lips forming the words, both hands open with fingers spread, arms swinging freely with the rhythm. The camera drifts slowly."
+    "sing": "Wide shot of {who} {action}, singing along, the lips forming the words, moving freely with the rhythm. {move} No one else in frame."
    }
   },
   "edit": "Photo of the same person as in image 1. {shot}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}. Wearing {wear}. {light}, {background}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
@@ -88,12 +88,93 @@
    "a red turtleneck",
    "a striped rugby shirt"
   ],
-  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles"
+  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles",
+  "edit_wide": "Photo of the same person as in image 1, photographed again somewhere new: a {shot} {lens}, shot {angle}. They are {action} {place}, singing with the mouth open mid-word. Wearing {wear}. {light}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
+  "places": [
+   "on a rooftop at dusk with the city lights behind",
+   "on an empty subway platform",
+   "in a neon-lit diner",
+   "in a parking garage under orange sodium lights",
+   "in a laundromat at night",
+   "beside a parked car on a desert road at golden hour",
+   "on a rain-wet city street under neon signs",
+   "in a skate park at sunset",
+   "in a karaoke room with glitter walls",
+   "in a hotel corridor with patterned carpet",
+   "in a field of tall grass at dusk",
+   "in a corner store under fluorescent light",
+   "in a concrete stairwell lit by a single bulb",
+   "on a basketball court at night under floodlights",
+   "in an empty swimming pool painted pale blue",
+   "in a dressing room with bulb-ringed mirrors",
+   "on a pier by the sea on an overcast day",
+   "in a pink-lit tunnel"
+  ],
+  "actions": {
+   "medium": [
+    "sitting and leaning toward the camera",
+    "leaning back against a wall",
+    "walking slowly beside the camera",
+    "swaying to the beat",
+    "turning toward the camera",
+    "sitting on the floor with knees up",
+    "raising one hand to the beat",
+    "looking up between lines, then back to the camera"
+   ],
+   "wide": [
+    "dancing loosely",
+    "walking toward the camera",
+    "spinning slowly with arms out",
+    "dancing alone, eyes closed",
+    "striding past the camera",
+    "jumping on the beat",
+    "swaying with arms raised",
+    "dancing with small sharp moves"
+   ]
+  },
+  "moves": {
+   "close": [
+    "The handheld camera stays very close and sways gently.",
+    "The camera pushes in slowly toward the face.",
+    "The camera drifts slowly around the face.",
+    "The handheld camera bobs gently with the beat."
+   ],
+   "medium": [
+    "The camera tracks slowly alongside.",
+    "The camera pushes in slowly.",
+    "The handheld camera sways with the rhythm.",
+    "The camera arcs slowly around them."
+   ],
+   "wide": [
+    "The camera follows from a few meters away.",
+    "The camera pushes in slowly from far away.",
+    "The camera arcs slowly around them.",
+    "The camera holds still on a tripod."
+   ]
+  },
+  "angle_wide": [
+   "from a low angle",
+   "at eye level",
+   "from slightly above",
+   "in three-quarter profile",
+   "from just behind the shoulder as they turn to the camera"
+  ]
  },
  "edit": {
+  "_note": "grammar 'hold': long holds in quiet stretches (shot_bars_quiet bars), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
+  "grammar": "hold",
+  "shot_bars_quiet": 2,
+  "shot_bars_build": 1,
+  "build_bars": 4,
+  "drop_group_bars": 1,
+  "drop_looks": 4,
+  "drop_cut_beats": 1,
+  "twin_preroll": 0.4,
+  "twin_tolerance": 1.0,
   "loud_threshold": 0.6,
+  "match_cut": true,
+  "match_threshold": 0.16,
   "shot_bars_loud": 2,
-  "shot_bars_quiet": 1,
   "twins": "loud",
   "insert_every_beats": 2,
   "insert_frames": [
@@ -104,9 +185,7 @@
   "pingpong": 0.35,
   "insert_on_beat": 0.75,
   "insert_off_beat": 0.35,
-  "insert_twin_share": 0.7,
-  "match_cut": true,
-  "match_threshold": 0.16
+  "insert_twin_share": 0.7
  },
  "fx": {
   "intensity": 1.0,
@@ -115,8 +194,9 @@
   "zoom": 0.05,
   "shake": 4,
   "ghost": 0.6,
-  "quiet_scale": 0.25,
-  "insert_flash": 0.75
+  "quiet_scale": 0.2,
+  "insert_flash": 0.75,
+  "build_scale": 0.6
  },
  "finish": {
   "grade_mean": [

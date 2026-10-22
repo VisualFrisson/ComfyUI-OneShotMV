@@ -210,7 +210,7 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     av = g.add("LTXVConcatAVLatent", video_latent=lat_ref, audio_latent=a_ref)
     guider = g.add("CFGGuider", model=m["model"], positive=p_ref, negative=n_ref, cfg=1.0)
     if pr["engine"] == "ltx23_r8":
-        sig = g.add("LTXVScheduler", steps=30, max_shift=2.05, base_shift=0.95, stretch=True,
+        sig = g.add("LTXVScheduler", steps=int(pr.get("steps1", 30)), max_shift=2.05, base_shift=0.95, stretch=True,
                     terminal=0.1, latent=O(av))
         smp = g.add("KSamplerSelect", sampler_name="res_2s")
     else:
@@ -285,13 +285,14 @@ TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Back
              "expression. A completely different person. Photorealistic photo with natural skin texture.")
 
 
-def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None):
-    """First frame of performer A's clip re-cast as performer B (same pose and mouth).
+def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
+             start_s=0.0):
+    """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth).
     editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
     editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose)."""
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
-               start_seconds=0.0, force_fps=0.0)
+               start_seconds=float(start_s), force_fps=0.0)
     if editor == "qwen":
         ref = g.add("FVLoadImagePath", path=portrait_path)
         out = _qwen21(g, O(fr), prompt or TWIN_PROMPT, [O(ref)], seed=seed)

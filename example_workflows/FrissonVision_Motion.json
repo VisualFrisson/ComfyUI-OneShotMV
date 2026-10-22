@@ -1,5 +1,5 @@
 {
- "id": "7e6ae0cf-7e41-4de3-ae9e-ab56c8f704c0",
+ "id": "3202d428-5d75-4f99-b108-96759244031f",
  "revision": 0,
  "last_node_id": 5,
  "last_link_id": 3,
@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## Frisson Vision: motion\n\n**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
+    "## Frisson Vision: motion\n\n**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts are calm in the quiet parts, a bar a character in the build, and fast on the drop, where a second character flickers in doing the same move.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
    ],
    "title": "How it works"
   },
@@ -148,7 +148,7 @@
    "widgets_values": [
     "motion",
     "spotlight",
-    "1:1",
+    "16:9",
     "quality",
     16.0,
     -1.0,
@@ -161,9 +161,9 @@
     "klein",
     1.0,
     true,
-    "close",
+    "mixed",
     "",
-    1
+    2
    ],
    "title": "Frisson Vision: Director"
   },

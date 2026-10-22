@@ -11,26 +11,34 @@ VOICE_NOTE = """## Frisson Vision: voice
 **One performance, many performers.** Drop in a song and press **Queue**. The Director:
 1. finds the beats, bars, sections and the drop;
 2. pulls the vocal and drum stems;
-3. plans a cut on the bar lines;
+3. plans the cut;
 4. casts a performer per shot (Krea 2 portraits);
 5. queues the jobs and then the final cut.
 
-Each performer lip-syncs the vocal (LTX audio-to-video). Loud shots get pose-matched twins for flash inserts, and every take is checked and re-rolled if it is bad.
+Each performer lip-syncs the vocal (LTX audio-to-video).
 
-The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 20 to 40 jobs.
+**The edit**
+- Verses hold each shot for about 2 bars.
+- The build tightens to a bar a shot.
+- The drop cuts on the beat through pose-matched looks of the same moment, so every fast cut is a match cut.
+- The cut never goes back to a shot it has left.
+
+**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync.
+
+The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.
 
 **Packs**
-- **crowd**: a new face every shot (the edamame look).
+- **crowd**: a new face every shot.
 - **eras**: invented archetypes through the decades.
 - **artist**: one singer from a photo. Un-bypass **Load Image**, pick the photo and set the pack to `artist`.
 
 **framing**
+- **mixed** (default): wide, medium and close shots in the verses, tighter in the build, close-ups on the drop.
 - **close**: close-ups only.
-- **mixed**: medium and wide shots in the quiet stretches.
 
 **preset**
 - **quality**: LTX-2.3, 3 stages, 50 fps.
-- **fast**: LTX-2.5 distilled, 2 stages, 25 fps.
+- **fast**: the same model at 25 fps with fewer steps.
 
 **seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.
 
@@ -38,7 +46,7 @@ Use music you have the rights to."""
 
 MOTION_NOTE = """## Frisson Vision: motion
 
-**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography on the beat. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts get faster as the section builds.
+**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts are calm in the quiet parts, a bar a character in the build, and fast on the drop, where a second character flickers in doing the same move.
 
 **Packs**
 - **spotlight**: one dark stage, costume changes, motion trails.
@@ -96,12 +104,12 @@ DIRECTOR_IN = [{"name": "audio", "type": "AUDIO"},
 DIRECTOR_OUT = [{"name": "summary", "type": "STRING"}, {"name": "run_dir", "type": "STRING"}]
 
 
-def director_widgets(mode, pack, preset="quality", fmt="9:16", seconds=30.0, framing="close", seed=1):
+def director_widgets(mode, pack, preset="quality", fmt="16:9", seconds=30.0, framing="mixed", seed=1):
     # required: mode, pack, format, preset, seconds, start, seed (+ control), twins, queue_renders
     # optional widgets: dance_video_path, run_name, twin_editor, guide_strength, queue_assemble,
     #                   framing, artist_image_path, qc_retries
     return [mode, pack, fmt, preset, seconds, -1.0, seed, "fixed", "auto", True,
-            "", "", "klein", 1.0, True, framing, "", 1]
+            "", "", "klein", 1.0, True, framing, "", 2]
 
 
 def voice():
@@ -131,7 +139,7 @@ def motion():
     vid = w.node("LoadVideo", [450, 220], [320, 400], ["dance.mp4", "image"],
                  outputs=[{"name": "VIDEO", "type": "VIDEO"}], title="Dance clip")
     d = w.node("FVDirector", [800, 0], [380, 560],
-               director_widgets("motion", "spotlight", fmt="1:1", seconds=16.0),
+               director_widgets("motion", "spotlight", seconds=16.0),
                inputs=DIRECTOR_IN, outputs=DIRECTOR_OUT, title="Frisson Vision: Director")
     pv = w.node("PreviewAny", [1210, 0], [420, 260], [],
                 inputs=[{"name": "source", "type": "*"}], outputs=[{"name": "STRING", "type": "STRING"}],

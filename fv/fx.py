@@ -16,9 +16,12 @@ def _hash01(i: int, k: int) -> float:
 
 
 def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_start: bool, j: int,
-              fps: float = 24.0) -> dict:
-    """f: output frame; ev: active edit event; j: frames since that event started."""
-    I = cfg.get("intensity", 1.0) * (1.0 if loud else cfg.get("quiet_scale", 0.25))
+              fps: float = 24.0, level: float | None = None) -> dict:
+    """f: output frame; ev: active edit event; j: frames since that event started.
+    level: FX level for this frame (quiet / build ramp / drop); default from `loud`."""
+    if level is None:
+        level = 1.0 if loud else cfg.get("quiet_scale", 0.25)
+    I = cfg.get("intensity", 1.0) * level
     kick = float(ctl["kick"][f]) if f < len(ctl["kick"]) else 0.0
     snare = float(ctl["snare"][f]) if f < len(ctl["snare"]) else 0.0
     hat = float(ctl["hat"][f]) if f < len(ctl["hat"]) else 0.0

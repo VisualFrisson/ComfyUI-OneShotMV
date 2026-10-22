@@ -12,11 +12,13 @@ import math
 
 FORMATS = {
     # name: (render w, h at quality), (render w, h at fast), delivery (w, h)
+    "16:9": {"quality": (1280, 768), "fast": (896, 512), "deliver": (1920, 1080)},
     "9:16": {"quality": (768, 1280), "fast": (512, 896), "deliver": (1080, 1920)},
     "1:1": {"quality": (1024, 1024), "fast": (768, 768), "deliver": (1080, 1080)},
-    "16:9": {"quality": (1280, 768), "fast": (896, 512), "deliver": (1920, 1080)},
 }
-FORMAT_NAMES = list(FORMATS)
+for _f in FORMATS.values():
+    _f["fast_voice"] = _f["quality"]
+FORMAT_NAMES = list(FORMATS)  # 16:9 first: the default
 
 PRESETS = {
     # quality = the user's R8 LTX lip-sync recipe: LTX-2.3 22B dev + distilled LoRA 0.45,
@@ -28,8 +30,16 @@ PRESETS = {
     # fast = LTX-2.5 22B distilled, two stages (1/2 -> full), 25 fps.
     # fast: LTX-2.5 lips lead by only ~0.12 s (peak over 11 clips), so a small nudge
     "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled", "sync_delay": 0.05},
+    # fast for singing: LTX-2.5's lip sync scores lower under SyncNet, so voice runs at "fast"
+    # keep the quality model and its full size, at 25 fps and fewer first-stage steps
+    "fast_voice": {"stages": 3, "fps": 25, "engine": "ltx23_r8", "sync_delay": 0.16, "steps1": 20},
 }
-PRESET_NAMES = list(PRESETS)
+PRESET_NAMES = ["quality", "fast"]  # what users pick; fast_voice is chosen for voice + fast
+
+
+def effective_preset(mode: str, preset: str) -> str:
+    """Singing shots always use the quality model (fast_voice), motion keeps LTX-2.5 at fast."""
+    return "fast_voice" if (mode == "voice" and preset == "fast") else preset
 
 
 def render_size(fmt: str, preset: str) -> tuple[int, int]:

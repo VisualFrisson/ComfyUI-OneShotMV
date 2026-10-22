@@ -122,9 +122,20 @@
   }
  },
  "edit": {
+  "_note": "grammar 'hold': long holds in quiet stretches (shot_bars_quiet bars), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
+  "grammar": "hold",
+  "shot_bars_quiet": 2,
+  "shot_bars_build": 1,
+  "build_bars": 4,
+  "drop_group_bars": 1,
+  "drop_looks": 4,
+  "drop_cut_beats": 1,
+  "twin_preroll": 0.4,
+  "twin_tolerance": 1.0,
   "loud_threshold": 0.6,
+  "match_cut": true,
+  "match_threshold": 0.16,
   "shot_bars_loud": 2,
-  "shot_bars_quiet": 1,
   "twins": "loud",
   "insert_every_beats": 2,
   "insert_frames": [
@@ -135,9 +146,7 @@
   "pingpong": 0.35,
   "insert_on_beat": 0.75,
   "insert_off_beat": 0.35,
-  "insert_twin_share": 0.7,
-  "match_cut": true,
-  "match_threshold": 0.16
+  "insert_twin_share": 0.7
  },
  "fx": {
   "intensity": 1.0,
@@ -146,8 +155,9 @@
   "zoom": 0.05,
   "shake": 4,
   "ghost": 0.6,
-  "quiet_scale": 0.25,
-  "insert_flash": 0.75
+  "quiet_scale": 0.2,
+  "insert_flash": 0.75,
+  "build_scale": 0.6
  },
  "finish": {
   "grade_mean": [

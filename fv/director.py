@@ -67,11 +67,11 @@ def clip_info(path: str) -> tuple[int, float]:
 
 
 def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pack: str = "crowd",
-           fmt: str = "9:16", preset: str = "quality", seconds: float = 30.0, start: float = -1.0,
+           fmt: str = "16:9", preset: str = "quality", seconds: float = 30.0, start: float = -1.0,
            seed: int = 1, twins: str = "auto", dance_path: str = "", run_name: str = "",
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
-           do_stems: bool = True, queue_assemble: bool = True, framing: str = "close",
-           artist_path: str = "", qc_retries: int = 1, log=print) -> dict:
+           do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
+           artist_path: str = "", qc_retries: int = 2, log=print) -> dict:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
@@ -86,6 +86,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
 
     tl = beat.analyze(audio, sr)
     pk = casting.load_pack(pack)
+    label = preset
+    preset = formats.effective_preset(mode, preset)  # singing always renders on the quality model
     if mode == "voice":
         if artist_path and pack != "artist":
             pk = casting.load_pack("artist")
@@ -137,7 +139,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             else:
                 jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
                                                            prefix=f"{rel}/{name}", size1=s1, size2=s2,
-                                                           turbo_only=(preset == "fast")).nodes))
+                                                           turbo_only=(label == "fast")).nodes))
             port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
         jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
         neg = pk["casting"]["negative"]
@@ -156,10 +158,13 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             a = by_id[r["twin_of"]]
             r["key"] = os.path.join(run_dir, f"k{r['id']:03d}_00001_.png")
             c = cast[r["performer"]]
+            # a chain of looks (hold grammar) needs a different look per twin: each twin
+            # performer's own; one twin per lead (flash grammar) keeps the lead's twin look
+            look_of = r["performer"] if "guide_start" in r else a["performer"]
             jobs.append((f"k{r['id']:03d}", graphs.twin_key(
                 video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
-                size=rsize, seed=seed + r["id"], editor=editor,
-                prompt=(cast[a["performer"]].get("twin_prompt") if c.get("artist_edit") else
+                size=rsize, seed=seed + r["id"], editor=editor, start_s=r.get("guide_start", 0.0),
+                prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
                         " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None).nodes))
         for r in twins_:
             a = by_id[r["twin_of"]]
@@ -168,7 +173,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 preset=preset, fmt=fmt, key_path=r["key"], prompt=c["sing"], negative=neg,
                 frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B",
                 audio_path=vocal_path, audio_seek=seek(r), guide_video=a["path"],
-                guide_strength=guide_strength, guide_face=True).nodes))
+                guide_start=r.get("guide_start", 0.0), guide_strength=guide_strength, guide_face=True).nodes))
     else:
         cast = casting.cast_motion(pk, len(pk["casting"]["cast"]), seed)
         neg = pk["casting"]["negative"]
@@ -211,7 +216,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             if name == "zz_assemble" and (not queue_assemble or use_qc):
                 continue
             ids.append(queue_prompt(g, url))
-    summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {preset}\n"
+    summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
@@ -265,12 +270,20 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     report, redo = [], []
     for r in p["renders"]:
         seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
+        takes = r.setdefault("takes", [])
+        done = next((t for t in takes if t.get("path") == r.get("path") and t.get("v", 0) >= qc.VERSION
+                     and os.path.exists(t["path"])), None)
+        if done is not None:  # checked in an earlier pass: keep its verdict
+            res = dict(done, ok=not done.get("fail"))
+            report.append({"id": r["id"], "role": r["role"], **res})
+            if not res["ok"]:
+                redo.append(r)
+            continue
         try:
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
-                                vocal=vocal, sr=sr or 44100, seek=seek)
+                                vocal=vocal, sr=sr or 44100, seek=seek, sync=voice and r["role"] == "A")
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
-        takes = r.setdefault("takes", [])
         entry = {k: v for k, v in res.items() if k != "ok"}
         for t in takes:  # a re-check (new checks, e.g. `cut`) replaces the old verdict on a take
             if t["path"] == res["path"]:
@@ -282,21 +295,47 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         report.append({"id": r["id"], "role": r["role"], **res})
         if not res["ok"]:
             redo.append(r)
+    # re-roll budget: re-renders may add at most `qc_budget` x the run's own render frames
+    # (the user's call: a run may take up to twice as long to get lip sync right). The worst
+    # takes go first: broken ones (missing, frozen, cut away...), then the weakest lip sync.
+    by_id = {r["id"]: r for r in p["renders"]}
+    total = sum(r.get("frames", 0) for r in p["renders"])
+    budget = p.setdefault("qc_budget_frames", int(total * float(p.get("qc_budget", 1.0))))
+    spent = p.get("qc_spent_frames", 0)
+
+    def severity(r):
+        t = next((x for x in report if x["id"] == r["id"]), {})
+        broken = bool(set(t.get("fail", [])) - {"sync"})
+        return (0 if broken else 1, t.get("sync_conf", 0.0), r["role"] == "B", r["id"])
+
+    chosen, redo_ids = [], set()
+    for r in sorted(redo, key=severity):
+        if r["id"] in redo_ids:
+            continue
+        # a re-rolled lead clip invalidates its pose-matched twins: re-render them on the new lead
+        group = [r] + [t for t in p["renders"] if t.get("twin_of") == r["id"] and t["role"] == "B"
+                       and t["id"] not in redo_ids]
+        cost = sum(x.get("frames", 0) for x in group)
+        if spent + cost > budget:
+            continue
+        spent += cost
+        for x in group:
+            chosen.append(x)
+            redo_ids.add(x["id"])
+    skipped = len({r["id"] for r in redo} - redo_ids)
+    redo = chosen
+    p["qc_spent_frames"] = spent
     last = pass_idx >= max_passes or not redo
     queued, rerolls = [], []
     if not last:
-        by_id = {r["id"]: r for r in p["renders"]}
-        redo_ids = {r["id"] for r in redo}
-        # a re-rolled lead clip invalidates its pose-matched twins: re-render them on the new lead
-        for r in list(redo):
-            for t in p["renders"]:
-                if t.get("twin_of") == r["id"] and t["id"] not in redo_ids and t["role"] == "B":
-                    redo.append(t)
-                    redo_ids.add(t["id"])
         redo.sort(key=lambda r: (r["role"] == "B", r["id"]))
         new_paths = {}
         rel = p.get("run_rel", "")
-        jobs = []
+        lead_jobs, key_jobs, twin_jobs = [], [], []
+
+        def swap(g, old, new):
+            return json.loads(json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new)[1:-1]))
+
         for r in redo:
             name = f"r{r['id']:03d}{r['role']}"
             jf = _job_file(run_dir, name)
@@ -311,13 +350,29 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     ins["filename_prefix"] = f"{rel}/{tag}"
             if r["role"] == "B" and r.get("twin_of") in new_paths:  # follow the re-rolled lead clip
                 old = by_id[r["twin_of"]]["takes"][0]["path"]
-                s = json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new_paths[r["twin_of"]])[1:-1])
-                g = json.loads(s)
+                g = swap(g, old, new_paths[r["twin_of"]])
+                # and re-make the twin's keyframe from the new lead, so its first frame has the
+                # new lead's pose (the old keyframe would snap from the old pose to the new)
+                kname = f"k{r['id']:03d}"
+                kf = _job_file(run_dir, kname)
+                if kf:
+                    kg = swap(json.load(open(kf, encoding="utf-8")), old, new_paths[r["twin_of"]])
+                    ktag = f"{kname}_t{pass_idx + 1}"
+                    for node in kg.values():
+                        ins = node.get("inputs", {})
+                        if node.get("class_type") == "SaveImage" and str(ins.get("filename_prefix", "")).endswith(kname):
+                            ins["filename_prefix"] = f"{rel}/{ktag}"
+                    old_key = r.get("key") or os.path.join(run_dir, f"{kname}_00001_.png")
+                    g = swap(g, old_key, os.path.join(run_dir, f"{ktag}_00001_.png"))
+                    json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
+                                       encoding="utf-8"), indent=1)
+                    key_jobs.append(kg)
             new_paths[r["id"]] = os.path.join(run_dir, f"{tag}_00001_.mp4")
             r["path"] = new_paths[r["id"]]
             json.dump(g, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{tag}.json"), "w", encoding="utf-8"),
                       indent=1)
-            jobs.append(g)
+            (twin_jobs if r["role"] == "B" else lead_jobs).append(g)
+        jobs = lead_jobs + key_jobs + twin_jobs  # grouped by model: LTX, Klein, LTX
         from . import graphs
         rerolls = list(jobs)
         if queue_rerolls:  # chain the next pass on the server
@@ -326,16 +381,18 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if queue and queue_rerolls:
             queued = queue_chain_front(jobs, server_url())
         msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
-            f"r{r['id']:03d}{r['role']}" for r in redo)
+            f"r{r['id']:03d}{r['role']}" for r in redo) + \
+            (f" ({skipped} more over the re-render budget)" if skipped else "")
     else:
         for r in p["renders"]:  # best take of each shot
             takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
-            for t in takes:  # takes judged before the cut check existed: judge them again
-                if "jump" not in t and t.get("frames"):
+            for t in takes:  # takes judged by an older QC (before the cut / sync checks): judge again
+                if t.get("v", 0) < qc.VERSION and t.get("frames"):
                     try:
                         seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
-                                            vocal=vocal, sr=sr or 44100, seek=seek)
+                                            vocal=vocal, sr=sr or 44100, seek=seek,
+                                            sync=voice and r["role"] == "A")
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
                     except Exception:
@@ -350,6 +407,21 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     r["unusable"] = sorted(best["fail"])
                 else:
                     r.pop("unusable", None)
+                # the take's own lip-sync offset (SyncNet, 25 fps frames; negative = the mouth
+                # leads the voice): show it that much later
+                if "sync_offset" in best:
+                    r["sync_delay"] = round(min(0.4, max(-0.1, -best["sync_offset"] / 25.0)), 3)
+                    r["sync_conf"] = best.get("sync_conf")
+        shots = {s["index"]: s for s in p.get("shots", []) if "index" in s}
+        for r in p["renders"]:  # twins follow their lead's mouth, so they share its offset
+            lead = by_id.get(r.get("twin_of"))
+            if r["role"] == "B" and lead is not None and "sync_delay" in lead:
+                r["sync_delay"] = lead["sync_delay"]
+            # a delay can't reach back past the clip's own lead-in (it would hold the first
+            # frame at the cut)
+            if "sync_delay" in r:
+                on = r.get("cut_at", shots.get(r.get("shot"), {}).get("t0", r["t_start"]))
+                r["sync_delay"] = round(min(r["sync_delay"], max(0.0, on - r["t_start"] - 0.02)), 3)
         if queue and then_assemble and queue_rerolls:
             from . import graphs
             queued = queue_chain_front([graphs.free_memory("before assembly").nodes,

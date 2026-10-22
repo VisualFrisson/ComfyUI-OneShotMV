@@ -12,10 +12,10 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, plan, pose, qc, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, pose, qc, stems, dsplan
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, stems, audiofx, fx, finish, export, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():
@@ -206,7 +206,7 @@ class FVDirector:
             "audio": ("AUDIO",),
             "mode": (["voice", "motion"], {"default": "voice"}),
             "pack": (casting.list_packs(), {"default": "crowd"}),
-            "format": (formats.FORMAT_NAMES, {"default": "9:16"}),
+            "format": (formats.FORMAT_NAMES, {"default": "16:9"}),
             "preset": (formats.PRESET_NAMES, {"default": "quality"}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
                                   "tooltip": "Length of the edit; 0 = the whole song"}),
@@ -223,18 +223,20 @@ class FVDirector:
             "guide_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05}),
             "queue_assemble": ("BOOLEAN", {"default": True,
                                "tooltip": "Also queue the final Assemble (off when a script assembles itself)"}),
-            "framing": (["close", "mixed"], {"default": "close",
-                        "tooltip": "close = close-ups only; mixed = medium and wide shots in quiet stretches"}),
+            "framing": (["mixed", "close"], {"default": "mixed",
+                        "tooltip": "mixed = wide, medium and close shots in quiet stretches, tighter in the "
+                                   "build, close-ups on the drop; close = close-ups only"}),
             "artist_image_path": ("STRING", {"default": "",
                                   "tooltip": "One-artist mode: a photo of the singer (uses the artist pack)"}),
             "artist_image": ("IMAGE", {"tooltip": "One-artist mode: connect a Load Image with the singer's photo "
                                                   "(instead of artist_image_path)"}),
             "dance_video": ("VIDEO", {"tooltip": "Motion mode: connect a Load Video with the dance clip "
                                                  "(instead of dance_video_path)"}),
-            "qc_retries": ("INT", {"default": 1, "min": 0, "max": 3,
-                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away from the shot) "
-                                      "and re-roll bad ones "
-                                      "this many times before the cut; 0 = off"}),
+            "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
+                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
+                                      "from the shot, and lip sync with SyncNet if its weights are installed) and "
+                                      "re-roll bad ones, up to this many rounds and at most doubling the render time; "
+                                      "0 = off"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -249,7 +251,7 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="close", artist_image_path="", qc_retries=1, artist_image=None, dance_video=None):
+            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -342,6 +344,38 @@ class FVQC:
         res = director.qc_pass(_resolve(run_dir), pass_idx=pass_index, max_passes=max_passes,
                                then_assemble=then_assemble, queue_rerolls=queue_rerolls)
         return {"ui": {"text": [res["message"], _file_ref(res["bundle"])]}, "result": (res["message"],)}
+
+
+class FVLipSyncScore:
+    """Scores a run's lip sync with SyncNet: per take, the confidence (higher = the mouth follows
+    the words) and the offset (25 fps frames; negative = the mouth leads the voice). Writes
+    <run>/lipsync.json; the run itself is not changed. Needs the SyncNet weights (see README)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"run_dir": ("STRING", {"default": ""}),
+                             "which": (["lead clips", "all clips"], {"default": "lead clips"}),
+                             "every_take": ("BOOLEAN", {"default": False,
+                                            "tooltip": "also score the re-rolled takes QC kept aside"})}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("report",)
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    @classmethod
+    def IS_CHANGED(cls, **kw):
+        return random.random()
+
+    def run(self, run_dir, which, every_take):
+        _reload()
+        if not lipsync.available():
+            msg = ("SyncNet weights not found: put syncnet_v2.model and sfd_face.pth in "
+                   "ComfyUI/models/syncnet/ (see the Frisson Vision README)")
+            return {"ui": {"text": [msg]}, "result": (msg,)}
+        res = lipsync.score_run(_resolve(run_dir), leads_only=(which == "lead clips"), every_take=every_take)
+        return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
 
 
 class FVFinish:
@@ -517,6 +551,7 @@ NODE_CLASS_MAPPINGS = {
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
     "FVQC": FVQC,
+    "FVLipSyncScore": FVLipSyncScore,
     "FVLoadImagePath": FVLoadImagePath,
     "FVLoadVideoPath": FVLoadVideoPath,
     "FVLoadAudioPath": FVLoadAudioPath,
@@ -533,4 +568,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVLoadImagePath": "Frisson Vision: Load Image (path)",
     "FVLoadVideoPath": "Frisson Vision: Load Video (path)",
     "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",
+    "FVLipSyncScore": "Frisson Vision: Lip Sync Score",
 }
