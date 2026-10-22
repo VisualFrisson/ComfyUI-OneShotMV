@@ -461,9 +461,9 @@
   ]
  },
  "edit": {
-  "_note": "grammar 'hold': long holds in quiet stretches (shot_bars_quiet bars), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
+  "_note": "grammar 'hold': holds of shot_bars_quiet bars in quiet stretches (1: the n37 note, 'the longest shots should be half the length'), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
   "grammar": "hold",
-  "shot_bars_quiet": 2,
+  "shot_bars_quiet": 1,
   "shot_bars_build": 1,
   "build_bars": 4,
   "drop_group_bars": 1,
