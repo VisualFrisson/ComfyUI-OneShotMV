@@ -197,10 +197,30 @@ def apply_align(al, box):
     return [0.5 + (box[0] - 0.5) * s + dx, 0.5 + (box[1] - 0.5) * s + dy, box[2] * s]
 
 
-def align(lead, src, max_scale=1.35, min_scale=0.9, max_shift=0.18):
+def align(lead, src, max_scale=1.35, min_scale=0.9, max_shift=0.18, cover=True):
     """Transform that puts the source face where the lead face is: (scale, dx, dy), with dx, dy
-    the shift of the source frame in frame-widths / heights after scaling about its centre."""
+    the shift of the source frame in frame-widths / heights after scaling about its centre.
+    cover: the moved frame must still fill the picture (no mirrored edges): the scale never goes
+    below 1 and grows to cover any shift, so the face ends up slightly larger rather than the
+    frame showing its own reflection at the borders."""
     s = float(np.clip(lead[2] / max(1e-3, src[2]), min_scale, max_scale))
-    dx = float(np.clip(lead[0] - (0.5 + (src[0] - 0.5) * s), -max_shift, max_shift))
-    dy = float(np.clip(lead[1] - (0.5 + (src[1] - 0.5) * s), -max_shift, max_shift))
+
+    def shifts(s):
+        dx = float(np.clip(lead[0] - (0.5 + (src[0] - 0.5) * s), -max_shift, max_shift))
+        dy = float(np.clip(lead[1] - (0.5 + (src[1] - 0.5) * s), -max_shift, max_shift))
+        return dx, dy
+
+    if cover:
+        s = max(1.0, s)
+        for _ in range(4):
+            dx, dy = shifts(s)
+            need = 1.0 + 2.0 * max(abs(dx), abs(dy))
+            if need <= s + 1e-4:
+                break
+            s = min(need, max(max_scale, 1.0) + 0.15)
+        dx, dy = shifts(s)
+        lim = max(0.0, (s - 1.0) / 2.0)
+        dx, dy = float(np.clip(dx, -lim, lim)), float(np.clip(dy, -lim, lim))
+    else:
+        dx, dy = shifts(s)
     return [round(s, 4), round(dx, 4), round(dy, 4)]
