@@ -89,41 +89,62 @@ def transcribe(vocal: np.ndarray, sr: int, log=print, language: str | None = Non
     x = x / peak * 0.9
     dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dt = torch.float16 if dev == "cuda" else torch.bfloat16
-    asr = None
+    model = None
     out = None
     try:
-        from transformers import pipeline
-        kw = {"model_kwargs": {"attn_implementation": "eager"}}
+        # the model directly (not transformers' ASR pipeline, whose audio path imports torchcodec:
+        # on a ComfyUI whose torchcodec can't find its FFmpeg libraries that import fails)
+        from transformers import WhisperForConditionalGeneration, WhisperProcessor
+        proc = WhisperProcessor.from_pretrained(d)
         try:
-            asr = pipeline("automatic-speech-recognition", model=d, dtype=dt, device=dev, **kw)
+            model = WhisperForConditionalGeneration.from_pretrained(d, dtype=dt, attn_implementation="eager")
         except TypeError:  # transformers < 4.56 calls it torch_dtype
-            asr = pipeline("automatic-speech-recognition", model=d, torch_dtype=dt, device=dev, **kw)
+            model = WhisperForConditionalGeneration.from_pretrained(d, torch_dtype=dt, attn_implementation="eager")
+        model = model.to(dev).eval()
+        tok = proc.tokenizer
+        special = set(tok.all_special_ids)
         chunks = []
         for a, b in _pieces(x):
+            feats = proc(x[a:b], sampling_rate=16000, return_tensors="pt").input_features.to(dev, dt)
             res = None
             for lang in ([language] if language else [None, "en"]):
-                gk = {"task": "transcribe", "max_new_tokens": 220, "no_repeat_ngram_size": 3}
+                gk = {"task": "transcribe", "max_new_tokens": 220, "no_repeat_ngram_size": 3,
+                      "return_token_timestamps": True, "return_dict_in_generate": True}
                 if lang:
                     gk["language"] = lang
                 with torch.inference_mode():
-                    res = asr({"raw": x[a:b], "sampling_rate": 16000}, return_timestamps="word", generate_kwargs=gk)
-                if not _degenerate(res.get("text", "")):
+                    g = model.generate(feats, **gk)
+                seq = g["sequences"][0].tolist()
+                ts = g["token_timestamps"][0].tolist()
+                text = tok.decode([t for t in seq if t not in special])
+                res = (seq, ts, text)
+                if not _degenerate(text):
                     break
-            if res is None or _degenerate(res.get("text", "")):
+            if res is None or _degenerate(res[2]):
                 continue  # a looping piece is dropped, the rest kept
+            seq, ts, _ = res
             off = a / 16000.0
-            for c in res.get("chunks", []):
-                t0, t1 = c.get("timestamp", (None, None))
-                if t0 is None:
+            cur = None
+            for i, (t, at) in enumerate(zip(seq, ts)):
+                if t in special or t >= len(tok):
                     continue
-                chunks.append({"text": c.get("text", ""), "timestamp": (t0 + off, None if t1 is None else t1 + off)})
+                piece = tok.decode([t])
+                if cur is None or piece.startswith(" "):
+                    if cur and cur["text"].strip():
+                        cur["timestamp"] = (cur["timestamp"][0], at + off)
+                        chunks.append(cur)
+                    cur = {"text": piece.strip(), "timestamp": (at + off, None)}
+                else:
+                    cur["text"] += piece
+            if cur and cur["text"].strip():
+                chunks.append(cur)
         out = {"chunks": chunks, "text": " ".join(c["text"] for c in chunks)}
     except Exception as e:
         LAST_ERROR = f"{type(e).__name__}: {e}"[:300]
         log(f"[FrissonVision] lyrics: Whisper failed ({LAST_ERROR})")
         return []
     finally:
-        del asr
+        del model
         if dev == "cuda":
             torch.cuda.empty_cache()
     if not out.get("chunks"):
