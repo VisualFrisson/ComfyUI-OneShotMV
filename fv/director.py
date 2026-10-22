@@ -147,10 +147,25 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         for r in p["renders"]:
             r["path"] = os.path.join(run_dir, f"r{r['id']:03d}{r['role']}_00001_.mp4")
         seek = lambda r: round(r["t_start"] + p["song_t0"] - p["stems_t0"], 4)
+        # dense vocals (rap) get the articulation prompt: it lifted lip sync on dense shots
+        from . import lipsync
+        vx, vsr = stems.read_wav(vocal_path) if os.path.exists(vocal_path) else (None, None)
+        if vx is not None:
+            vx = vx.mean(0) if vx.ndim == 2 else vx
+            vref = float(np.sqrt(np.mean(vx ** 2) + 1e-12))
+        dense_from = float(pk["casting"].get("dense_from", 0.6))
+        sing_for = {}
+        for r in [r for r in p["renders"] if r["role"] == "A"]:
+            text = cast[r["performer"]]["sing"]
+            if vx is not None:
+                r["vocal_density"] = round(lipsync.vocal_density(vx, vsr, seek(r), r["frames"] / r["fps"], vref), 3)
+                if r["vocal_density"] >= dense_from:
+                    text = casting.articulate(text)
+            sing_for[r["id"]] = text
         for r in [r for r in p["renders"] if r["role"] == "A"]:
             c = cast[r["performer"]]
             jobs.append((f"r{r['id']:03d}A", graphs.ltx_render(
-                preset=preset, fmt=fmt, key_path=port[r["performer"]], prompt=c["sing"], negative=neg,
+                preset=preset, fmt=fmt, key_path=port[r["performer"]], prompt=sing_for[r["id"]], negative=neg,
                 frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}A",
                 audio_path=vocal_path, audio_seek=seek(r)).nodes))
         twins_ = [r for r in p["renders"] if r["role"] == "B"]
@@ -169,8 +184,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         for r in twins_:
             a = by_id[r["twin_of"]]
             c = cast[r["performer"]]
+            text = casting.articulate(c["sing"]) if a.get("vocal_density", 0.0) >= dense_from else c["sing"]
             jobs.append((f"r{r['id']:03d}B", graphs.ltx_render(
-                preset=preset, fmt=fmt, key_path=r["key"], prompt=c["sing"], negative=neg,
+                preset=preset, fmt=fmt, key_path=r["key"], prompt=text, negative=neg,
                 frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B",
                 audio_path=vocal_path, audio_seek=seek(r), guide_video=a["path"],
                 guide_start=r.get("guide_start", 0.0), guide_strength=guide_strength, guide_face=True).nodes))
@@ -238,6 +254,18 @@ def _bump(graph: dict, k: int) -> dict:
 def _job_file(run_dir: str, name: str) -> str | None:
     hits = sorted(f for f in os.listdir(os.path.join(run_dir, "jobs")) if f.endswith(f"_{name}.json"))
     return os.path.join(run_dir, "jobs", hits[0]) if hits else None
+
+
+def _articulate_prompt(g: dict) -> None:
+    """A lead re-rolled for lip sync switches to the articulation prompt (casting.articulate)."""
+    from . import casting
+    for node in g.values():
+        if node.get("class_type") != "LTXVConditioning":
+            continue
+        ref = node.get("inputs", {}).get("positive")
+        enc = g.get(str(ref[0])) if isinstance(ref, list) and ref else None
+        if enc and enc.get("class_type") == "CLIPTextEncode" and isinstance(enc["inputs"].get("text"), str):
+            enc["inputs"]["text"] = casting.articulate(enc["inputs"]["text"])
 
 
 def _refresh_prompt(g: dict) -> None:
@@ -343,6 +371,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 continue
             g = _bump(json.load(open(jf, encoding="utf-8")), pass_idx + 1)
             _refresh_prompt(g)
+            if r["role"] == "A" and "sync" in next((x.get("fail", []) for x in report if x["id"] == r["id"]), []):
+                _articulate_prompt(g)
             tag = f"{name}_t{pass_idx + 1}"
             for node in g.values():
                 ins = node.get("inputs", {})

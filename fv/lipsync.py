@@ -84,6 +84,20 @@ def unload():
         _MODELS.clear()
 
 
+def vocal_density(x: np.ndarray, sr: int, seek: float, seconds: float, ref: float | None = None) -> float:
+    """Fraction of 25 fps frames in [seek, seek + seconds) where the vocal stem is clearly sung
+    (RMS above half the stem's overall RMS). Sparse stretches (ad-libs, gaps) score low."""
+    x = x.mean(0) if x.ndim == 2 else x
+    ref = ref if ref is not None else float(np.sqrt(np.mean(x ** 2) + 1e-12))
+    a0 = int(max(0.0, seek) * sr)
+    seg = x[a0:a0 + int(seconds * sr)]
+    hop = max(1, sr // FPS)
+    if len(seg) < hop:
+        return 0.0
+    rms = np.sqrt(np.array([np.mean(seg[i:i + hop] ** 2) for i in range(0, len(seg) - hop + 1, hop)]) + 1e-12)
+    return float((rms > 0.5 * ref).mean())
+
+
 # ---- MFCC: python_speech_features 0.6 (MIT), the features SyncNet was trained on ---------------
 
 def _hz2mel(hz):

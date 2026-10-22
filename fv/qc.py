@@ -19,6 +19,8 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
              Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
              median confidence of 5.8-7.0, the ones heard as bad 1.4-4.7, with a wide spread
              inside every run; takes under 4.5, or more than 9 frames off, are re-rolled.
+             Takes sung on under 55% of their frames are scored but not failed: on sparse
+             stretches no re-roll lever (seed, face, prompt, audio attention) lifted the score.
              The measured offset also sets that take's own lip-sync delay in the cut.
 Mouth-vs-vocal correlation is reported for information only: on continuous singing it is
 too noisy to reject takes with (calibrated on known-good renders).
@@ -31,7 +33,7 @@ import numpy as np
 
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
-          "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.35}
+          "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55}
 VERSION = 2  # takes checked by an older QC are checked again
 
 

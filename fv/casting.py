@@ -5,6 +5,7 @@ import glob
 import json
 import os
 import random
+import re
 
 PACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "packs")
 
@@ -40,6 +41,26 @@ def _pick(rng: random.Random, seq, used: dict, key: str):
 DEFAULT_FRAMING = {"close": {"shot": "Extreme close-up portrait", "lens": "on a wide-angle lens very close to the face",
                              "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word "
                                      "clearly with wide open mouth movements and jaw motion, natural breathing. Both hands stay below the frame."}}
+
+
+# Dense vocals (rap, fast flows): a prompt that asks for a mouth that snaps on every syllable
+# lifted SyncNet confidence on every dense shot it was tried on (n28: 3.3-4.0 -> 4.3-4.5,
+# 2.2-2.6 -> 4.0); on sparse stretches no prompt, face or setting helped. See fv/lipsync.py.
+ARTICULATE = ("The mouth moves sharply on every syllable: the lips close on the consonants and open wide on the "
+              "vowels, the jaw snapping with each word, in time with the voice.")
+_LIPS = re.compile(r"The lips form each word clearly with [^.]*\.")
+
+
+def articulate(text: str, sentence: str | None = None) -> str:
+    """Swap a sing prompt's mouth sentence for the articulation one (no-op if absent or done)."""
+    sentence = sentence or ARTICULATE
+    if sentence in text:
+        return text
+    m = _LIPS.search(text)
+    if not m:
+        return text
+    tail = " Both hands stay below the frame." if "hands below" in m.group(0) and "Both hands" not in text else ""
+    return text[:m.start()] + sentence + tail + text[m.end():]
 
 
 def _frame(c: dict, size: str) -> dict:
