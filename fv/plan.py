@@ -358,16 +358,29 @@ def _hold_renders(shots: list[dict], beats: list[float], ed: dict, rfps: float, 
 def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: float,
               faces: dict | None, delay: float) -> list[dict]:
     """The hold grammar's cut. Each shot plays its lead; a drop group steps through its chain of
-    pose-matched looks on the beat and never returns to an earlier one. A look that QC could
-    not save, or whose face doesn't land on the lead's, is skipped (the look before it plays
-    on), so every fast cut is a match cut."""
+    pose-matched looks on the beat and never returns to an earlier one. With face tracks, a
+    look is used only if its face is found and lands on the lead's (then nudged exactly into
+    place); one that QC could not save, or that can't be checked, is skipped and the look
+    before it plays on, so every fast cut is a match cut. The cut into a new drop group (a new
+    lead on the bar line) is nudged too, so its face starts where the last one was."""
     by_id = {r["id"]: r for r in renders}
     thr = ed.get("match_threshold", 0.16) * ed.get("twin_tolerance", 2.0)
     edl = []
+    prev_face = None  # (face box on screen at the end of the previous shot, previous phase)
+
+    def face(rid, t):
+        r = by_id[rid]
+        return fz.face_at(faces.get(rid), t - r["t_start"] - r.get("sync_delay", delay)) if faces else None
+
     for s in shots:
         f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
         a = by_id[s["A"]]
-        segs = [(s["A"], f0, None)]
+        a_al = None
+        if faces is not None and s.get("phase") == "drop" and prev_face is not None and prev_face[1] == "drop":
+            lf0 = face(s["A"], s["t0"] + 0.02)
+            if lf0 is not None and fz.match_cost(prev_face[0], lf0) < 3 * thr:
+                a_al = fz.align(prev_face[0], lf0, max_scale=1.12, min_scale=0.92, max_shift=0.08)
+        segs = [(s["A"], f0, a_al)]
         for rid in s.get("chain", []):
             r = by_id.get(rid)
             if r is None or r.get("unusable"):
@@ -378,12 +391,11 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
             al = None
             if faces is not None:
                 tf = r["cut_at"]
-                lf = fz.face_at(faces.get(s["A"]), tf - a["t_start"] - a.get("sync_delay", delay))
-                bf = fz.face_at(faces.get(rid), tf - r["t_start"] - r.get("sync_delay", delay))
-                if lf is not None and bf is not None:
-                    if fz.match_cost(lf, bf) > thr:
-                        continue
-                    al = fz.align(lf, bf)
+                lf = fz.apply_align(a_al, face(s["A"], tf))  # where the lead's face is on screen
+                bf = face(rid, tf)
+                if lf is None or bf is None or fz.match_cost(lf, bf) > thr:
+                    continue  # can't be shown to line up: no fast cut here
+                al = fz.align(lf, bf)
             segs.append((rid, fc, al))
         for k, (rid, fa, al) in enumerate(segs):
             fb = segs[k + 1][1] if k + 1 < len(segs) else f1
@@ -391,6 +403,11 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
             if al is not None:
                 ev["align"] = al
             edl.append(ev)
+        if faces is not None:
+            last_rid, _, last_al = segs[-1]
+            prev_face = (fz.apply_align(last_al, face(last_rid, s["t1"] - 0.02)), s.get("phase"))
+            if prev_face[0] is None:
+                prev_face = None
     return edl
 
 

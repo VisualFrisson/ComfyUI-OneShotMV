@@ -1,9 +1,10 @@
 """Face tracks for match cuts: where the face is (centre, size) through each clip.
 
-OpenCV's frontal-face cascade on downscaled frames, every few frames, with gaps filled by
-interpolation (short) or left empty (long). Tracks are cached as JSON beside the run so a
-re-cut costs nothing. Coordinates are normalised to the frame: cx, cy in 0..1, w = face
-width / frame width.
+The S3FD face detector (installed with the SyncNet weights, see fv/lipsync.py) when available,
+else OpenCV's frontal-face cascade, on downscaled frames every few frames, with gaps filled by
+interpolation (short) or left empty (long). S3FD also finds the extreme close-ups and turned
+heads the cascade misses. Tracks are cached as JSON beside the run so a re-cut costs nothing.
+Coordinates are normalised to the frame: cx, cy in 0..1, w = face width / frame width.
 """
 from __future__ import annotations
 
@@ -27,12 +28,31 @@ def _cascade():
     return _CASCADE
 
 
+def method() -> str:
+    try:
+        from . import lipsync
+        if lipsync.available():
+            return "s3fd"
+    except Exception:
+        pass
+    return "haar" if _cascade() else ""
+
+
+def _s3fd_detector():
+    from . import lipsync
+    dev = lipsync._device()
+    return lipsync, lipsync._load(dev)[1], dev
+
+
 def track(path: str, every: int = 3, size: int = 320) -> dict | None:
     """{fps, n, every, boxes: [[cx, cy, w] or None per sampled frame]} or None."""
     import cv2
-    casc = _cascade()
-    if not casc or not path or not os.path.exists(path):
+    how = method()
+    if not how or not path or not os.path.exists(path):
         return None
+    casc = _cascade() if how == "haar" else None
+    if how == "s3fd":
+        ls, det, dev = _s3fd_detector()
     cap = cv2.VideoCapture(path)
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 25.0)
     boxes, k, prev = [], 0, None
@@ -43,9 +63,14 @@ def track(path: str, every: int = 3, size: int = 320) -> dict | None:
         if k % every == 0:
             h, w = f.shape[:2]
             s = size / max(h, w)
-            g = cv2.cvtColor(cv2.resize(f, (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
-            gh, gw = g.shape
-            fs = casc.detectMultiScale(g, 1.1, 4, minSize=(int(0.08 * min(gh, gw)),) * 2)
+            small = cv2.resize(f, (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA)
+            gh, gw = small.shape[:2]
+            if how == "s3fd":  # (x, y, w, h) like the cascade's
+                fs = [(q[0], q[1], q[2] - q[0], q[3] - q[1]) for q in
+                      ls._detect(det, small[:, :, ::-1].copy(), dev, 1.0, 0.8)]
+            else:
+                g = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                fs = casc.detectMultiScale(g, 1.1, 4, minSize=(int(0.08 * min(gh, gw)),) * 2)
             b = None
             if len(fs):
                 if prev is not None:  # keep the same face if several are found
@@ -85,7 +110,7 @@ def tracks_for_run(run_dir: str, renders: list[dict], log=None) -> dict:
         local = os.path.join(run_dir, name)
         if not os.path.exists(local):
             continue
-        key = f"{name}:{os.path.getsize(local)}"
+        key = f"{name}:{os.path.getsize(local)}:{method()}"
         if key not in cache:
             t = track(local)
             if t is None:
@@ -118,6 +143,14 @@ def match_cost(a, b) -> float:
     if a is None or b is None:
         return 9.0
     return abs(a[0] - b[0]) + abs(a[1] - b[1]) + 1.2 * abs(np.log(max(1e-3, b[2]) / max(1e-3, a[2])))
+
+
+def apply_align(al, box):
+    """Where a face box lands after the frame is warped by `al` (see align)."""
+    if not al or box is None:
+        return box
+    s, dx, dy = al
+    return [0.5 + (box[0] - 0.5) * s + dx, 0.5 + (box[1] - 0.5) * s + dy, box[2] * s]
 
 
 def align(lead, src, max_scale=1.35, min_scale=0.9, max_shift=0.18):
