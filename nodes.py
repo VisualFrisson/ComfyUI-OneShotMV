@@ -13,9 +13,13 @@ import folder_paths
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
 from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, pose, qc, stems, dsplan
+from .fv import theme as fv_theme
+from .fv import lyrics as fv_lyrics
+from .fv import broll as fv_broll
+from .fv import lipfix as fv_lipfix
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():
@@ -217,6 +221,12 @@ class FVDirector:
                       "tooltip": "Pose-matched twins for flash inserts (voice mode)"}),
             "queue_renders": ("BOOLEAN", {"default": True}),
         }, "optional": {
+            "theme": ("STRING", {"default": "", "multiline": True,
+                      "tooltip": "The world of the whole video in a line or two, e.g. 'astronauts and ground crew on "
+                                 "a 1970s space station, warm orange and teal light'. It sets who the characters "
+                                 "are, what they wear, the places, the light and the colour grade; the pack still "
+                                 "sets the edit. Empty = the pack's own looks. Expanded once by Gemma 3 (the "
+                                 "LTX-2.3 text encoder) and cached."}),
             "dance_video_path": ("STRING", {"default": "", "tooltip": "Motion mode: path to the dance clip"}),
             "run_name": ("STRING", {"default": ""}),
             "twin_editor": (["klein", "qwen"], {"default": "klein"}),
@@ -232,6 +242,11 @@ class FVDirector:
                                                   "(instead of artist_image_path)"}),
             "dance_video": ("VIDEO", {"tooltip": "Motion mode: connect a Load Video with the dance clip "
                                                  "(instead of dance_video_path)"}),
+            "broll_share": ("FLOAT", {"default": 0.125, "min": 0.0, "max": 0.5, "step": 0.025,
+                            "tooltip": "Voice mode: share of shots replaced by b-roll cutaways (nobody singing) that "
+                                       "show what the words are about: first where lip sync stayed weak, then in "
+                                       "instrumental gaps; never on the drop. Needs Whisper large-v3-turbo in "
+                                       "models/whisper for the words. 0 = off"}),
             "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
                            "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
                                       "from the shot, and lip sync with SyncNet if its weights are installed) and "
@@ -251,7 +266,7 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None):
+            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -264,7 +279,7 @@ class FVDirector:
                               queue=queue_renders, editor=twin_editor, guide_strength=guide_strength,
                               queue_assemble=queue_assemble, framing=framing,
                               artist_path=_resolve(artist_image_path) if artist_image_path else "",
-                              qc_retries=qc_retries)
+                              qc_retries=qc_retries, theme=theme or "", broll_share=broll_share)
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
@@ -589,6 +604,76 @@ class FVFreeMemory:
         return {"ui": {"text": ["models unloaded"]}}
 
 
+class FVTheme:
+    """Preview what a theme turns into before a run: the characters, outfits, places, light,
+    in-scene actions and colour grade the Director will cast from (Gemma 3, the LTX-2.3 text
+    encoder). The result is cached, so a Director run with the same theme and seed reuses it."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"theme": ("STRING", {"default": "", "multiline": True}),
+                             "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1})}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("world",)
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    def run(self, theme, seed):
+        _reload()
+        b = fv_theme.expand(theme, seed=seed, out_root=folder_paths.get_output_directory())
+        if not b:
+            return {"ui": {"text": ["(no theme)"]}, "result": ("",)}
+        lines = [f"Theme: {b['theme']}  ({b.get('source')}, grade: {b.get('grade')})"]
+        for k in ("who", "wear", "places", "light", "actions"):
+            lines.append(f"\n{k}:")
+            lines += [f"  - {x}" for x in b.get(k, [])]
+        text = "\n".join(lines)
+        return {"ui": {"text": [text]}, "result": (text,)}
+
+
+class FVLipFix:
+    """Re-draws the mouth of one clip to the audio with LatentSync 1.6 (the same repair the take QC
+    runs on weak leads). Writes <clip>_ls.mp4 at 25 fps next to the clip. audio_offset: where in
+    the audio the clip's first frame is (seconds). Needs the LatentSync weights (see README)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"video_path": ("STRING", {"default": ""}), "audio": ("AUDIO",),
+                             "audio_offset": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 3600.0, "step": 0.01}),
+                             "seed": ("INT", {"default": 1247, "min": 0, "max": 2 ** 31 - 1})}}
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("path", "report")
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    def run(self, video_path, audio, audio_offset, seed):
+        _reload()
+        if not fv_lipfix.available():
+            msg = ("LatentSync not found: put latentsync_unet.pt, whisper/tiny.pt and sd-vae-ft-mse/ in "
+                   "custom_nodes/ComfyUI-FrissonVision/weights/latentsync/ and insightface buffalo_l in "
+                   "models/insightface/models/ (see the README)")
+            return {"ui": {"text": [msg]}, "result": ("", msg)}
+        path = _resolve(video_path)
+        wf = audio["waveform"][0].detach().cpu().float().numpy()
+        sr = int(audio["sample_rate"])
+        out = os.path.splitext(path)[0] + "_ls.mp4"
+        res = fv_lipfix.repair(path, wf, sr, float(audio_offset), out, seed=seed)
+        fv_lipfix.free()
+        if not res:
+            return {"ui": {"text": ["no face found"]}, "result": ("", "no face found")}
+        msg = f"{out}: {res['frames']} frames, face found in {res['face_frac'] * 100:.0f}%"
+        if lipsync.available():
+            x = wf.mean(0) if wf.ndim == 2 else wf
+            a = qc.sync_check(path, x, sr, float(audio_offset))
+            b = qc.sync_check(out, x, sr, float(audio_offset))
+            msg += f"; SyncNet confidence {a.get('sync_conf', 0):.1f} -> {b.get('sync_conf', 0):.1f}"
+        return {"ui": {"text": [msg]}, "result": (out, msg)}
+
+
 NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVOffloadToCPU": FVOffloadToCPU,
@@ -600,6 +685,8 @@ NODE_CLASS_MAPPINGS = {
     "FVQC": FVQC,
     "FVLipSyncScore": FVLipSyncScore,
     "FVFaceMatch": FVFaceMatch,
+    "FVTheme": FVTheme,
+    "FVLipFix": FVLipFix,
     "FVLoadImagePath": FVLoadImagePath,
     "FVLoadVideoPath": FVLoadVideoPath,
     "FVLoadAudioPath": FVLoadAudioPath,
@@ -618,4 +705,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",
     "FVLipSyncScore": "Frisson Vision: Lip Sync Score",
     "FVFaceMatch": "Frisson Vision: Face Match",
+    "FVTheme": "Frisson Vision: Theme Preview",
+    "FVLipFix": "Frisson Vision: Lip Sync Repair",
 }

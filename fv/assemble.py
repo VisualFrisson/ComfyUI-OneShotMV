@@ -92,6 +92,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     import torch.nn.functional as F
     plan = json.load(open(os.path.join(run_dir, "plan.json"), encoding="utf-8"))
     pack = casting.load_pack(plan["pack"])
+    if plan.get("finish"):  # a theme's grade (fv/theme.py)
+        pack["finish"] = plan["finish"]
     fps = plan["out_fps"]
     fmt = plan["format"]
     rw, rh = formats.render_size(fmt, plan["preset"])

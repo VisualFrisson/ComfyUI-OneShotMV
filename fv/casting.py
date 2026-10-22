@@ -77,10 +77,12 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     if fmt == "16:9" and c.get("framing_landscape"):
         c = dict(c, framing={**(c.get("framing") or DEFAULT_FRAMING), **c["framing_landscape"]})
     sizes = sizes or ["close"] * n
+    if c.get("theme"):
+        return _cast_theme(c, n, seed, sizes)
     if c.get("artist"):
         return _cast_artist(c, n, seed, sizes)
     if "people" in c:  # packs of coherent archetypes (who, setting, light)
-        return _cast_people(c, n, seed)
+        return _cast_people(c, n, seed, sizes)
     rng, used, out = random.Random(seed), {}, []
     for i in range(n):
         fr = _frame(c, sizes[i] if i < len(sizes) else "close")
@@ -138,21 +140,166 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     return out
 
 
-def _cast_people(c: dict, n: int, seed: int) -> list[dict]:
+# ------------------------------------------------------------------ in-scene shots
+# Medium and wide shots where the performer does something in their world (walking, leaning in
+# a doorway, working) instead of standing and singing at the lens. The n31 notes: "the walking
+# shots were a great step up from the standard portrait-looking shots".
+SCENE_ACTIONS = {
+    "medium": ["leaning in a doorway", "sitting and leaning toward the camera", "leaning back against a wall",
+               "walking slowly beside the camera", "turning toward the camera", "swaying to the beat",
+               "looking up between lines, then back to the camera", "resting their arms on a railing"],
+    "wide": ["walking slowly toward the camera", "striding past the camera", "sitting on a low wall",
+             "dancing alone with small loose moves", "pacing slowly", "turning in a slow circle",
+             "working with their hands, then looking up", "walking through the scene"],
+}
+SCENE_MOVES = {
+    "close": ["The handheld camera stays very close and sways gently.", "The camera drifts slowly around the face.",
+              "The handheld camera bobs gently with the beat.", "The camera holds steady, very close."],
+    "medium": ["The camera tracks slowly alongside.", "The camera pushes in slowly.",
+               "The handheld camera sways with the rhythm.", "The camera arcs slowly around them."],
+    "wide": ["The camera follows from a few meters away.", "The camera pushes in slowly from far away.",
+             "The camera arcs slowly around them.", "The camera holds still on a tripod."],
+}
+SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
+              "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
+SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word. "
+                  "{wear}Setting: {place}. {light}. Photorealistic film still, an invented person, the only "
+                  "person in frame, natural colour, subtle film grain.")
+SCENE_SING = {
+    "medium": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with "
+              "open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} "
+              "No one else in frame.",
+    "wide": "Wide shot of {who} {action}, singing along, the lips forming the words, moving freely with the "
+            "rhythm. {move} No one else in frame.",
+}
+
+
+def _scene_shot(rng, used, size: str, who: str, short: str, place: str, light: str, wear: str = "",
+                actions: dict | None = None) -> tuple[str, str]:
+    """(portrait prompt, singing prompt) for an in-scene medium or wide shot."""
+    acts = (actions or SCENE_ACTIONS).get(size) or SCENE_ACTIONS[size]
+    action = _pick(rng, acts, used, "scene_action_" + size)
+    shot, lens = SCENE_SHOT[size]
+    light = light[:1].upper() + light[1:] if light else "Natural light"
+    portrait = SCENE_PORTRAIT.format(shot=shot, lens=lens, who=who, action=action, place=place, light=light,
+                                     wear=("Wearing " + wear + ". ") if wear else "")
+    move = _pick(rng, SCENE_MOVES[size], used, "scene_move_" + size)
+    sing = SCENE_SING[size].format(who=short, action=action, move=move)
+    return " ".join(portrait.split()), " ".join((sing[0].upper() + sing[1:]).split())
+
+
+def _bg_place(bg: str) -> str:
+    """'a dusty corral and adobe walls behind' -> 'a dusty corral and adobe walls'."""
+    return re.sub(r"\s+behind$", "", bg.strip().rstrip("."))
+
+
+def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> list[dict]:
     rng = random.Random(seed)
+    srng, used = random.Random(seed * 13 + 5), {}
     people = list(c["people"])
     rng.shuffle(people)
+    scene_share = float(c.get("scene_medium_share", 0.5))
     out = []
     for i in range(n):
         who, bg, light = people[i % len(people)]
-        portrait = c["template"].format(who=who, background=bg, light=light)
+        size = sizes[i] if sizes and i < len(sizes) else "close"
         short = who.split(" with ")[0].split(" in ")[0]
-        sing = c["sing"].format(who=short)
-        sing = sing[0].upper() + sing[1:]
+        if size == "wide" or (size == "medium" and srng.random() < scene_share):
+            portrait, sing = _scene_shot(srng, used, size, who, short, _bg_place(bg), light,
+                                         actions=c.get("actions"))
+        else:
+            portrait = c["template"].format(who=who, background=bg, light=light)
+            sing = c["sing"].format(who=short)
+            sing = sing[0].upper() + sing[1:]
         twin = {"who": who, "detail": "", "wear": "", "light": light, "background": bg}
-        out.append({"id": i, "portrait": portrait, "sing": sing, "who": short, "twin": twin,
+        out.append({"id": i, "portrait": portrait, "sing": sing, "who": short, "twin": twin, "size": size,
                     "seed": seed * 1000 + i * 7 + 1})
     return out
+
+
+# ------------------------------------------------------------------ themes
+THEME_CLOSE = ("{shot} of {who}, singing straight into the lens with the mouth open mid-word, shot from {angle} "
+               "{lens}. Wearing {wear}. {light}. Background: {place} softly out of focus. An invented person, "
+               "the only one in frame. Photorealistic film still, visible pores and natural skin texture, "
+               "subtle film grain.")
+THEME_CLOSE_SING = ("Handheld close-up of {who} singing straight into the camera. The lips form each word clearly "
+                    "with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural "
+                    "breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the "
+                    "frame. No one else in frame.")
+THEME_ANGLES = ["slightly below", "eye level", "slightly above", "a low angle", "a three-quarter angle"]
+
+
+def _place_noun(p: str) -> str:
+    return re.sub(r"^(in|on|at|inside|atop)\s+", "", p.strip(), flags=re.I)
+
+
+def _short_who(who: str) -> str:
+    return re.split(r",| with ", who)[0].strip()
+
+
+def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
+    """Voice casting from a theme's world bible (fv/theme.py): every performer a new character,
+    outfit, place and light from the theme; wide shots (and half the medium ones) are in-scene
+    shots of the character doing something there."""
+    th = c["theme"]
+    fr = c.get("framing") or DEFAULT_FRAMING
+    rng, used, out = random.Random(seed), {}, []
+    acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
+    for i in range(n):
+        size = sizes[i] if i < len(sizes) else "close"
+        who = _pick(rng, th["who"], used, "who")
+        wear = _pick(rng, th["wear"], used, "wear")
+        place = _pick(rng, th["places"], used, "place")
+        light = _pick(rng, th["light"], used, "light")
+        short = _short_who(who)
+        if size == "wide" or (size == "medium" and rng.random() < 0.5):
+            portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts)
+        else:
+            f = fr.get(size) or fr.get("close") or DEFAULT_FRAMING["close"]
+            portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear,
+                                          angle=_pick(rng, THEME_ANGLES, used, "angle"),
+                                          light=light[:1].upper() + light[1:], place=_place_noun(place))
+            move = _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")
+            sing = THEME_CLOSE_SING.format(who=short, move=move)
+        twin = {"who": who, "detail": "", "wear": "Wearing " + wear + ".", "light": light,
+                "background": _place_noun(place)}
+        out.append({"id": i, "portrait": " ".join(portrait.split()), "sing": " ".join(sing.split()),
+                    "who": short, "twin": twin, "size": size, "seed": seed * 1000 + i * 7 + 1})
+    return out
+
+
+def apply_theme(pack: dict, bible: dict) -> dict:
+    """A copy of the pack whose casting comes from the theme (who, wear, places, light, actions);
+    the pack keeps its edit, FX and finish (the grade comes from theme.finish_for)."""
+    if not bible:
+        return pack
+    p = json.loads(json.dumps(pack))
+    c = p["casting"]
+    neg = c.get("negative", "")
+    neg = neg.replace("modern clothing in a period scene, ", "")  # the eras pack's period lock
+    if p.get("mode") == "motion":
+        rng = random.Random(len(bible["who"]) * 7 + 3)
+        cast, used = [], {}
+        for k in range(max(40, len(c.get("cast", [])))):
+            who = _pick(rng, bible["who"], used, "who")
+            wear = _pick(rng, bible["wear"], used, "wear")
+            place = _pick(rng, bible["places"], used, "place")
+            light = _pick(rng, bible["light"], used, "light")
+            cast.append([f"{who}, wearing {wear}", f"{_place_noun(place)}, {light}"])
+        c["cast"] = cast
+    elif c.get("artist"):
+        c["wear"] = bible["wear"]
+        c["light"] = bible["light"]
+        c["places"] = bible["places"]
+        c["background"] = [_place_noun(pl) + " behind" for pl in bible["places"]]
+        c["actions"] = {"medium": SCENE_ACTIONS["medium"], "wide": bible["actions"]}
+    else:
+        p["casting"] = {"theme": bible, "framing": c.get("framing"),
+                        "framing_landscape": c.get("framing_landscape"), "negative": neg,
+                        "dense_from": c.get("dense_from", 0.6)}
+        return p
+    c["negative"] = neg
+    return p
 
 
 def cast_motion(pack: dict, n: int, seed: int) -> list[dict]:

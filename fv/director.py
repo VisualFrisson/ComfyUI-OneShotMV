@@ -71,7 +71,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            seed: int = 1, twins: str = "auto", dance_path: str = "", run_name: str = "",
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
-           artist_path: str = "", qc_retries: int = 2, log=print) -> dict:
+           artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
+           log=print) -> dict:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
@@ -88,10 +89,17 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     pk = casting.load_pack(pack)
     label = preset
     preset = formats.effective_preset(mode, preset)  # singing always renders on the quality model
+    if mode == "voice" and artist_path and pack != "artist":
+        pk = casting.load_pack("artist")
+        pack = "artist"
+    bible = {}
+    if theme and theme.strip():  # the theme sets the world: who, wear, places, light, actions, grade
+        from . import theme as themes
+        bible = themes.expand(theme, seed=seed, out_root=out_root, log=log)
+        pk = casting.apply_theme(pk, bible)
+        pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
+        log("[FrissonVision] " + themes.summary(bible).replace("\n", "\n[FrissonVision] "))
     if mode == "voice":
-        if artist_path and pack != "artist":
-            pk = casting.load_pack("artist")
-            pack = "artist"
         if pk["casting"].get("artist") and not (artist_path and os.path.exists(artist_path)):
             raise ValueError("the artist pack needs artist_image_path (one photo of the artist)")
         p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
@@ -118,6 +126,22 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     else:
         vocal_path = os.path.join(run_dir, "song.wav")
         p["stems_t0"] = 0.0
+
+    # lyrics with word timings (Whisper) for b-roll that matches the words (fv/broll.py)
+    if mode == "voice" and broll_share > 0:
+        p["broll_share"] = float(broll_share)
+        from . import lyrics
+        if lyrics.available() and os.path.exists(vocal_path):
+            try:
+                vx_, vsr_ = stems.read_wav(vocal_path)
+                shift = p["stems_t0"] - p["song_t0"]
+                words = [dict(w, t0=round(w["t0"] + shift, 3), t1=round(w["t1"] + shift, 3))
+                         for w in lyrics.transcribe(vx_, vsr_, log=log)]
+                words = [w for w in words if -0.5 <= w["t0"] <= p["duration"] + 0.5]
+                p["lyrics"] = {"words": words, "lines": lyrics.lines(words)}
+                log(f"[FrissonVision] lyrics: {len(words)} words, {len(p['lyrics']['lines'])} lines")
+            except Exception as e:
+                log(f"[FrissonVision] lyrics skipped ({e})")
 
     rsize = formats.render_size(fmt, preset)
     jobs: list[tuple[str, dict]] = []
@@ -216,6 +240,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
 
     p["cast"] = cast
+    if bible:
+        p["theme"] = {k: v for k, v in bible.items() if k != "raw"}
+        p["finish"] = pk["finish"]
     p["run_dir"], p["run_rel"] = run_dir, rel
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
@@ -233,6 +260,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 continue
             ids.append(queue_prompt(g, url))
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
+               + (themes.summary(bible) + "\n" if bible else "") +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
@@ -309,7 +337,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             continue
         try:
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
-                                vocal=vocal, sr=sr or 44100, seek=seek, sync=voice and r["role"] == "A",
+                                vocal=vocal, sr=sr or 44100, seek=seek,
+                                sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
                                 people=not voice)
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
@@ -443,7 +472,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
                                             vocal=vocal, sr=sr or 44100, seek=seek,
-                                            sync=voice and r["role"] == "A", people=not voice)
+                                            sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
+                                            people=not voice)
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
                     except Exception:
@@ -463,24 +493,85 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 if "sync_offset" in best:
                     r["sync_delay"] = round(min(0.4, max(-0.1, -best["sync_offset"] / 25.0)), 3)
                     r["sync_conf"] = best.get("sync_conf")
+        # lip-sync repair: LatentSync re-draws the mouth of the leads SyncNet still scores low
+        # (fv/lipfix.py); a repaired take replaces the original only if it scores clearly higher
+        fixed = []
+        if voice and vocal is not None and p.get("lipfix", True) and not p.get("lipfix_done"):
+            from . import lipfix
+            if lipfix.available():
+                thr = qc.THRESH.get("sync_conf", 4.5)
+                sung = qc.THRESH.get("sync_singing", 0.55)
+                weak = []
+                for r in p["renders"]:
+                    if r["role"] != "A" or r.get("size", "close") == "wide" or r.get("sync_conf") is None:
+                        continue
+                    cur = next((t for t in r.get("takes", []) if t.get("path") == r.get("path")), {})
+                    if r["sync_conf"] < thr and cur.get("singing_frac25", 1.0) >= sung:
+                        weak.append((r, cur))
+                weak.sort(key=lambda x: x[0]["sync_conf"])
+                for r, cur in weak[:int(p.get("lipfix_max", 16))]:
+                    seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
+                    out = os.path.join(run_dir, f"r{r['id']:03d}A_ls_00001_.mp4")
+                    try:
+                        res = lipfix.repair(r["path"], vocal, sr, seek, out, log=log)
+                    except Exception as e:  # never let the repair block the cut
+                        log(f"[FrissonVision] lip-sync repair of r{r['id']:03d}A failed: {e}")
+                        continue
+                    if not res:
+                        continue
+                    sc = qc.sync_check(out, vocal, sr, seek)
+                    before = float(r["sync_conf"])
+                    after = float(sc.get("sync_conf", 0.0))
+                    better = after >= before + 0.5
+                    take = {"path": out, "fps": 25, "frames": res["frames"], "latentsync": True, "v": qc.VERSION,
+                            "fail": [], "face_frac_ls": res["face_frac"], **sc,
+                            "score": round(cur.get("score", 0.0) + 0.08 * (after - before) + (0.01 if better else -1.0), 4)}
+                    r.setdefault("takes", []).append(take)
+                    if better:
+                        r["sync_delay_ltx"] = r.get("sync_delay")
+                        r.update(path=out, fps=25, frames=res["frames"], sync_conf=after, latentsync=True)
+                        if "sync_offset" in sc:
+                            r["sync_delay"] = round(min(0.4, max(-0.1, -sc["sync_offset"] / 25.0)), 3)
+                    fixed.append(f"r{r['id']:03d}A {before:.1f}->{after:.1f}{' kept' if better else ''}")
+                lipfix.free()
+                if fixed:
+                    log("[FrissonVision] lip-sync repair: " + ", ".join(fixed))
+            p["lipfix_done"] = True
+            p["lipfix_report"] = fixed
         shots = {s["index"]: s for s in p.get("shots", []) if "index" in s}
         for r in p["renders"]:  # twins follow their lead's mouth, so they share its offset
             lead = by_id.get(r.get("twin_of"))
             if r["role"] == "B" and lead is not None and "sync_delay" in lead:
-                r["sync_delay"] = lead["sync_delay"]
+                # a repaired lead's own offset changed; its twins still follow the original take
+                r["sync_delay"] = lead.get("sync_delay_ltx", lead["sync_delay"]) if lead.get("latentsync") \
+                    else lead["sync_delay"]
             # a delay can't reach back past the clip's own lead-in (it would hold the first
             # frame at the cut)
             if "sync_delay" in r:
                 on = r.get("cut_at", shots.get(r.get("shot"), {}).get("t0", r["t_start"]))
                 r["sync_delay"] = round(min(r["sync_delay"], max(0.0, on - r["t_start"] - 0.02)), 3)
+        # b-roll cutaways (over weak lip sync and instrumental gaps), made once, before assembly
+        post = []
+        if voice and float(p.get("broll_share", 0.0)) > 0 and not p.get("broll_planned"):
+            try:
+                from . import broll
+                post = broll.plan(p, run_dir, casting.load_pack(p["pack"]), log=log)
+            except Exception as e:  # never let b-roll block the cut
+                log(f"[FrissonVision] b-roll skipped ({e})")
+                post = []
+            p["broll_planned"] = True
+        rerolls = list(post)  # SDK clients run these themselves (qc bundle)
         if queue and then_assemble and queue_rerolls:
             from . import graphs
-            queued = queue_chain_front([graphs.free_memory("before assembly").nodes,
-                                        graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes],
+            queued = queue_chain_front(post + [graphs.free_memory("before assembly").nodes,
+                                               graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes],
                                        server_url())
         bad = [f"r{x['id']:03d}{x['role']}:{'+'.join(x['fail'])}" for x in report if not x["ok"]]
+        nb = sum(1 for r in p["renders"] if r.get("role") == "R")
         msg = f"QC pass {pass_idx}: {len(report) - len(bad)}/{len(report)} takes pass" + \
-              (f"; kept best take for {', '.join(bad)}" if bad else "") + ("; assembling" if then_assemble else "")
+              (f"; kept best take for {', '.join(bad)}" if bad else "") + \
+              (f"; lip-sync repair {', '.join(fixed)}" if fixed else "") + \
+              (f"; {nb} b-roll cutaway(s) queued" if post else "") + ("; assembling" if then_assemble else "")
     json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
     hist = os.path.join(run_dir, "qc.json")
     allq = json.load(open(hist, encoding="utf-8")) if os.path.exists(hist) else []

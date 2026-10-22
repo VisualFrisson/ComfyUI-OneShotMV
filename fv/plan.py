@@ -15,6 +15,7 @@ Times in the plan are seconds relative to the window start; `song_t0` maps back 
 from __future__ import annotations
 
 import math
+import os
 import random
 
 import numpy as np
@@ -374,6 +375,12 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
 
     for s in shots:
         f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
+        br = by_id.get(s.get("broll"))
+        if br is not None and br.get("path") and not br.get("unusable") and os.path.exists(br["path"]):
+            # a b-roll cutaway (fv/broll.py) replaces the shot's lead
+            edl.append({"f0": f0, "f1": f1, "render": br["id"], "kind": "main", "broll": True})
+            prev_face = None
+            continue
         a = by_id[s["A"]]
         a_al = None
         if faces is not None and s.get("phase") == "drop" and prev_face is not None and prev_face[1] == "drop":
