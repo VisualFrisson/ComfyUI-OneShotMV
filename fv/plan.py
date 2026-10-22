@@ -399,9 +399,12 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
             al = None
             if faces is not None:
                 tf = r["cut_at"]
-                lf = fz.apply_align(a_al, face(s["A"], tf))  # where the lead's face is on screen
+                lf_raw = face(s["A"], tf)
+                lf = fz.apply_align(a_al, lf_raw)  # where the lead's face is on screen
                 bf = face(rid, tf)
-                if lf is None or bf is None or fz.match_cost(lf, bf) > thr:
+                # a look is rendered (and face-matched) against the lead's own frame: judge it there,
+                # then move it to wherever the group's alignment put the lead on screen
+                if lf is None or bf is None or fz.match_cost(lf_raw, bf) > thr:
                     continue  # can't be shown to line up: no fast cut here
                 al = fz.align(lf, bf)
             cands.append((rid, fc, al))
