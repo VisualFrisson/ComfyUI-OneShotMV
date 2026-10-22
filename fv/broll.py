@@ -60,8 +60,13 @@ def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: floa
     weak.sort(key=lambda s: lead(s)["sync_conf"])
     gaps = [s for s in cands if lead(s).get("vocal_density", 1.0) < gap_below and s not in weak]
     gaps.sort(key=lambda s: lead(s).get("vocal_density", 1.0))
+    # when lip sync holds up everywhere and there are no gaps, cutaways still mix things up
+    # (the n31b note: "not many, but to keep things interesting"): the weakest remaining shots
+    rest = [s for s in cands if s not in weak and s not in gaps]
+    rest.sort(key=lambda s: (lead(s).get("sync_conf") is None, lead(s).get("sync_conf") or 0.0))
     picks = []
-    for s, why in [(s, "weak lip sync") for s in weak] + [(s, "instrumental gap") for s in gaps]:
+    for s, why in [(s, "weak lip sync") for s in weak] + [(s, "instrumental gap") for s in gaps] + \
+            [(s, "variety") for s in rest]:
         if len(picks) >= n:
             break
         if any(abs(s["index"] - q["index"]) <= 1 for q, _ in picks):

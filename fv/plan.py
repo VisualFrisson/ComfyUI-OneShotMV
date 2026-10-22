@@ -165,7 +165,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
     if ed.get("grammar") == "hold":
         shots = _hold_shots(bars, dur, secs, ed, bar_len)
         if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
-            shots[-2]["t1"] = shots.pop()["t1"]
+            shots[-1]["t1"] = shots.pop()["t1"]
         assign_framing(shots, framing, seed, drop_size=ed.get("drop_size", "close"))
         renders, performers = _hold_renders(shots, beats, ed, rfps, t0, preroll, tail)
         edl = voice_edl(shots, renders, beats, ed, out_fps, seed)
@@ -194,7 +194,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
         shots[-1]["t1"] = round(dur, 4)
     # a final sliver shorter than a beat joins the previous shot
     if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
-        shots[-2]["t1"] = shots.pop()["t1"]
+        shots[-1]["t1"] = shots.pop()["t1"]
 
     assign_framing(shots, framing, seed)
 
