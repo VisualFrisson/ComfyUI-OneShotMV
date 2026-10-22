@@ -44,6 +44,28 @@ def _s3fd_detector():
     return lipsync, lipsync._load(dev)[1], dev
 
 
+def detect(rgb, size: int = 320):
+    """Largest face in one RGB uint8 frame: [cx, cy, w] normalised, or None."""
+    import cv2
+    how = method()
+    if not how:
+        return None
+    h, w = rgb.shape[:2]
+    s = size / max(h, w)
+    small = cv2.resize(np.ascontiguousarray(rgb), (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA)
+    gh, gw = small.shape[:2]
+    if how == "s3fd":
+        ls, det, dev = _s3fd_detector()
+        fs = [(q[0], q[1], q[2] - q[0], q[3] - q[1]) for q in ls._detect(det, small.copy(), dev, 1.0, 0.8)]
+    else:
+        fs = _cascade().detectMultiScale(cv2.cvtColor(small, cv2.COLOR_RGB2GRAY), 1.1, 4,
+                                         minSize=(int(0.08 * min(gh, gw)),) * 2)
+    if not len(fs):
+        return None
+    x, y, bw, bh = max(fs, key=lambda q: q[2] * q[3])
+    return [float((x + bw / 2) / gw), float((y + bh / 2) / gh), float(bw / gw)]
+
+
 def track(path: str, every: int = 3, size: int = 320) -> dict | None:
     """{fps, n, every, boxes: [[cx, cy, w] or None per sampled frame]} or None."""
     import cv2

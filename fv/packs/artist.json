@@ -23,7 +23,7 @@
    }
   },
   "edit": "Photo of the same person as in image 1. {shot}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}. Wearing {wear}. {light}, {background}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
-  "twin": "Change the outfit to {wear}, the lighting to {light} and the background to {background}. Keep the exact same person with the same face, identity and hair, and the same camera angle, framing, head position, mouth shape and expression. Photorealistic photo.",
+  "twin": "Change the outfit to {wear}, the lighting to {light} and the background to {background}. Keep the exact same person with the same face, identity and hair, and the same camera angle, framing, head position, mouth shape and expression. The same tight crop: the face stays exactly the same size and in the same place in the frame. Photorealistic photo.",
   "who": "the person",
   "angle": [
    "slightly below",

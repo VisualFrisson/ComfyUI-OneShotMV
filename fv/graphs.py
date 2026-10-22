@@ -282,7 +282,8 @@ TWIN_PROMPT = ("Recreate image 1 with the person from image 2. Keep image 1's ex
 
 TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Background: {background}. "
              "Keep the exact same camera angle, framing, head position, head tilt, mouth shape and facial "
-             "expression. A completely different person. Photorealistic photo with natural skin texture.")
+             "expression, and the same tight crop: the face stays exactly the same size and in the same place in "
+             "the frame. A completely different person. Photorealistic photo with natural skin texture.")
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
@@ -299,6 +300,8 @@ def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, p
     else:
         out = _klein(g, O(fr), prompt, seed=seed)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size[0], height=size[1], crop="center"))
+    if _has_node("FVFaceMatch"):  # the edit pulls the camera back: put the face back where the lead's is
+        out = O(g.add("FVFaceMatch", image=out, reference=O(fr), max_scale=2.2))
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 

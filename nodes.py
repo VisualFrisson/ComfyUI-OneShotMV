@@ -378,6 +378,53 @@ class FVLipSyncScore:
         return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
 
 
+class FVFaceMatch:
+    """Moves and scales an edited keyframe so its face sits where the reference frame's face is.
+    Image edits asked for a new outfit tend to pull the camera back; a pose-matched look made
+    from such a keyframe stays smaller and higher than the lead, so the cut doesn't match."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"image": ("IMAGE",), "reference": ("IMAGE",),
+                             "max_scale": ("FLOAT", {"default": 2.2, "min": 1.0, "max": 4.0, "step": 0.05})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY
+
+    def run(self, image, reference, max_scale=2.2):
+        _reload()
+        import torch.nn.functional as F
+        a = (image[0].clamp(0, 1) * 255).byte().cpu().numpy()
+        b = (reference[0].clamp(0, 1) * 255).byte().cpu().numpy()
+        fa, fb = faces.detect(a), faces.detect(b)
+        if fa is None or fb is None:
+            print(f"[FrissonVision] face match: no face in {'image' if fa is None else 'reference'}; unchanged")
+            return (image,)
+        t4 = image.permute(0, 3, 1, 2)
+
+        def warp(sc, dx, dy):
+            th = torch.tensor([[[1 / sc, 0.0, -2 * dx / sc], [0.0, 1 / sc, -2 * dy / sc]]], dtype=image.dtype)
+            grid = F.affine_grid(th.expand(t4.shape[0], 2, 3), t4.shape, align_corners=False)
+            return F.grid_sample(t4, grid.to(t4.device), mode="bicubic", padding_mode="border",
+                                 align_corners=False).permute(0, 2, 3, 1).clamp(0, 1)
+
+        sc, dx, dy = 1.0, 0.0, 0.0
+        cur = fa
+        for _ in range(3):  # a face box sits differently on a big face than a small one: re-measure
+            s2 = float(fb[2] / max(1e-3, cur[2]))
+            s2 = min(max_scale / sc, max(0.8 / sc, s2))
+            d2x = fb[0] - (0.5 + (cur[0] - 0.5) * s2)
+            d2y = fb[1] - (0.5 + (cur[1] - 0.5) * s2)
+            sc, dx, dy = sc * s2, s2 * dx + d2x, s2 * dy + d2y
+            out = warp(sc, dx, dy)
+            cur = faces.detect((out[0] * 255).byte().cpu().numpy())
+            if cur is None or (abs(cur[0] - fb[0]) + abs(cur[1] - fb[1]) < 0.02 and abs(cur[2] / fb[2] - 1) < 0.05):
+                break
+        print(f"[FrissonVision] face match: scale {sc:.2f}, shift {dx:+.2f} {dy:+.2f}")
+        return (out,)
+
+
 class FVFinish:
     """The Frisson Vision finish on any frames: learned grade, diffusion, halation, contrast,
     gate vignette, grain (settings from a style pack)."""
@@ -552,6 +599,7 @@ NODE_CLASS_MAPPINGS = {
     "FVFinish": FVFinish,
     "FVQC": FVQC,
     "FVLipSyncScore": FVLipSyncScore,
+    "FVFaceMatch": FVFaceMatch,
     "FVLoadImagePath": FVLoadImagePath,
     "FVLoadVideoPath": FVLoadVideoPath,
     "FVLoadAudioPath": FVLoadAudioPath,
@@ -569,4 +617,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVLoadVideoPath": "Frisson Vision: Load Video (path)",
     "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",
     "FVLipSyncScore": "Frisson Vision: Lip Sync Score",
+    "FVFaceMatch": "Frisson Vision: Face Match",
 }
