@@ -149,33 +149,36 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
         key = os.path.join(run_dir, f"k{rid:03d}R_00001_.png")
         seed = p.get("seed", 1) * 1000 + 900 + k
         line = ""
+        # text to video on LTX, which is already loaded after the QC re-rolls: a Krea still first
+        # would mean swapping Krea in and LTX back (about 10 minutes each on a 22B model)
+        stills = bool(p.get("broll_stills", False))
+        if kind == "dance" and p.get("artist_path"):
+            kind = "words"  # the artist's own dance would need an identity edit (another model swap)
         if kind == "dance":
             d = _dancer(p, pack, k)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
-            motion = " ".join(DANCE_MOTION.format(who=short).split())
-            if p.get("artist_path"):
-                img = " ".join(DANCE_ARTIST.format(**d).split())
-                keys.append(graphs.artist_portrait(artist_path=p["artist_path"], prompt=img, seed=seed,
-                                                   prefix=f"{rel}/k{rid:03d}R", size2=s2).nodes)
-            else:
-                img = " ".join(DANCE_STILL.format(**d).split())
+            img = " ".join(DANCE_STILL.format(**d).split())
+            motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
+                f"{d['light']}. Setting: {d['place']}. Photorealistic, natural colour, subtle film grain."
+            if stills:
                 keys.append(graphs.krea2_portrait(prompt=img, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             # the drum stem drives the movement (no vocal, so nobody starts singing)
             seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
-            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=motion,
-                                           negative=NEGATIVE, frames=frames, seed=seed,
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
+                                           prompt=motion, negative=NEGATIVE, frames=frames, seed=seed,
                                            prefix=f"{rel}/r{rid:03d}R",
                                            audio_path=drums if os.path.exists(drums) else None,
                                            audio_seek=seek).nodes)
         else:
             img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, log=log)
-            keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
-                                              size1=s1, size2=s2).nodes)
-            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=img + MOTION,
-                                           negative=NEGATIVE, frames=frames, seed=seed,
-                                           prefix=f"{rel}/r{rid:03d}R").nodes)
+            if stills:
+                keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                                                  size1=s1, size2=s2).nodes)
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
+                                           prompt=img + STILL + MOTION, negative=NEGATIVE, frames=frames,
+                                           seed=seed, prefix=f"{rel}/r{rid:03d}R").nodes)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
              "frames": frames, "fps": rfps, "size": "medium" if kind == "dance" else "wide", "sync_delay": 0.0,
              "key": key, "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"),
@@ -186,4 +189,4 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
     for i, g in enumerate(keys + clips):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"broll_{i:02d}.json"), "w", encoding="utf-8"), indent=1)
     log("[FrissonVision] b-roll: " + " | ".join(made))
-    return keys + [graphs.free_memory("after b-roll stills").nodes] + clips
+    return (keys + [graphs.free_memory("after b-roll stills").nodes] if keys else []) + clips

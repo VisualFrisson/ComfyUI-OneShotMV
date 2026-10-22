@@ -178,16 +178,17 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     neg = g.add("CLIPTextEncode", clip=m["clip"], text=negative)
     cond = g.add("LTXVConditioning", positive=O(pos), negative=O(neg), frame_rate=float(fps))
     p_ref, n_ref = O(cond, 0), O(cond, 1)
-    key = g.add("FVLoadImagePath", path=key_path)
     keys = []
-    for (w, h) in sizes:
-        k = g.add("ImageScale", image=O(key), upscale_method="lanczos", width=w, height=h, crop="center")
-        keys.append(O(g.add("LTXVPreprocess", image=O(k), img_compression=33)))
+    if key_path:  # image to video; without a key it is text to video (b-roll)
+        key = g.add("FVLoadImagePath", path=key_path)
+        for (w, h) in sizes:
+            k = g.add("ImageScale", image=O(key), upscale_method="lanczos", width=w, height=h, crop="center")
+            keys.append(O(g.add("LTXVPreprocess", image=O(k), img_compression=33)))
     ks = key_strengths or ((0.7, 0.75, 0.8) if pr["stages"] == 3 else (0.9, 0.9))
     w1, h1 = sizes[0]
     lat = g.add("EmptyLTXVLatentVideo", width=w1, height=h1, length=frames, batch_size=1)
     lat_ref = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[0], latent=O(lat),
-                      strength=ks[0], bypass=False))
+                      strength=ks[0], bypass=False)) if keys else O(lat)
     if union:
         ctl = _pose(g, guide_video, w1, h1, frames, fps, guide_start, guide_face, lead_only=not guide_face)
         gd = g.add("LTXAddVideoICLoRAGuide", positive=p_ref, negative=n_ref, vae=m["vae"], latent=lat_ref,
@@ -225,8 +226,9 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
             else [("euler_ancestral", D25_S2)])
     for i, (sname, sigs) in enumerate(plan, start=1):
         up = g.add("LTXVLatentUpsampler", samples=vlat, upscale_model=m["ups"], vae=m["vae"])
-        li = g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[i], latent=O(up), strength=ks[i], bypass=False)
-        av = g.add("LTXVConcatAVLatent", video_latent=O(li), audio_latent=a_ref if audio_path else O(sep, 1))
+        li = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[i], latent=O(up), strength=ks[i],
+                     bypass=False)) if keys else O(up)
+        av = g.add("LTXVConcatAVLatent", video_latent=li, audio_latent=a_ref if audio_path else O(sep, 1))
         gd2 = g.add("CFGGuider", model=m["model"], positive=cpos, negative=cneg, cfg=1.0)
         s = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=12345 + seed % 1000)),
                   guider=O(gd2), sampler=O(g.add("KSamplerSelect", sampler_name=sname)),
