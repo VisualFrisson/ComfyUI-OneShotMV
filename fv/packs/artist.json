@@ -23,7 +23,7 @@
    }
   },
   "edit": "Photo of the same person as in image 1. {shot}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}. Wearing {wear}. {light}, {background}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
-  "twin": "Change the outfit to {wear}, the lighting to {light} and the background to {background}. Keep the exact same person with the same face, identity and hair, and the same camera angle, framing, head position, mouth shape and expression. The same tight crop: the face stays exactly the same size and in the same place in the frame. Photorealistic photo.",
+  "twin": "Change the outfit to {wear}, the hairstyle to {hair} and the place to {place}, with {soft_light}. Keep the exact same person with the same face and identity, and the same camera angle, framing, head position, mouth shape and expression. The same crop: the face stays exactly the same size and in the same place in the frame. Photorealistic photo.",
   "who": "the person",
   "angle": [
    "slightly below",
@@ -165,7 +165,31 @@
     "lens": "on a 35mm lens close to the face",
     "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the frame. No one else in frame."
    }
-  }
+  },
+  "hair": [
+   "a sleek high ponytail",
+   "loose beach waves",
+   "a short choppy bob",
+   "tight braids pulled back",
+   "a messy bun with loose strands",
+   "slicked-back wet-look hair",
+   "big voluminous curls",
+   "a sharp blunt fringe",
+   "space buns",
+   "a low side part, tucked behind the ears",
+   "a half-up half-down style",
+   "a cropped pixie cut"
+  ],
+  "twin_light": [
+   "soft daylight",
+   "warm evening light",
+   "cool overcast light",
+   "golden-hour sun",
+   "soft window light",
+   "the glow of neon signs",
+   "warm practical lamps",
+   "bright clean studio light"
+  ]
  },
  "edit": {
   "_note": "grammar 'hold': long holds in quiet stretches (shot_bars_quiet bars), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
@@ -192,7 +216,8 @@
   "pingpong": 0.35,
   "insert_on_beat": 0.75,
   "insert_off_beat": 0.35,
-  "insert_twin_share": 0.7
+  "insert_twin_share": 0.7,
+  "drop_size": "medium"
  },
  "fx": {
   "intensity": 1.0,

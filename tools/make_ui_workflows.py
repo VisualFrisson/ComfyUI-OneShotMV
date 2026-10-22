@@ -25,7 +25,7 @@ Each performer lip-syncs the vocal (LTX audio-to-video).
 
 **theme** (optional): one line that sets the world, e.g. *a retro-futurist 1970s space station, warm orange and teal light*. It decides who the characters are, what they wear, the places, the light and the grade; the pack keeps the edit. Try it first in **Theme Preview**.
 
-**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync, and with LatentSync installed it repairs the singing shots that stay out of sync.
+**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync. **lip_repair** (experimental, off) re-draws weak mouths with LatentSync.
 
 **broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. With **broll_style** `mix`, weak lip sync gets a shot that shows what the words are about (Whisper finds the words) and instrumental gaps get a performer dancing to the track; `lyrics` or `dance` uses one kind. 0 turns it off.
 
@@ -111,9 +111,9 @@ DIRECTOR_OUT = [{"name": "summary", "type": "STRING"}, {"name": "run_dir", "type
 def director_widgets(mode, pack, preset="quality", fmt="16:9", seconds=30.0, framing="mixed", seed=1, theme=""):
     # required: mode, pack, format, preset, seconds, start, seed (+ control), twins, queue_renders
     # optional widgets: theme, dance_video_path, run_name, twin_editor, guide_strength, queue_assemble,
-    #                   framing, artist_image_path, broll_share, broll_style, qc_retries
+    #                   framing, artist_image_path, broll_share, broll_style, lip_repair, qc_retries
     return [mode, pack, fmt, preset, seconds, -1.0, seed, "fixed", "auto", True,
-            theme, "", "", "klein", 1.0, True, framing, "", 0.125 if mode == "voice" else 0.0, "mix", 2]
+            theme, "", "", "klein", 1.0, True, framing, "", 0.125 if mode == "voice" else 0.0, "mix", False, 2]
 
 
 def voice():

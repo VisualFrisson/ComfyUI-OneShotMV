@@ -47,7 +47,7 @@ def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
     return beat.choose_window(tl, seconds, drop_at=0.25, start=start if start >= 0 else None)
 
 
-def assign_framing(shots: list[dict], framing: str, seed: int) -> None:
+def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = "close") -> None:
     """'close': every shot a close-up (the edamame look). 'mixed': quiet stretches lean wide and
     medium, loud ones punch in close (with an occasional medium), never the same size twice in
     a row in quiet sections. With phases (the hold grammar): quiet shots move between wide,
@@ -64,6 +64,8 @@ def assign_framing(shots: list[dict], framing: str, seed: int) -> None:
             size = rng.choices(opts, weights=[{"wide": 0.4, "medium": 0.4, "close": 0.2}[x] for x in opts])[0]
         elif ph == "build":
             size = "close" if prev == "medium" else "medium"
+        elif ph == "drop":
+            size = drop_size
         elif s["loud"]:
             size = "medium" if (ph is None and rng.random() < 0.25 and prev == "close") else "close"
         else:
@@ -135,7 +137,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
 def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "quality",
                seconds: float = 30.0, start: float = -1.0, seed: int = 1,
                twins: str | None = None, preroll: float | None = None, tail: float = 0.12,
-               out_fps: float = 24.0, framing: str = "mixed") -> dict:
+               out_fps: float | None = None, framing: str = "mixed") -> dict:
     ed = pack["edit"]
     twins = twins or ed.get("twins", "loud")
     # lead-in before each shot: room for the per-take lip-sync delay (up to ~0.4 s) without
@@ -156,12 +158,15 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
     secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.6))
     sec_starts = sorted(s["start"] for s in secs)
     rfps = formats.PRESETS[preset]["fps"]
+    # the cut runs at an exact divisor of the render rate: 50 fps clips cut at 25 fps take every
+    # other frame; at 24 fps every twelfth step skips a frame, which reads as stutter on the mouth
+    out_fps = float(out_fps or (rfps / 2.0 if rfps >= 48 else rfps))
     rng = random.Random(seed)
     if ed.get("grammar") == "hold":
         shots = _hold_shots(bars, dur, secs, ed, bar_len)
         if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
             shots[-2]["t1"] = shots.pop()["t1"]
-        assign_framing(shots, framing, seed)
+        assign_framing(shots, framing, seed, drop_size=ed.get("drop_size", "close"))
         renders, performers = _hold_renders(shots, beats, ed, rfps, t0, preroll, tail)
         edl = voice_edl(shots, renders, beats, ed, out_fps, seed)
         return {"version": 2, "mode": "voice", "pack": pack["name"], "format": fmt, "preset": preset,

@@ -131,7 +131,10 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         sing = fr["sing"].format(who=who, move=move, action=action or "singing")
         sing = " ".join((sing[0].upper() + sing[1:]).split())
         # the twin of this performer: same person, a different look
-        g = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("light", "background", "wear")}
+        g = {k: _pick(rng, c.get(k, [""]), used, k) for k in ("light", "background", "wear", "hair")}
+        g["place"] = _pick(rng, c.get("places") or [g["background"]], used, "twin_place")
+        g["place"] = re.sub(r"^(in|on|at)\s+", "", g["place"])
+        g["soft_light"] = _pick(rng, c.get("twin_light") or c.get("light", [""]), used, "twin_light")
         twin_prompt = " ".join(c["twin"].format(**g).split())
         out.append({"id": i, "portrait": edit, "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
                     "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],

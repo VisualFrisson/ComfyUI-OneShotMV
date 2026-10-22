@@ -1,5 +1,5 @@
 {
- "id": "ab8cb469-1b75-4e49-8374-99e92b330657",
+ "id": "8d479461-d38e-49ad-892e-e7093462c38e",
  "revision": 0,
  "last_node_id": 5,
  "last_link_id": 3,
@@ -166,6 +166,7 @@
     "",
     0.0,
     "mix",
+    false,
     2
    ],
    "title": "Frisson Vision: Director"
