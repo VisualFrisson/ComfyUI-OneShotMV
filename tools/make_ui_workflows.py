@@ -27,7 +27,7 @@ Each performer lip-syncs the vocal (LTX audio-to-video).
 
 **Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync, and with LatentSync installed it repairs the singing shots that stay out of sync.
 
-**broll_share**: about 1 shot in 8 becomes a cutaway that shows what the words are about (Whisper finds the words), placed over weak lip sync and instrumental gaps, never on the drop. 0 turns it off.
+**broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. With **broll_style** `mix`, weak lip sync gets a shot that shows what the words are about (Whisper finds the words) and instrumental gaps get a performer dancing to the track; `lyrics` or `dance` uses one kind. 0 turns it off.
 
 The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.
 
@@ -111,9 +111,9 @@ DIRECTOR_OUT = [{"name": "summary", "type": "STRING"}, {"name": "run_dir", "type
 def director_widgets(mode, pack, preset="quality", fmt="16:9", seconds=30.0, framing="mixed", seed=1, theme=""):
     # required: mode, pack, format, preset, seconds, start, seed (+ control), twins, queue_renders
     # optional widgets: theme, dance_video_path, run_name, twin_editor, guide_strength, queue_assemble,
-    #                   framing, artist_image_path, broll_share, qc_retries
+    #                   framing, artist_image_path, broll_share, broll_style, qc_retries
     return [mode, pack, fmt, preset, seconds, -1.0, seed, "fixed", "auto", True,
-            theme, "", "", "klein", 1.0, True, framing, "", 0.125 if mode == "voice" else 0.0, 2]
+            theme, "", "", "klein", 1.0, True, framing, "", 0.125 if mode == "voice" else 0.0, "mix", 2]
 
 
 def voice():

@@ -247,6 +247,10 @@ class FVDirector:
                                        "show what the words are about: first where lip sync stayed weak, then in "
                                        "instrumental gaps; never on the drop. Needs Whisper large-v3-turbo in "
                                        "models/whisper for the words. 0 = off"}),
+            "broll_style": (["mix", "lyrics", "dance"], {"default": "mix",
+                            "tooltip": "mix: cutaways that show the words over weak lip sync, performers dancing "
+                                       "(medium shots, not singing) in instrumental gaps; lyrics or dance: one kind "
+                                       "everywhere"}),
             "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
                            "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
                                       "from the shot, and lip sync with SyncNet if its weights are installed) and "
@@ -266,7 +270,7 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125):
+            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix"):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -279,7 +283,8 @@ class FVDirector:
                               queue=queue_renders, editor=twin_editor, guide_strength=guide_strength,
                               queue_assemble=queue_assemble, framing=framing,
                               artist_path=_resolve(artist_image_path) if artist_image_path else "",
-                              qc_retries=qc_retries, theme=theme or "", broll_share=broll_share)
+                              qc_retries=qc_retries, theme=theme or "", broll_share=broll_share,
+                              broll_style=broll_style)
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}

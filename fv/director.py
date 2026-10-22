@@ -72,7 +72,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
-           log=print) -> dict:
+           broll_style: str = "mix", log=print) -> dict:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
@@ -130,6 +130,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     # lyrics with word timings (Whisper) for b-roll that matches the words (fv/broll.py)
     if mode == "voice" and broll_share > 0:
         p["broll_share"] = float(broll_share)
+        p["broll_style"] = broll_style
         from . import lyrics
         if lyrics.available() and os.path.exists(vocal_path):
             try:

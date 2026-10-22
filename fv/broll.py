@@ -1,11 +1,14 @@
-"""B-roll: a few cutaways, nobody singing, that show what the words are about.
+"""B-roll: a few cutaways where nobody sings: shots that show what the words are about, and
+performers dancing to the track (medium shots, not full body) as filler.
 
 About one shot in eight (`broll_share`), never on the drop and never the opening shot, never
 two in a row. Slots are filled first where lip sync is still weak after the re-rolls (a sung
 shot whose SyncNet confidence stayed low), then in instrumental gaps (a lead with almost no
 vocal under it). Each cutaway illustrates the line sung there (Whisper, fv/lyrics.py), written
 as an image prompt by the same local language model as themes (fv/theme.py), in the theme's or
-pack's world; Krea 2 makes the still and LTX moves it."""
+pack's world; Krea 2 makes the still and LTX moves it. broll_style 'mix' (default) puts the
+lyric cutaways over weak lip sync and the dance filler in instrumental gaps; 'lyrics' or 'dance'
+uses one kind everywhere."""
 from __future__ import annotations
 
 import json
@@ -18,6 +21,19 @@ Show the idea of these words literally or as a visual metaphor: an object, a pla
 
 PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No real or famous people, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
+# dance filler (the n34-n36 notes: pose-guided full-body dance doesn't hold up in LTX, but a
+# performer grooving to the track in a medium shot works as a cutaway between sung lines)
+DANCE_STILL = ("Cinematic medium shot on a 35mm lens of {who}, wearing {wear}, dancing to the music with loose "
+               "shoulders and one arm raised, eyes half closed, mouth closed in a slight smile, not singing. "
+               "{light}. Setting: {place}. Photorealistic film still, an invented person, the only person in frame, "
+               "natural colour, subtle film grain. No text, no lettering.")
+DANCE_MOTION = ("Medium shot of {who} dancing to the beat: shoulders, hips and arms move with the rhythm, the head "
+                "bobs, a relaxed smile, the mouth stays closed, not singing. The handheld camera sways with the "
+                "rhythm. No one else in frame. No text appears.")
+DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again somewhere new: a medium shot on a 35mm "
+                "lens. They are dancing to the music with loose shoulders and one arm raised, eyes half closed, "
+                "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
+                "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
 STILL = " Cinematic film still, shallow depth of field, natural colour, subtle film grain. No text, no lettering."
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody sings or speaks. "
           "No text appears.")
@@ -80,12 +96,41 @@ def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, log=print) -> tuple[
     return text, (ln or {}).get("text", "")
 
 
+def _dancer(p: dict, pack: dict, k: int) -> dict:
+    """Who dances in a filler shot: someone from the run's own cast (theme or pack world)."""
+    import random
+    rng = random.Random(p.get("seed", 1) * 31 + k)
+    th = p.get("theme") or {}
+    if th.get("who"):
+        return {"who": rng.choice(th["who"]), "wear": rng.choice(th["wear"]),
+                "place": rng.choice(th["places"]).split(" ", 1)[-1], "light": rng.choice(th["light"])}
+    cast = [c for c in p.get("cast", []) if c.get("twin")] or [{"twin": {}}]
+    c = rng.choice(cast)["twin"]
+    c2 = (pack.get("casting") or {})
+    wear = (c.get("wear") or "").replace("Wearing ", "").rstrip(".") or \
+        rng.choice(c2.get("wear") or ["their own clothes"])
+    place = (c.get("background") or rng.choice(c2.get("places") or ["a dim club with coloured lights"]))
+    return {"who": c.get("who") or "a person", "wear": wear, "light": c.get("light") or "warm practical light",
+            "place": place.replace(" behind", "")}
+
+
+def kind_for(why: str, style: str) -> str:
+    """'words' (a cutaway that shows the lyric) or 'dance' (a performer dancing, not singing)."""
+    if style == "dance":
+        return "dance"
+    if style == "lyrics":
+        return "words"
+    return "dance" if why == "instrumental gap" else "words"  # mix
+
+
 def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
     """Pick the slots, write the prompts, add the b-roll renders to the plan; returns the job
     graphs (stills first, then the LTX clips) to queue before assembly."""
     picks = choose(p, share=float(p.get("broll_share", 0.0)))
     if not picks:
         return []
+    style = p.get("broll_style", "mix")
+    drums = os.path.join(run_dir, "drums.wav")
     rel = p.get("run_rel", "")
     preset, fmt = p["preset"], p["format"]
     rfps = p.get("render_fps", formats.PRESETS[preset]["fps"])
@@ -93,23 +138,46 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
     keys, clips, made = [], [], []
     for k, (s, why) in enumerate(picks):
         rid = len(p["renders"])
-        img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, log=log)
+        kind = kind_for(why, style)
         t_start = max(-p["song_t0"], s["t0"] - 0.2)
         frames = formats.ltx_frames(s["t1"] - t_start + 0.15, rfps)
         key = os.path.join(run_dir, f"k{rid:03d}R_00001_.png")
+        seed = p.get("seed", 1) * 1000 + 900 + k
+        line = ""
+        if kind == "dance":
+            d = _dancer(p, pack, k)
+            d["light"] = d["light"][:1].upper() + d["light"][1:]
+            short = d["who"].split(",")[0].split(" with ")[0]
+            motion = " ".join(DANCE_MOTION.format(who=short).split())
+            if p.get("artist_path"):
+                img = " ".join(DANCE_ARTIST.format(**d).split())
+                keys.append(graphs.artist_portrait(artist_path=p["artist_path"], prompt=img, seed=seed,
+                                                   prefix=f"{rel}/k{rid:03d}R", size2=s2).nodes)
+            else:
+                img = " ".join(DANCE_STILL.format(**d).split())
+                keys.append(graphs.krea2_portrait(prompt=img, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                                                  size1=s1, size2=s2).nodes)
+            # the drum stem drives the movement (no vocal, so nobody starts singing)
+            seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=motion,
+                                           negative=NEGATIVE, frames=frames, seed=seed,
+                                           prefix=f"{rel}/r{rid:03d}R",
+                                           audio_path=drums if os.path.exists(drums) else None,
+                                           audio_seek=seek).nodes)
+        else:
+            img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, log=log)
+            keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                                              size1=s1, size2=s2).nodes)
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=img + MOTION,
+                                           negative=NEGATIVE, frames=frames, seed=seed,
+                                           prefix=f"{rel}/r{rid:03d}R").nodes)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
-             "frames": frames, "fps": rfps, "size": "wide", "sync_delay": 0.0, "key": key,
-             "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"), "broll": {"why": why, "line": line,
-                                                                                   "prompt": img}}
+             "frames": frames, "fps": rfps, "size": "medium" if kind == "dance" else "wide", "sync_delay": 0.0,
+             "key": key, "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"),
+             "broll": {"kind": kind, "why": why, "line": line, "prompt": img}}
         p["renders"].append(r)
         s["broll"] = rid
-        seed = p.get("seed", 1) * 1000 + 900 + k
-        keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
-                                          size1=s1, size2=s2).nodes)
-        clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=img + MOTION,
-                                       negative=NEGATIVE, frames=frames, seed=seed,
-                                       prefix=f"{rel}/r{rid:03d}R").nodes)
-        made.append(f"shot {s['index']} ({why}): {line!r} -> {img}")
+        made.append(f"shot {s['index']} ({why}, {kind}): {line!r} -> {img[:120]}")
     for i, g in enumerate(keys + clips):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"broll_{i:02d}.json"), "w", encoding="utf-8"), indent=1)
     log("[FrissonVision] b-roll: " + " | ".join(made))
