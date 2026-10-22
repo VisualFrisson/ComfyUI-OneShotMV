@@ -69,7 +69,7 @@ The Director does the whole run from one press of Queue:
 
    The worst takes are re-rendered first, and re-renders stop once they would double the run's render time. A re-rolled lead clip also re-renders its pose-matched looks. The best take of each shot goes into the cut.
 
-   **Lip-sync repair.** A sung lead that SyncNet still scores low after the re-rolls goes through LatentSync 1.6 (`fv/lipfix.py`, vendored in `fv/latentsync/`), which re-draws the mouth to the vocal. The repaired take replaces the original only when SyncNet scores it clearly higher.
+   **Lip-sync repair (experimental, off by default).** With `lip_repair` on, a sung lead that SyncNet still scores low after the re-rolls goes through LatentSync 1.6 (`fv/lipfix.py`, vendored in `fv/latentsync/`), which re-draws the mouth to the vocal; the repaired take replaces the original only when SyncNet scores it clearly higher. In our tests it smeared the mouth on fast head and camera moves, which LTX shots have a lot of, so it is off unless you turn it on.
 
    **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world; Krea 2 makes the still and LTX moves it.
 6. **Cuts it together** (`fv/assemble.py`):
@@ -78,7 +78,7 @@ The Director does the whole run from one press of Queue:
    - **Lip sync.** LTX's mouths run slightly ahead of its audio. SyncNet measures each take's offset, and the cut shows that take that much later. Without SyncNet, each preset shows its clips by an average measured offset (`sync_delay` in `fv/formats.py`).
    - **Effects.** Exposure flashes, bloom, zoom punches, shake, RGB split and motion trails, driven by the kick, snare and hat envelopes and the drop (`fv/audiofx.py`, `fv/fx.py`). They stay low in the quiet stretches and rise through the build, so the drop lands at full strength.
    - **The finish** (`fv/finish.py`): a grade learned from a reference edit, halation, glow, contrast, a gate vignette and grain.
-   - **Output.** It scales to the delivery size, muxes the song, and writes an EDL so the cut opens in Resolve or Premiere.
+   - **Output.** It scales to the delivery size, muxes the song, and writes an EDL so the cut opens in Resolve or Premiere. The cut runs at 25 fps, exactly every other frame of the 50 fps quality clips (at 24 fps the uneven frame steps read as stutter on the mouths).
 
 ## Style packs
 
