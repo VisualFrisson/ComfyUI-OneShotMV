@@ -137,8 +137,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             try:
                 vx_, vsr_ = stems.read_wav(vocal_path)
                 shift = p["stems_t0"] - p["song_t0"]
-                words = [dict(w, t0=round(w["t0"] + shift, 3), t1=round(w["t1"] + shift, 3))
-                         for w in lyrics.transcribe(vx_, vsr_, log=log)]
+                raw = lyrics.transcribe(vx_, vsr_, log=log)
+                p["lyrics_debug"] = {"raw": len(raw), "first": raw[:6], "text": getattr(lyrics, "LAST_TEXT", "")[:300]}
+                words = [dict(w, t0=round(w["t0"] + shift, 3), t1=round(w["t1"] + shift, 3)) for w in raw]
                 words = [w for w in words if -0.5 <= w["t0"] <= p["duration"] + 0.5]
                 p["lyrics"] = {"words": words, "lines": lyrics.lines(words)}
                 if lyrics.LAST_ERROR:

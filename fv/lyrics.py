@@ -49,6 +49,7 @@ def _resample(x: np.ndarray, sr: int, to: int = 16000) -> np.ndarray:
 
 
 LAST_ERROR = ""
+LAST_TEXT = ""
 
 
 def _degenerate(text: str) -> bool:
@@ -89,62 +90,48 @@ def transcribe(vocal: np.ndarray, sr: int, log=print, language: str | None = Non
     x = x / peak * 0.9
     dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
     dt = torch.float16 if dev == "cuda" else torch.bfloat16
-    model = None
+    asr = None
     out = None
     try:
-        # the model directly (not transformers' ASR pipeline, whose audio path imports torchcodec:
-        # on a ComfyUI whose torchcodec can't find its FFmpeg libraries that import fails)
-        from transformers import WhisperForConditionalGeneration, WhisperProcessor
-        proc = WhisperProcessor.from_pretrained(d)
+        # transformers' ASR pipeline (word timings, its own decoding setup) without its torchcodec
+        # check: on a ComfyUI whose torchcodec can't find its FFmpeg libraries that import fails,
+        # and raw arrays don't need it
+        import transformers.pipelines.automatic_speech_recognition as _asr_mod
+        _asr_mod.is_torchcodec_available = lambda: False
+        from transformers import pipeline
+        kw = {"model_kwargs": {"attn_implementation": "eager"}}
         try:
-            model = WhisperForConditionalGeneration.from_pretrained(d, dtype=dt, attn_implementation="eager")
+            asr = pipeline("automatic-speech-recognition", model=d, dtype=dt, device=dev, **kw)
         except TypeError:  # transformers < 4.56 calls it torch_dtype
-            model = WhisperForConditionalGeneration.from_pretrained(d, torch_dtype=dt, attn_implementation="eager")
-        model = model.to(dev).eval()
-        tok = proc.tokenizer
-        special = set(tok.all_special_ids)
+            asr = pipeline("automatic-speech-recognition", model=d, torch_dtype=dt, device=dev, **kw)
         chunks = []
         for a, b in _pieces(x):
-            feats = proc(x[a:b], sampling_rate=16000, return_tensors="pt").input_features.to(dev, dt)
             res = None
             for lang in ([language] if language else [None, "en"]):
-                gk = {"task": "transcribe", "max_new_tokens": 220, "no_repeat_ngram_size": 3,
-                      "return_token_timestamps": True, "return_dict_in_generate": True}
+                gk = {"task": "transcribe", "max_new_tokens": 220, "no_repeat_ngram_size": 3}
                 if lang:
                     gk["language"] = lang
                 with torch.inference_mode():
-                    g = model.generate(feats, **gk)
-                seq = g["sequences"][0].tolist()
-                ts = g["token_timestamps"][0].tolist()
-                text = tok.decode([t for t in seq if t not in special])
-                res = (seq, ts, text)
-                if not _degenerate(text):
+                    res = asr({"raw": x[a:b], "sampling_rate": 16000}, return_timestamps="word", generate_kwargs=gk)
+                if not _degenerate(res.get("text", "")):
                     break
-            if res is None or _degenerate(res[2]):
+            if res is None or _degenerate(res.get("text", "")):
                 continue  # a looping piece is dropped, the rest kept
-            seq, ts, _ = res
             off = a / 16000.0
-            cur = None
-            for i, (t, at) in enumerate(zip(seq, ts)):
-                if t in special or t >= len(tok):
+            for c in res.get("chunks", []):
+                t0, t1 = c.get("timestamp", (None, None))
+                if t0 is None:
                     continue
-                piece = tok.decode([t])
-                if cur is None or piece.startswith(" "):
-                    if cur and cur["text"].strip():
-                        cur["timestamp"] = (cur["timestamp"][0], at + off)
-                        chunks.append(cur)
-                    cur = {"text": piece.strip(), "timestamp": (at + off, None)}
-                else:
-                    cur["text"] += piece
-            if cur and cur["text"].strip():
-                chunks.append(cur)
+                chunks.append({"text": c.get("text", ""), "timestamp": (t0 + off, None if t1 is None else t1 + off)})
         out = {"chunks": chunks, "text": " ".join(c["text"] for c in chunks)}
+        global LAST_TEXT
+        LAST_TEXT = out["text"]
     except Exception as e:
         LAST_ERROR = f"{type(e).__name__}: {e}"[:300]
         log(f"[FrissonVision] lyrics: Whisper failed ({LAST_ERROR})")
         return []
     finally:
-        del model
+        del asr
         if dev == "cuda":
             torch.cuda.empty_cache()
     if not out.get("chunks"):
