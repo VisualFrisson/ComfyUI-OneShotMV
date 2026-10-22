@@ -97,9 +97,12 @@ def apply_fx(img, p: dict, prev=None):
         b = torch.roll(t[:, 2:3], shifts=px, dims=3)
         t = torch.cat([r, t[:, 1:2], b], 1)
     if p["bloom"] > 0.01:
+        # like the flash below, bloom on a high-key frame (a white suit on a white set) only
+        # milks it out to a blank frame: less of it the brighter the frame already is
+        kb = min(1.0, max(0.15, (0.75 - float(t.mean())) / 0.35))
         hi = torch.clamp((t.mean(1, keepdim=True) - 0.55) / 0.45, 0, 1) * t
         g = _blur(hi)
-        t = 1 - (1 - t) * (1 - g * p["bloom"] * 1.4)
+        t = 1 - (1 - t) * (1 - g * p["bloom"] * 1.4 * kb)
     if p["flash"] > 0.01:
         # a hot, warm over-exposure like an on-camera flash: blacks stay deep (no milky
         # white-out), highlights roll off softly and bloom, colour gets a little richer

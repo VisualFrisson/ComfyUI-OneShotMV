@@ -309,7 +309,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             continue
         try:
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
-                                vocal=vocal, sr=sr or 44100, seek=seek, sync=voice and r["role"] == "A")
+                                vocal=vocal, sr=sr or 44100, seek=seek, sync=voice and r["role"] == "A",
+                                people=not voice)
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
         entry = {k: v for k, v in res.items() if k != "ok"}
@@ -378,6 +379,25 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 ins = node.get("inputs", {})
                 if node.get("class_type") == "SaveVideo" and str(ins.get("filename_prefix", "")).endswith(name):
                     ins["filename_prefix"] = f"{rel}/{tag}"
+            fails = next((x.get("fail", []) for x in report if x["id"] == r["id"]), [])
+            needs_key = False
+            if r["role"] in ("M", "MB") and "people" in fails:
+                # a second person came from the character keyframe: re-make it with a new seed
+                kname = f"k{r['id']:03d}"
+                kf = _job_file(run_dir, kname)
+                if kf:
+                    kg = _bump(json.load(open(kf, encoding="utf-8")), pass_idx + 1)
+                    ktag = f"{kname}_t{pass_idx + 1}"
+                    for node in kg.values():
+                        ins = node.get("inputs", {})
+                        if node.get("class_type") == "SaveImage" and str(ins.get("filename_prefix", "")).endswith(kname):
+                            ins["filename_prefix"] = f"{rel}/{ktag}"
+                    old_key = r.get("key") or os.path.join(run_dir, f"{kname}_00001_.png")
+                    g = swap(g, old_key, os.path.join(run_dir, f"{ktag}_00001_.png"))
+                    json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
+                                       encoding="utf-8"), indent=1)
+                    key_jobs.append(kg)
+                    needs_key = True
             if r["role"] == "B" and r.get("twin_of") in new_paths:  # follow the re-rolled lead clip
                 old = by_id[r["twin_of"]]["takes"][0]["path"]
                 g = swap(g, old, new_paths[r["twin_of"]])
@@ -401,8 +421,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             r["path"] = new_paths[r["id"]]
             json.dump(g, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{tag}.json"), "w", encoding="utf-8"),
                       indent=1)
-            (twin_jobs if r["role"] == "B" else lead_jobs).append(g)
-        jobs = lead_jobs + key_jobs + twin_jobs  # grouped by model: LTX, Klein, LTX
+            # renders that wait on a new keyframe run after the keyframe jobs
+            (twin_jobs if (r["role"] == "B" or needs_key) else lead_jobs).append(g)
+        jobs = lead_jobs + key_jobs + twin_jobs  # grouped by model: LTX, Klein, LTX (renders after their keys)
         from . import graphs
         rerolls = list(jobs)
         if queue_rerolls:  # chain the next pass on the server
@@ -422,7 +443,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
                                             vocal=vocal, sr=sr or 44100, seek=seek,
-                                            sync=voice and r["role"] == "A")
+                                            sync=voice and r["role"] == "A", people=not voice)
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
                     except Exception:

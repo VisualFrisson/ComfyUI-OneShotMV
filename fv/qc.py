@@ -14,6 +14,8 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
+  people   - motion renders: a second person in the shot (an image edit sometimes turns one
+             dancer into two); faces of at least 40% the main face's size in half the sampled frames
   sync     - lead clips: SyncNet says the mouth doesn't follow the words (fv/lipsync.py; needs the
              SyncNet weights, skipped without them, and on stretches with little singing).
              Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
@@ -34,7 +36,7 @@ import numpy as np
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55}
-VERSION = 2  # takes checked by an older QC are checked again
+VERSION = 3  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -178,8 +180,20 @@ def sync_check(path: str, vocal, sr: int, seek: float) -> dict:
     return out
 
 
+def extra_people(frames, n: int = 6) -> float:
+    """Fraction of n sampled frames showing a second face at least 40% the size of the main one."""
+    from . import faces
+    hits = k = 0
+    for i in np.linspace(0, len(frames) - 1, n).round().astype(int):
+        fs = faces.detect_all(frames[i][:, :, ::-1], size=512)
+        k += 1
+        if len(fs) >= 2 and fs[1][2] >= 0.4 * fs[0][2]:
+            hits += 1
+    return hits / max(1, k)
+
+
 def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, vocal=None, sr: int = 44100,
-               seek: float = 0.0, sync: bool = False) -> dict:
+               seek: float = 0.0, sync: bool = False, people: bool = False) -> dict:
     r = {"path": path, "ok": True, "fail": [], "score": 1.0, "v": VERSION}
     if not path or not os.path.exists(path):
         r.update(ok=False, fail=["missing"], score=0.0)
@@ -206,6 +220,14 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["jump"], r["jump_at"] = round(jmax, 3), jat
     if jmax > THRESH["cut_abs"] and jmax > THRESH["cut_rel"] * max(jmed, 1e-3):
         r["fail"].append("cut")
+    if people:
+        try:
+            frac = extra_people(_read(path, size=512, max_frames=400)[0])
+            r["extra_people"] = round(frac, 2)
+            if frac >= 0.5:
+                r["fail"].append("people")
+        except Exception as e:  # the check is a nicety: never block the cut
+            r["people_error"] = str(e)
     if voice:
         box = face_box(frames)
         r["face"] = box is not None
