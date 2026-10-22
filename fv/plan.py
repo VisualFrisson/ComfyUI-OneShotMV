@@ -381,6 +381,7 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
             if lf0 is not None and fz.match_cost(prev_face[0], lf0) < 3 * thr:
                 a_al = fz.align(prev_face[0], lf0, max_scale=1.12, min_scale=0.92, max_shift=0.08)
         segs = [(s["A"], f0, a_al)]
+        cands = []
         for rid in s.get("chain", []):
             r = by_id.get(rid)
             if r is None or r.get("unusable"):
@@ -396,7 +397,18 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
                 if lf is None or bf is None or fz.match_cost(lf, bf) > thr:
                     continue  # can't be shown to line up: no fast cut here
                 al = fz.align(lf, bf)
-            segs.append((rid, fc, al))
+            cands.append((rid, fc, al))
+        # each look's clip only runs to the next planned cut: a look may stay up only until the
+        # next look that is actually shown, or it would freeze on its last frame (n31 at 0:40).
+        # Pick, from the end of the bar back, the looks whose clips reach the next one shown.
+        need, keep = f1, []
+        for rid, fc, al in reversed(cands):
+            r = by_id[rid]
+            end = r["t_start"] + r.get("sync_delay", delay) + (r["frames"] - 1) / r["fps"]
+            if end * out_fps >= need - 0.5:
+                keep.insert(0, (rid, fc, al))
+                need = fc
+        segs += keep
         for k, (rid, fa, al) in enumerate(segs):
             fb = segs[k + 1][1] if k + 1 < len(segs) else f1
             ev = {"f0": fa, "f1": fb, "render": rid, "kind": "main" if k == 0 else "switch"}

@@ -157,6 +157,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     readers = {rid: ClipReader(r.get("path", ""), (rw, rh)) for rid, r in renders.items()}
     missing = [rid for rid, rd in readers.items() if not rd.ok]
 
+    held = {}  # output frames that had to hold a clip's first / last frame (shows as a pause)
+
     def frame_for(rid, t):
         r = renders.get(rid)
         rd = readers.get(rid)
@@ -166,7 +168,10 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
                 return frame_for(alt, t)
             return None
         # per-take lip-sync offset measured by take QC (SyncNet), else the preset's average
-        return rd.get(int(round((t - r["t_start"] - r.get("sync_delay", delay)) * r["fps"])))
+        idx = int(round((t - r["t_start"] - r.get("sync_delay", delay)) * r["fps"]))
+        if idx < 0 or idx > rd.n - 1:
+            held[rid] = held.get(rid, 0) + 1
+        return rd.get(idx)
 
     def warp(x, al):
         """Scale/shift a frame so its face lands where the lead's face is (see faces.align)."""
@@ -278,6 +283,9 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             progress(f + 1, n_out)
     proc.stdin.close()
     proc.wait()
+    if held:
+        print(f"[FrissonVision] {sum(held.values())} lookups held a clip's first/last frame: "
+              + ", ".join(f"r{k:03d} x{v}" for k, v in sorted(held.items())))
     edl_path = export.write_edl(plan, os.path.join(run_dir, f"{out_name}.edl"))
     return {"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,
             "previews": previews}
