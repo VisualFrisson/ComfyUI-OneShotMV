@@ -54,7 +54,7 @@
    "saturated teal painted wall behind",
    "dark red wall behind",
    "saturated lime green wall behind",
-   "a blurred party crowd behind",
+   "an empty dance floor with a mirror ball behind",
    "a cracked pastel wall behind",
    "a bathroom with glossy tiles behind",
    "a night street with bokeh behind",
@@ -135,9 +135,9 @@
   "moves": {
    "close": [
     "The handheld camera stays very close and sways gently.",
-    "The camera pushes in slowly toward the face.",
     "The camera drifts slowly around the face.",
-    "The handheld camera bobs gently with the beat."
+    "The handheld camera bobs gently with the beat.",
+    "The camera holds steady, very close."
    ],
    "medium": [
     "The camera tracks slowly alongside.",
@@ -158,7 +158,14 @@
    "from slightly above",
    "in three-quarter profile",
    "from just behind the shoulder as they turn to the camera"
-  ]
+  ],
+  "framing_landscape": {
+   "close": {
+    "shot": "Close-up portrait with the whole face in frame, a little space above the hair",
+    "lens": "on a 35mm lens close to the face",
+    "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the frame. No one else in frame."
+   }
+  }
  },
  "edit": {
   "_note": "grammar 'hold': long holds in quiet stretches (shot_bars_quiet bars), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",

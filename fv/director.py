@@ -125,7 +125,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         sizes = ["close"] * p["performers"]
         for r in p["renders"]:
             sizes[r["performer"]] = r.get("size", "close")
-        cast = casting.cast_voice(pk, p["performers"], seed, sizes)
+        cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt)
         s1, s2 = formats.portrait_size(fmt)
         port = {}
         need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A" or editor == "qwen"}

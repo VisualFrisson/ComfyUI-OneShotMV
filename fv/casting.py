@@ -68,10 +68,14 @@ def _frame(c: dict, size: str) -> dict:
     return fr.get(size) or fr.get("close") or next(iter(fr.values()))
 
 
-def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None) -> list[dict]:
+def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
     """n performers for a voice pack: portrait prompt + singing (video) prompt.
-    sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close)."""
+    sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close).
+    fmt '16:9': a pack's `framing_landscape` overrides its framing (an extreme close-up on a
+    wide frame crops the face at the eyes)."""
     c = pack["casting"]
+    if fmt == "16:9" and c.get("framing_landscape"):
+        c = dict(c, framing={**(c.get("framing") or DEFAULT_FRAMING), **c["framing_landscape"]})
     sizes = sizes or ["close"] * n
     if c.get("artist"):
         return _cast_artist(c, n, seed, sizes)
