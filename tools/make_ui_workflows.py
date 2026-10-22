@@ -23,7 +23,11 @@ Each performer lip-syncs the vocal (LTX audio-to-video).
 - The drop cuts on the beat through pose-matched looks of the same moment, so every fast cut is a match cut.
 - The cut never goes back to a shot it has left.
 
-**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync.
+**theme** (optional): one line that sets the world, e.g. *a retro-futurist 1970s space station, warm orange and teal light*. It decides who the characters are, what they wear, the places, the light and the grade; the pack keeps the edit. Try it first in **Theme Preview**.
+
+**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync, and with LatentSync installed it repairs the singing shots that stay out of sync.
+
+**broll_share**: about 1 shot in 8 becomes a cutaway that shows what the words are about (Whisper finds the words), placed over weak lip sync and instrumental gaps, never on the drop. 0 turns it off.
 
 The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.
 
@@ -33,7 +37,7 @@ The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. 
 - **artist**: one singer from a photo. Un-bypass **Load Image**, pick the photo and set the pack to `artist`.
 
 **framing**
-- **mixed** (default): wide, medium and close shots in the verses, tighter in the build, close-ups on the drop.
+- **mixed** (default): wide, medium and close shots in the verses, tighter in the build, close-ups on the drop. Wide shots show the singer doing something in the scene (walking, leaning, working).
 - **close**: close-ups only.
 
 **preset**
@@ -104,12 +108,12 @@ DIRECTOR_IN = [{"name": "audio", "type": "AUDIO"},
 DIRECTOR_OUT = [{"name": "summary", "type": "STRING"}, {"name": "run_dir", "type": "STRING"}]
 
 
-def director_widgets(mode, pack, preset="quality", fmt="16:9", seconds=30.0, framing="mixed", seed=1):
+def director_widgets(mode, pack, preset="quality", fmt="16:9", seconds=30.0, framing="mixed", seed=1, theme=""):
     # required: mode, pack, format, preset, seconds, start, seed (+ control), twins, queue_renders
-    # optional widgets: dance_video_path, run_name, twin_editor, guide_strength, queue_assemble,
-    #                   framing, artist_image_path, qc_retries
+    # optional widgets: theme, dance_video_path, run_name, twin_editor, guide_strength, queue_assemble,
+    #                   framing, artist_image_path, broll_share, qc_retries
     return [mode, pack, fmt, preset, seconds, -1.0, seed, "fixed", "auto", True,
-            "", "", "klein", 1.0, True, framing, "", 2]
+            theme, "", "", "klein", 1.0, True, framing, "", 0.125 if mode == "voice" else 0.0, 2]
 
 
 def voice():

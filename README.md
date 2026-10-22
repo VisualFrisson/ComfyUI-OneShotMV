@@ -40,6 +40,8 @@ The cut, the effects and the finish come from the song itself.
 
 ![Ten frames from a spotlight motion run](media/motion_strip.jpg)
 
+**A theme sets the world.** Type a line into the Director's `theme` box ("a retro-futurist 1970s space station, orange and teal light") and it decides who the characters are, what they wear, where every shot happens, the light and the colour grade; the pack still decides the edit. The line is expanded once into a small world bible by Gemma 3, the LTX-2.3 text encoder you already have, through ComfyUI's own Generate Text, and cached. **Frisson Vision: Theme Preview** shows that bible before you spend a run on it.
+
 The Director does the whole run from one press of Queue:
 
 1. **Listens.**
@@ -50,7 +52,8 @@ The Director does the whole run from one press of Queue:
    - shots on bar lines: two bars in the quiet stretches, one in the build;
    - on the drop, one-bar groups, each a chain of pose-matched looks of the same moment;
    - wide, medium and close shots in the quiet stretches (`mixed` framing).
-3. **Casts** every performer from the pack's casting grammar (`fv/casting.py`). It writes the portrait prompt and the performance prompt for each.
+3. **Casts** every performer from the pack's casting grammar, or from the theme (`fv/casting.py`, `fv/theme.py`). It writes the portrait prompt and the performance prompt for each. Wide shots, and half the medium ones, are in-scene shots: the performer walks toward the camera, leans in a doorway or works at something in their world while singing, instead of standing at the lens.
+   - **Lyrics.** Whisper large-v3-turbo transcribes the vocal stem with word timings (`fv/lyrics.py`), for the b-roll below.
 4. **Queues the renders, grouped by model** so each model loads once:
    1. Krea 2 portraits (or Qwen-Image identity edits of the artist photo);
    2. LTX lip-sync clips;
@@ -65,6 +68,10 @@ The Director does the whole run from one press of Queue:
    - **is out of lip sync**, by SyncNet (`fv/lipsync.py`, see Install). SyncNet also measures how far each take's mouth runs ahead of the voice, and the cut shows that take that much later.
 
    The worst takes are re-rendered first, and re-renders stop once they would double the run's render time. A re-rolled lead clip also re-renders its pose-matched looks. The best take of each shot goes into the cut.
+
+   **Lip-sync repair.** A sung lead that SyncNet still scores low after the re-rolls goes through LatentSync 1.6 (`fv/lipfix.py`, vendored in `fv/latentsync/`), which re-draws the mouth to the vocal. The repaired take replaces the original only when SyncNet scores it clearly higher.
+
+   **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world; Krea 2 makes the still and LTX moves it.
 6. **Cuts it together** (`fv/assemble.py`):
    - **The edit.** Every shot plays its lead performer, and the cut never goes back to a shot it has left. Quiet stretches hold; the build tightens; the drop steps through each group's chain of looks on the beat.
    - **Match cuts.** Fast cutting only works when the eye has somewhere to rest. Each look in a drop chain is rendered from the lead's own pose and words (DWPose plus the LTX union-control IC-LoRA, keyframed from the lead's frame at that beat), so the next look lands on the same pose and syllable. The assembler tracks every face (`fv/faces.py`), nudges each look so the faces line up exactly, and skips a look whose face doesn't land. Motion runs get the same effect on the drop: each segment is rendered twice from the same pose guide, so every flicker lands on the same move.
@@ -114,6 +121,9 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 | **Frisson Vision: Director** | Takes a song, plus an optional artist photo or dance clip. Plans, casts and queues the whole run. |
 | **Frisson Vision: Take QC** | Checks every take, lip sync included, and re-rolls bad ones, then queues the cut (queued by the Director). |
 | **Frisson Vision: Lip Sync Score** | Scores a finished run's lip sync with SyncNet, take by take, into `<run>/lipsync.json`. |
+| **Frisson Vision: Theme Preview** | Shows what a theme turns into: characters, outfits, places, light, in-scene actions and the grade. |
+| **Frisson Vision: Lip Sync Repair** | Re-draws the mouth of any clip to an audio track with LatentSync 1.6. |
+| **Frisson Vision: Face Match** | Moves and scales an edited keyframe so its face sits where the reference frame's face is (used for the pose-matched looks). |
 | **Frisson Vision: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
 | **Frisson Vision: Finish** | A pack's finish on any frames. |
 | **Frisson Vision: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
@@ -142,6 +152,12 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
    - `sfd_face.pth`.
 
    They come from the [Oxford VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/), and are also mirrored in [syncnet-python](https://github.com/nawta/SyncNet_py309_313/tree/main/weights). The weights are for research use (Creative Commons Attribution), so they are not shipped here. The model code is vendored in `fv/syncnet/` (MIT and Apache-2.0, see its NOTICE). Without the weights, take QC skips the lip-sync check.
+6. **Lyrics for b-roll (optional).** [openai/whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) (about 1.6 GB, MIT) in `ComfyUI/models/whisper/whisper-large-v3-turbo/` (the folder comfy-mtb's Whisper loader also uses). Without it, b-roll illustrates the theme or pack world instead of the words.
+7. **Lip-sync repair (optional).** In `custom_nodes/ComfyUI-FrissonVision/weights/latentsync/`:
+   - `latentsync_unet.pt` and `whisper/tiny.pt` from [ByteDance/LatentSync-1.6](https://huggingface.co/ByteDance/LatentSync-1.6);
+   - `sd-vae-ft-mse/` (`config.json` and `diffusion_pytorch_model.safetensors`) from [stabilityai/sd-vae-ft-mse](https://huggingface.co/stabilityai/sd-vae-ft-mse).
+
+   It also needs insightface's buffalo_l face models (`det_10g.onnx`, `2d106det.onnx`) in `ComfyUI/models/insightface/models/buffalo_l/`; many face-swap packs install them. They run with onnxruntime, so the insightface package itself isn't needed. The buffalo_l models are for non-commercial research use. The LatentSync code is vendored under Apache-2.0 (see `fv/latentsync/NOTICE`); the weights are not shipped.
 
 ## Use it
 
