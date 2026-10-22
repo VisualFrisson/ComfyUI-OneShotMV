@@ -79,7 +79,7 @@ def track(path: str, every: int = 3, size: int = 320) -> dict | None:
                                        - 0.5 * q[2])
                 else:
                     x, y, bw, bh = max(fs, key=lambda q: q[2] * q[3])
-                b = [round((x + bw / 2) / gw, 4), round((y + bh / 2) / gh, 4), round(bw / gw, 4)]
+                b = [round(float((x + bw / 2) / gw), 4), round(float((y + bh / 2) / gh), 4), round(float(bw / gw), 4)]
                 prev = b
             boxes.append(b)
         k += 1
@@ -119,10 +119,12 @@ def tracks_for_run(run_dir: str, renders: list[dict], log=None) -> dict:
             changed = True
         out[r["id"]] = cache[key]
     if changed:
-        try:
-            json.dump(cache, open(cache_p, "w", encoding="utf-8"))
-        except Exception:
-            pass
+        try:  # write whole or not at all (a failed dump used to leave a truncated cache)
+            txt = json.dumps(cache)
+            with open(cache_p, "w", encoding="utf-8") as fh:
+                fh.write(txt)
+        except Exception as e:
+            print(f"[FrissonVision] face cache not saved: {e}")
     return out
 
 

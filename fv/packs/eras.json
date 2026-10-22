@@ -10,7 +10,7 @@
   "people": [
    [
     "a Roman market trader in a linen tunic with a weathered tan face and short grey hair",
-    "a bustling ancient Roman market with clay amphorae behind",
+    "an ancient Roman market street with clay amphorae behind, early morning before the crowds",
     "harsh midday sun"
    ],
    [
@@ -117,6 +117,346 @@
     "a Byzantine mosaic artist with a dark beard and a simple tunic",
     "a half-finished gold mosaic wall behind",
     "glinting candle light on gold"
+   ],
+   [
+    "an ancient Egyptian scribe with a shaved head, kohl-lined eyes and a white linen kilt",
+    "painted temple columns with hieroglyphs behind",
+    "warm sunlight through a stone doorway"
+   ],
+   [
+    "a Mesopotamian potter with a curled black beard and a fringed wool garment",
+    "mud-brick walls and drying clay jars behind",
+    "dusty late-afternoon sun"
+   ],
+   [
+    "a Han dynasty court musician in layered silk robes with hair in a topknot",
+    "a red lacquered pavilion and hanging silk lanterns behind",
+    "soft lantern light"
+   ],
+   [
+    "a Maya astronomer with jade ear spools and a feathered headband",
+    "a stepped stone pyramid at dusk behind",
+    "violet dusk light"
+   ],
+   [
+    "an ancient Greek olive farmer with curly grey hair and a wool chiton",
+    "a hillside olive grove above a blue sea behind",
+    "bright Mediterranean sun"
+   ],
+   [
+    "an Aksumite trader in a white shamma shawl with braided hair",
+    "tall carved granite stelae behind",
+    "high clear sunlight"
+   ],
+   [
+    "an Indus valley bead maker with a striped cloth wrap and bangles up the arms",
+    "a brick-lined street with bead stalls behind, quiet at dawn",
+    "pale dawn light"
+   ],
+   [
+    "a Celtic blacksmith with copper braids, freckles and a leather apron",
+    "a glowing forge and an iron anvil behind",
+    "orange forge glow"
+   ],
+   [
+    "a Mali manuscript scholar in an indigo robe and a white cap",
+    "shelves of old manuscripts in a mud-brick library behind",
+    "warm window light"
+   ],
+   [
+    "a Persian miniature painter with a neat beard and a patterned turban",
+    "a tiled arch with blue and gold patterns behind",
+    "soft shaded daylight"
+   ],
+   [
+    "a Polynesian navigator with a tattooed shoulder and a shell necklace",
+    "an outrigger canoe on a turquoise lagoon behind",
+    "golden ocean sunset"
+   ],
+   [
+    "a Mongolian horse herder in a deep blue deel coat and fur hat",
+    "a white ger tent on a wide green steppe behind",
+    "big-sky afternoon light"
+   ],
+   [
+    "a medieval stonemason with dust in his beard and a rough wool hood",
+    "a half-built cathedral wall and scaffolding behind",
+    "hazy morning light"
+   ],
+   [
+    "a Song dynasty tea merchant in a grey silk robe with a thin mustache",
+    "a misty river with a wooden bridge behind",
+    "soft grey river light"
+   ],
+   [
+    "an Ottoman coffeehouse keeper in a red fez and embroidered vest",
+    "brass coffee pots and tiled walls behind",
+    "warm brass-reflected lamplight"
+   ],
+   [
+    "an Aztec feather artist with obsidian earrings and a woven cotton cape",
+    "a canal garden with flowering boats behind",
+    "bright highland sun"
+   ],
+   [
+    "a Ming porcelain painter with ink-stained fingers and a dark cap",
+    "shelves of blue-and-white porcelain behind",
+    "even north light"
+   ],
+   [
+    "an Edo-period kabuki actor in white face paint and a bold red kimono",
+    "a wooden stage with painted pine screens behind",
+    "warm stage footlights"
+   ],
+   [
+    "a Benin bronze caster with a coral bead collar",
+    "a workshop of bronze plaques and clay moulds behind",
+    "glowing furnace light"
+   ],
+   [
+    "a Renaissance noblewoman in a pearl-trimmed bodice with braided hair",
+    "a Venetian balcony over a canal behind",
+    "golden late-afternoon light"
+   ],
+   [
+    "an 18th-century pirate quartermaster with a red head scarf and a gold earring",
+    "a ship's deck with ropes and sails behind",
+    "bright sea glare"
+   ],
+   [
+    "a Georgian-era baker in a flour-dusted apron and linen cap",
+    "a brick oven and loaves on wooden racks behind",
+    "warm oven glow"
+   ],
+   [
+    "a Caribbean sugar-boat captain in a weathered blue coat",
+    "a harbour with tall ships behind",
+    "humid golden morning light"
+   ],
+   [
+    "a Qing dynasty scholar with a long queue braid and round spectacles",
+    "a garden with a moon gate behind",
+    "soft overcast light"
+   ],
+   [
+    "a 19th-century railway worker with a red neckerchief and a soot-streaked face",
+    "a steam locomotive in a station behind",
+    "steam-filtered sunlight"
+   ],
+   [
+    "an American frontier schoolteacher in a high-collared blouse with her hair pinned up",
+    "a one-room wooden schoolhouse behind",
+    "dry prairie light"
+   ],
+   [
+    "a vaquero in a wide sombrero and embroidered jacket",
+    "a dusty corral and adobe walls behind",
+    "hot afternoon sun"
+   ],
+   [
+    "a Meiji-era photographer in a western waistcoat with a bowler hat",
+    "a wooden plate camera on a tripod in a studio behind",
+    "soft skylight"
+   ],
+   [
+    "an Irish fisherwoman in a cable-knit sweater with windblown red hair",
+    "a stone harbour wall and fishing boats behind",
+    "silver overcast sea light"
+   ],
+   [
+    "a Tuareg silversmith in a white tagelmust veil showing only his eyes and nose",
+    "a desert workshop with silver jewellery behind",
+    "harsh bright sun"
+   ],
+   [
+    "a Siberian reindeer herder in a fur parka with beaded trim",
+    "a snowy taiga with reindeer behind",
+    "low pink winter sun"
+   ],
+   [
+    "a 1900s suffragette in a white blouse and a sash with no writing",
+    "a brick street with gas lamps behind, empty in the morning",
+    "pale morning light"
+   ],
+   [
+    "a 1910s cinema pianist in a waistcoat with slicked-back hair",
+    "a dark silent-film theatre with a flickering screen behind",
+    "flickering projector light"
+   ],
+   [
+    "a 1920s Harlem jazz trumpeter in a pinstripe suit, the trumpet resting on his shoulder",
+    "an empty art-deco club with a small stage behind",
+    "smoky golden stage light"
+   ],
+   [
+    "a 1920s flapper with a sleek bob and a beaded headband",
+    "an art-deco ballroom with gold fans behind",
+    "champagne-gold light"
+   ],
+   [
+    "a 1930s Dust Bowl farmer in denim overalls with a wide-brim hat",
+    "a dry wheat field and a wooden windmill behind",
+    "dusty amber sun"
+   ],
+   [
+    "a 1930s Shanghai tailor in a crisp qipao collar shirt with round glasses",
+    "a tailor's shop with bolts of silk behind",
+    "warm tungsten shop light"
+   ],
+   [
+    "a 1940s swing dancer with victory-roll hair and a polka-dot dress",
+    "an empty dance hall with a bandstand behind",
+    "warm spotlight"
+   ],
+   [
+    "a 1940s shipyard welder with a red bandana and rolled-up sleeves",
+    "steel ship hulls in a shipyard behind",
+    "sparks and cold daylight"
+   ],
+   [
+    "a 1950s Bollywood set painter with oiled hair and a half-sleeve shirt",
+    "painted film backdrops of palaces behind",
+    "bright studio lights"
+   ],
+   [
+    "a 1950s Havana cigar roller in a guayabera shirt and a straw hat",
+    "a sunlit tobacco workshop behind",
+    "warm Caribbean sun through shutters"
+   ],
+   [
+    "a 1950s rockabilly mechanic with a quiff and a grease-stained t-shirt with no print",
+    "a vintage car up on a garage lift behind",
+    "warm garage light"
+   ],
+   [
+    "a 1960s mod with a sharp fringe and a tailored three-button suit",
+    "a scooter parked on a London-style street behind",
+    "grey city daylight"
+   ],
+   [
+    "a 1960s Lagos highlife guitarist in a bright patterned shirt, the guitar slung on his back",
+    "a palm-lined open-air dance floor behind, empty at dusk",
+    "string lights at dusk"
+   ],
+   [
+    "a 1960s astronaut-programme engineer with horn-rimmed glasses and a short-sleeve shirt",
+    "a room of blinking mainframe computers behind",
+    "cool fluorescent light"
+   ],
+   [
+    "a 1970s roller skater with feathered hair and striped knee socks",
+    "a roller rink with coloured lights behind, empty",
+    "swirling coloured rink lights"
+   ],
+   [
+    "a 1970s Bogota salsa dancer with gold hoops and a flowing red dress",
+    "an empty salsa club with mirrored walls behind",
+    "warm red club light"
+   ],
+   [
+    "a 1970s Tokyo city-pop DJ with feathered hair and aviator glasses",
+    "a radio booth with vinyl shelves behind",
+    "warm VU-meter glow"
+   ],
+   [
+    "a 1980s Kingston sound-system selector in a mesh vest and a gold chain",
+    "a wall of hand-built speaker boxes behind",
+    "hot coloured bulbs"
+   ],
+   [
+    "a 1980s breakdancer in a tracksuit with no logos and a bucket hat",
+    "a graffiti-free concrete underpass behind",
+    "harsh streetlight"
+   ],
+   [
+    "a 1980s aerobics instructor with a high side ponytail and a neon leotard",
+    "a mirrored gym studio behind",
+    "bright gym light"
+   ],
+   [
+    "a 1990s Seoul arcade kid with bleached tips and an oversized windbreaker",
+    "rows of glowing arcade cabinets behind",
+    "colourful arcade glow"
+   ],
+   [
+    "a 1990s grunge kid in a flannel shirt with messy dyed hair",
+    "a garage with a drum kit and amps behind",
+    "single bare bulb light"
+   ],
+   [
+    "a 1990s rave kid with glitter on the cheeks and a fluffy bucket hat",
+    "a warehouse with laser beams in haze behind, empty",
+    "green laser and strobe light"
+   ],
+   [
+    "a 1990s Johannesburg kwaito dancer in a bright bucket hat and baggy jeans",
+    "a corrugated-iron wall painted in bold colours behind",
+    "hot afternoon sun"
+   ],
+   [
+    "a 2000s skater with a side-swept fringe and a hoodie with no logos",
+    "an empty skate park at sunset behind",
+    "golden sunset light"
+   ],
+   [
+    "a 2000s Mumbai call-centre worker with a headset around the neck",
+    "rows of cubicles at night behind, empty",
+    "cool office light"
+   ],
+   [
+    "a 2010s Lagos tailor with a measuring tape around the neck",
+    "a bright tailoring stall with Ankara fabrics behind",
+    "bright market daylight"
+   ],
+   [
+    "a 2010s Brazilian funk dancer with braids and a cropped jersey with no logos",
+    "a hillside of colourful houses at night behind",
+    "warm streetlights"
+   ],
+   [
+    "a 2020s delivery rider with a reflective jacket and a helmet in the hand",
+    "a rainy neon night street behind",
+    "wet neon reflections"
+   ],
+   [
+    "a 2020s rooftop gardener with soil on the hands and a sun hat",
+    "a city rooftop garden with water tanks behind",
+    "late golden sun"
+   ],
+   [
+    "a 2040s solar farm engineer in a white jumpsuit",
+    "rows of glinting solar panels behind",
+    "bright high sun"
+   ],
+   [
+    "a 2060s deep-sea station diver with a sleek wetsuit, hair slicked back",
+    "a submarine window looking into blue ocean behind",
+    "blue underwater light"
+   ],
+   [
+    "a 2080s Mars colonist in a dusty orange suit with the helmet off",
+    "a red desert and domed habitats behind",
+    "dusty pink Martian light"
+   ],
+   [
+    "a 2100s orbital station gardener with silver-streaked hair",
+    "hydroponic plant racks and a window onto Earth behind",
+    "soft white grow lights"
+   ],
+   [
+    "a far-future android tailor with porcelain skin seams and kind eyes",
+    "a white studio with floating fabrics behind",
+    "soft clean studio light"
+   ],
+   [
+    "a 2200s desert nomad in a solar-weave cloak",
+    "a glass city on the horizon of a salt flat behind",
+    "shimmering heat light"
+   ],
+   [
+    "a future cyber-courier with chrome cheek implants and a fur-trimmed collar",
+    "a vertical neon city at night behind",
+    "magenta and teal neon"
    ]
   ]
  },
