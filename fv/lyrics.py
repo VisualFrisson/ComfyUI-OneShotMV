@@ -48,36 +48,87 @@ def _resample(x: np.ndarray, sr: int, to: int = 16000) -> np.ndarray:
         return np.interp(np.linspace(0, len(x) - 1, n), np.arange(len(x)), x).astype(np.float32)
 
 
-def transcribe(vocal: np.ndarray, sr: int, log=print) -> list[dict]:
-    """[{"w": word, "t0": s, "t1": s}] on the vocal's own time axis; [] without the model."""
+LAST_ERROR = ""
+
+
+def _degenerate(text: str) -> bool:
+    """Whisper looping on a sung hook ('S-D-D-D-D...'): few distinct tokens for the length."""
+    toks = re.findall(r"[\w']+", text.lower())
+    return len(toks) >= 12 and len(set(toks)) / len(toks) < 0.25
+
+
+def _pieces(x: np.ndarray, sr: int = 16000, most: float = 28.0, least: float = 18.0) -> list[tuple[int, int]]:
+    """Cut the vocal into pieces Whisper takes in one pass (< 30 s), at the quietest moment."""
+    out, a, n = [], 0, len(x)
+    hop = sr // 50
+    while n - a > most * sr:
+        lo, hi = a + int(least * sr), a + int(most * sr)
+        seg = x[lo:hi]
+        e = np.array([np.mean(seg[i:i + hop] ** 2) for i in range(0, len(seg) - hop, hop)])
+        cut = lo + int(np.argmin(e)) * hop + hop // 2
+        out.append((a, cut))
+        a = cut
+    out.append((a, n))
+    return [(p, q) for p, q in out if q - p > sr // 2]
+
+
+def transcribe(vocal: np.ndarray, sr: int, log=print, language: str | None = None, device=None) -> list[dict]:
+    """[{"w": word, "t0": s, "t1": s}] on the vocal's own time axis; [] without the model.
+    Word timings need the attention weights, so the model runs with eager attention; repeats are
+    blocked (sung hooks send Whisper into loops) and a looping answer is retried in English."""
+    global LAST_ERROR
+    LAST_ERROR = ""
     d = model_dir()
     if d is None:
+        LAST_ERROR = "no model"
         return []
     import torch
     x = vocal.mean(0) if vocal.ndim == 2 else vocal
     x = _resample(np.asarray(x, np.float32), sr)
     peak = float(np.abs(x).max() or 1.0)
     x = x / peak * 0.9
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
-    dt = torch.float16 if dev == "cuda" else torch.float32
+    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    dt = torch.float16 if dev == "cuda" else torch.bfloat16
+    asr = None
+    out = None
     try:
         from transformers import pipeline
+        kw = {"model_kwargs": {"attn_implementation": "eager"}}
         try:
-            asr = pipeline("automatic-speech-recognition", model=d, dtype=dt, device=dev)
+            asr = pipeline("automatic-speech-recognition", model=d, dtype=dt, device=dev, **kw)
         except TypeError:  # transformers < 4.56 calls it torch_dtype
-            asr = pipeline("automatic-speech-recognition", model=d, torch_dtype=dt, device=dev)
-        out = asr({"raw": x, "sampling_rate": 16000}, return_timestamps="word", chunk_length_s=30,
-                  batch_size=4, generate_kwargs={"task": "transcribe"})
+            asr = pipeline("automatic-speech-recognition", model=d, torch_dtype=dt, device=dev, **kw)
+        chunks = []
+        for a, b in _pieces(x):
+            res = None
+            for lang in ([language] if language else [None, "en"]):
+                gk = {"task": "transcribe", "max_new_tokens": 220, "no_repeat_ngram_size": 3}
+                if lang:
+                    gk["language"] = lang
+                with torch.inference_mode():
+                    res = asr({"raw": x[a:b], "sampling_rate": 16000}, return_timestamps="word", generate_kwargs=gk)
+                if not _degenerate(res.get("text", "")):
+                    break
+            if res is None or _degenerate(res.get("text", "")):
+                continue  # a looping piece is dropped, the rest kept
+            off = a / 16000.0
+            for c in res.get("chunks", []):
+                t0, t1 = c.get("timestamp", (None, None))
+                if t0 is None:
+                    continue
+                chunks.append({"text": c.get("text", ""), "timestamp": (t0 + off, None if t1 is None else t1 + off)})
+        out = {"chunks": chunks, "text": " ".join(c["text"] for c in chunks)}
     except Exception as e:
-        log(f"[FrissonVision] lyrics: Whisper failed ({e})")
+        LAST_ERROR = f"{type(e).__name__}: {e}"[:300]
+        log(f"[FrissonVision] lyrics: Whisper failed ({LAST_ERROR})")
         return []
     finally:
-        try:
-            del asr
-        except Exception:
-            pass
+        del asr
         if dev == "cuda":
             torch.cuda.empty_cache()
+    if not out.get("chunks"):
+        LAST_ERROR = "Whisper heard no words (or looped on every piece)"
+        return []
     words = []
     for c in out.get("chunks", []):
         t0, t1 = c.get("timestamp", (None, None))

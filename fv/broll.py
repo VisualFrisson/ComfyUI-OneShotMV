@@ -17,7 +17,7 @@ import os
 from . import formats, graphs, lyrics
 
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
-Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, hands, a landscape, the weather, the sky, a street. No real or famous people, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, hands, a landscape, the weather, the sky, a street. No real or famous people, no brands, no logos, no text or lettering anywhere, nothing explicit. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
 PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No real or famous people, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 

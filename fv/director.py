@@ -140,6 +140,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                          for w in lyrics.transcribe(vx_, vsr_, log=log)]
                 words = [w for w in words if -0.5 <= w["t0"] <= p["duration"] + 0.5]
                 p["lyrics"] = {"words": words, "lines": lyrics.lines(words)}
+                if lyrics.LAST_ERROR:
+                    p["lyrics_error"] = lyrics.LAST_ERROR
                 log(f"[FrissonVision] lyrics: {len(words)} words, {len(p['lyrics']['lines'])} lines")
             except Exception as e:
                 log(f"[FrissonVision] lyrics skipped ({e})")
