@@ -344,7 +344,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if not voice or r["role"] not in ("A", "B"):
             return {}
         # a look takes its lead's framing (Face Match), so only leads are judged for "too close"
-        return {"framing": r.get("size", "close") if r["role"] == "A" else "close", "ref": ref,
+        return {"framing": r.get("size", "close") if r["role"] == "A" else "look", "ref": ref,
                 "key_path": r.get("key") if r["role"] == "B" else None}
 
     for r in p["renders"]:

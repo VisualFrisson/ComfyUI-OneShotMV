@@ -161,8 +161,8 @@
   ],
   "framing_landscape": {
    "close": {
-    "shot": "Close-up from the shoulders up, the whole head in frame with space above the hair",
-    "lens": "on a 50mm lens about a metre away",
+    "shot": "Head-and-shoulders portrait taken from about one and a half metres away",
+    "lens": "on a 50mm lens, with clear space above the head and both shoulders in frame, the face about a third of the frame height",
     "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the frame. No one else in frame."
    }
   },
@@ -215,7 +215,9 @@
   "insert_on_beat": 0.75,
   "insert_off_beat": 0.35,
   "insert_twin_share": 0.7,
-  "drop_size": "medium"
+  "drop_size": "close",
+  "_note_sizes": "n40: close-ups lip-sync far better than medium shots (SyncNet median 6.7 against 3.9 on LISA), and the artist looks frame themselves head-and-shoulders, so drops and most sung quiet shots are close; the close framing is head-and-shoulders (face about half the frame height), not the old face-filling close-up ('all mouth', the n30c note)",
+  "quiet_sizes": {"wide": 0.3, "medium": 0.3, "close": 0.4}
  },
  "fx": {
   "intensity": 1.0,

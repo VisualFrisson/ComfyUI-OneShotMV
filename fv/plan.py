@@ -47,12 +47,15 @@ def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
     return beat.choose_window(tl, seconds, drop_at=0.25, start=start if start >= 0 else None)
 
 
-def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = "close") -> None:
+def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = "close",
+                   quiet_weights: dict | None = None) -> None:
     """'close': every shot a close-up (the edamame look). 'mixed': quiet stretches lean wide and
     medium, loud ones punch in close (with an occasional medium), never the same size twice in
     a row in quiet sections. With phases (the hold grammar): quiet shots move between wide,
-    medium and close; builds tighten (medium, close); drops are close-ups."""
+    medium and close (`quiet_weights`, a pack's edit `quiet_sizes`); builds tighten (medium,
+    close); drops are close-ups (or the pack's `drop_size`)."""
     rng = random.Random(seed * 31 + 7)
+    qw = {"wide": 0.4, "medium": 0.4, "close": 0.2, **(quiet_weights or {})}
     prev = None
     for k, s in enumerate(shots):
         if framing != "mixed":
@@ -61,7 +64,7 @@ def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = 
         ph = s.get("phase")
         if ph == "quiet":
             opts = [x for x in ("wide", "medium", "close") if x != prev]
-            size = rng.choices(opts, weights=[{"wide": 0.4, "medium": 0.4, "close": 0.2}[x] for x in opts])[0]
+            size = rng.choices(opts, weights=[qw[x] for x in opts])[0]
         elif ph == "build":
             size = "close" if prev == "medium" else "medium"
         elif ph == "drop":
@@ -166,7 +169,8 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
         shots = _hold_shots(bars, dur, secs, ed, bar_len)
         if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
             shots[-1]["t1"] = shots.pop()["t1"]
-        assign_framing(shots, framing, seed, drop_size=ed.get("drop_size", "close"))
+        assign_framing(shots, framing, seed, drop_size=ed.get("drop_size", "close"),
+                       quiet_weights=ed.get("quiet_sizes"))
         renders, performers = _hold_renders(shots, beats, ed, rfps, t0, preroll, tail)
         edl = voice_edl(shots, renders, beats, ed, out_fps, seed)
         return {"version": 2, "mode": "voice", "pack": pack["name"], "format": fmt, "preset": preset,

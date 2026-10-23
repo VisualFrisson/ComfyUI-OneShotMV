@@ -18,9 +18,10 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
              dancer into two); faces of at least 40% the main face's size in half the sampled frames
   noface   - voice renders: no face in most sampled frames (the head walked out of the top of a
              wide shot: n39's r040A; SCRFD via fv/identity.py)
-  tooclose - a medium or wide shot whose face fills too much of the frame (the n30c note, "all
-             mouth"); medium over 0.75 of the frame height, wide over 0.45 (n39 leads: close
-             1.0-1.1, medium 0.59-0.92, wide 0.18)
+  tooclose - a shot whose face fills too much of the frame (the n30c note, "all mouth"): close
+             over 0.95 of the frame height, medium over 0.75, wide over 0.45 (n39 leads: close
+             1.0-1.1, medium 0.59-0.92, wide 0.18; the head-and-shoulders close-up since n41
+             lands at about 0.65-0.85)
   identity - artist runs: the face is no longer the artist's (ArcFace similarity to the artist
              photo). A look is judged on its keyframe, under 0.40 (n39: the artist's portraits
              0.60-0.82, looks edited without the artist photo 0.08-0.40, with it 0.33-0.63); a
@@ -48,7 +49,7 @@ import numpy as np
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
-          "noface": 0.4, "tooclose": {"medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.40,
+          "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.40,
           "id_face_h": 0.25}
 VERSION = 4  # takes checked by an older QC are checked again
 
