@@ -39,7 +39,7 @@ COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10}
 
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. Answer with one JSON object only, no other text, with these keys:
-"who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin and a silver buzz cut, small gold hoops": age, gender, skin tone, hair and one distinctive detail. Vary ages (teens to seventies), genders, skin tones and builds. No names, never real or famous people. At most 18 words each.
+"who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin and a silver buzz cut, small gold hoops": age, gender, skin tone, hair and one distinctive detail. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 18 words each.
 "wear": a list of {wear} outfits that fit the theme. Plain clothes with no text, logos or lettering. At most 14 words each.
 "places": a list of {places} specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups with their colours. At most 12 words each.
@@ -52,7 +52,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v1".encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v2".encode("utf-8")).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the language model

@@ -156,18 +156,25 @@ SCENE_ACTIONS = {
              "working with their hands, then looking up", "walking through the scene"],
 }
 SCENE_MOVES = {
-    "close": ["The handheld camera stays very close and sways gently.", "The camera drifts slowly around the face.",
-              "The handheld camera bobs gently with the beat.", "The camera holds steady, very close."],
-    "medium": ["The camera tracks slowly alongside.", "The camera pushes in slowly.",
+    # close moves keep their distance: "very close" / "around the face" made LTX push in until the
+    # face filled the frame (n41, the n30c "all mouth" note)
+    "close": ["The handheld camera sways gently at the same distance.",
+              "The camera drifts slowly sideways, keeping its distance.",
+              "The handheld camera bobs gently with the beat, keeping its distance.",
+              "The camera holds steady at head-and-shoulders distance."],
+    "medium": ["The camera tracks slowly alongside.", "The camera holds at the same distance, waist-up.",
                "The handheld camera sways with the rhythm.", "The camera arcs slowly around them."],
     "wide": ["The camera follows from a few meters away.", "The camera pushes in slowly from far away.",
              "The camera arcs slowly around them.", "The camera holds still on a tripod."],
 }
 SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
               "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
-SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word. "
-                  "{wear}Setting: {place}. {light}. Photorealistic film still, an invented person, the only "
-                  "person in frame, natural colour, subtle film grain.")
+REAL_PHOTO = ("A real candid photograph, not a render: true-to-life skin with pores, fine lines and small "
+              "blemishes, real fabric texture, natural uneven light, no airbrushing, no glossy or plastic skin, "
+              "subtle film grain.")
+SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
+                  "expressive and a little over the top. {wear}Setting: {place}. {light}. An invented person, the "
+                  "only person in frame. " + REAL_PHOTO)
 SCENE_SING = {
     "medium": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with "
               "open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} "
@@ -221,14 +228,19 @@ def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> 
 
 
 # ------------------------------------------------------------------ themes
-THEME_CLOSE = ("{shot} of {who}, singing straight into the lens with the mouth open mid-word, shot from {angle} "
-               "{lens}. Wearing {wear}. {light}. Background: {place} softly out of focus. An invented person, "
-               "the only one in frame. Photorealistic film still, visible pores and natural skin texture, "
-               "subtle film grain.")
-THEME_CLOSE_SING = ("Handheld close-up of {who} singing straight into the camera. The lips form each word clearly "
-                    "with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural "
-                    "breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the "
-                    "frame. No one else in frame.")
+THEME_CLOSE = ("{shot} of {who}, singing straight into the lens with the mouth open mid-word, expressive and a "
+               "little over the top, shot from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An "
+               "invented person, the only one in frame. " + REAL_PHOTO)
+THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} singing straight into the camera. The lips form each word "
+                    "clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural "
+                    "breathing, small head bobs and eyebrow raises on the beat. {move} The framing stays "
+                    "head-and-shoulders and never moves in closer. Both hands stay below the frame. No one else "
+                    "in frame.")
+# themed close-ups are head-and-shoulders (n41: they lip-sync far better than medium shots and
+# don't read as "all mouth"); a pack's own 16:9 close framing still wins
+THEME_CLOSE_FRAME = {"shot": "Head-and-shoulders portrait",
+                     "lens": "from about one and a half metres away on a 50mm lens, with clear space above the "
+                             "head and both shoulders in frame, the face about a third of the frame height"}
 THEME_ANGLES = ["slightly below", "eye level", "slightly above", "a low angle", "a three-quarter angle"]
 
 
@@ -258,7 +270,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         if size == "wide" or (size == "medium" and rng.random() < 0.5):
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts)
         else:
-            f = fr.get(size) or fr.get("close") or DEFAULT_FRAMING["close"]
+            f = THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
             portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear,
                                           angle=_pick(rng, THEME_ANGLES, used, "angle"),
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
