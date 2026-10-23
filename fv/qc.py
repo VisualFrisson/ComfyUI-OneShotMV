@@ -24,8 +24,10 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
   identity - artist runs: the face is no longer the artist's (ArcFace similarity to the artist
              photo). A look is judged on its keyframe, under 0.40 (n39: the artist's portraits
              0.60-0.82, looks edited without the artist photo 0.08-0.40, with it 0.33-0.63); a
-             lead on its clip, under 0.30 (LTX softens faces: n39 lead clips 0.37-0.50, the
-             drifted looks' clips 0.17-0.32). Skipped on small faces.
+             lead on its clip, under 0.20 (LTX softens faces, more so in medium shots: n40's
+             lead clips 0.29-0.60, n39's drifted looks' clips 0.17-0.32; a lead comes from an
+             identity-checked portrait, so this only catches gross failures). Skipped on small
+             faces.
   sync     - lead clips: SyncNet says the mouth doesn't follow the words (fv/lipsync.py; needs the
              SyncNet weights, skipped without them, and on stretches with little singing).
              Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
@@ -46,7 +48,7 @@ import numpy as np
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
-          "noface": 0.4, "tooclose": {"medium": 0.75, "wide": 0.45}, "id_min": 0.30, "id_min_key": 0.40,
+          "noface": 0.4, "tooclose": {"medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.40,
           "id_face_h": 0.25}
 VERSION = 4  # takes checked by an older QC are checked again
 
