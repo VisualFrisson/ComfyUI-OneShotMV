@@ -135,6 +135,9 @@ BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|f
 
 def _debrand(s: str) -> str:
     s = BRANDS.sub("designer", s)
+    # signs come out as garbled lettering (n45's "neon signs reflecting off the floor"): plain light
+    s = re.sub(r"(?i)\bneon signs\b", "neon tube lights", s)
+    s = re.sub(r"(?i)\bneon sign\b", "neon tube light", s)
     return re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
 
 

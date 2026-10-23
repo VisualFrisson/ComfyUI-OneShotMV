@@ -170,7 +170,8 @@ SCENE_MOVES = {
 SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
               "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
 REAL_PHOTO = ("A real candid photograph, not a render: true-to-life skin with pores, fine lines and small "
-              "blemishes, real fabric texture, no airbrushing, no glossy or plastic skin, subtle film grain.")
+              "blemishes, real fabric texture, no airbrushing, no glossy or plastic skin, subtle film grain. "
+              "No text, signs or lettering anywhere.")
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
