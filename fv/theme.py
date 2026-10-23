@@ -39,7 +39,7 @@ COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses
 OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
 
 PROMPT = """You design the look of a music video. Theme: "{theme}"
-Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Answer with one JSON object only, no other text, with these keys:
+Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Never use brand or product names. Answer with one JSON object only, no other text, with these keys:
 "who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain": age, gender, skin tone, a specific hairdo and one or two distinctive details. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 22 words each.
 "wear": a list of {wear} outfits that fit the theme, specific in fabric, colour and cut. Plain clothes with no text, logos or lettering. At most 18 words each.
 "places": a list of {places} specific places in this world, each starting with "in" or "on". At most 16 words each.
@@ -124,6 +124,20 @@ _WORDS = re.compile(r"\b(logos?|lettering|slogans?|name ?tags?|insignia|printed 
 _NO_WORDS = re.compile(r"\b(no|without)\b[^,.]*\b(logos?|lettering|slogans?|text)\b", re.I)
 
 
+# brand names the model slips in anyway ("oversized Versace sunglasses", n46): a generic word instead,
+# so the image models don't draw a logo
+BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|fendi|hermes|hermès|burberry|"
+                    r"cartier|rolex|ray-?ban|oakley|nike|adidas|reebok|puma|converse|vans|levi'?s|calvin klein|"
+                    r"tommy hilfiger|ralph lauren|lacoste|fila|champion|supreme|coca-?cola|pepsi|mcdonald'?s|"
+                    r"cadillac|rolls-?royce|ferrari|lamborghini|porsche|mercedes(-benz)?|bmw|polaroid|walkman|"
+                    r"sony|gameboy|game boy|nintendo|casio|swatch|members only)\b", re.I)
+
+
+def _debrand(s: str) -> str:
+    s = BRANDS.sub("designer", s)
+    return re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
+
+
 def _clean_list(v, n_min: int = 3) -> list[str]:
     if isinstance(v, str):
         v = [x for x in re.split(r"[\n;]", v) if x.strip()]
@@ -133,7 +147,7 @@ def _clean_list(v, n_min: int = 3) -> list[str]:
     for x in v:
         if isinstance(x, dict):
             x = ", ".join(str(y) for y in x.values())
-        x = _NAME.sub("", str(x).strip().strip("-•* ").rstrip("."))
+        x = _debrand(_NAME.sub("", str(x).strip().strip("-•* ").rstrip(".")))
         x = " ".join(x.split()).strip(" ,")
         if _WORDS.search(x) and not _NO_WORDS.search(x):
             continue  # lettering on clothes and walls comes out as garbled text
@@ -197,7 +211,11 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         path = os.path.join(cache_dir(out_root), _key(theme, seed) + ".json")
         if os.path.exists(path):
             try:
-                return json.load(open(path, encoding="utf-8"))
+                cached = json.load(open(path, encoding="utf-8"))
+                for k in COUNTS:  # bibles cached before the brand scrub
+                    if isinstance(cached.get(k), list):
+                        cached[k] = [_debrand(x) for x in cached[k]]
+                return cached
             except Exception:
                 pass
     prompt = PROMPT.format(theme=theme.replace('"', "'"), grades=", ".join(GRADES), **COUNTS)
