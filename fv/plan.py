@@ -44,7 +44,7 @@ def _loud_at(secs: list[dict], t: float) -> bool:
 def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
     if seconds <= 0:
         return 0.0, tl["duration"]
-    return beat.choose_window(tl, seconds, drop_at=0.25, start=start if start >= 0 else None)
+    return beat.choose_window(tl, seconds, drop_at=0.25, start=start if start >= 0 else None, phrase_bars=4)
 
 
 def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = "close",

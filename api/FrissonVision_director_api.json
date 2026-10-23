@@ -28,7 +28,10 @@
    "queue_assemble": true,
    "framing": "close",
    "artist_image_path": "",
-   "qc_retries": 1
+   "qc_retries": 1,
+   "theme": "",
+   "broll_share": 0.125,
+   "broll_style": "mix"
   }
  }
 }

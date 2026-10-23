@@ -179,7 +179,7 @@ To re-roll one shot, re-queue its file from `<run>/jobs/`, then re-cut.
 **With the Comfy SDK** (`sdk_run.py`), the script drives the whole run through the Comfy API v2:
 1. The Director plans.
 2. The SDK submits every render.
-3. Take QC returns re-rolls, which the SDK submits.
+3. Take QC returns re-rolls, which the SDK submits; the last pass returns the b-roll cutaways.
 4. Assemble runs and the SDK downloads the MP4.
 
 Point it at your own ComfyUI through `comfy-api-proxy`, or at a Comfy API deployment:
@@ -189,6 +189,7 @@ pip install comfy-sdk comfy-api-proxy
 comfy-api-proxy --max-upload-mb 2000                  # beside your ComfyUI
 export COMFY_BASE_URL=http://127.0.0.1:8189
 python sdk_run.py --song track.mp3 --pack crowd --seconds 30
+python sdk_run.py --song track.mp3 --pack crowd --seconds 30 --theme "an 80s Florida retirement community"
 python sdk_run.py --song track.mp3 --pack artist --artist me.png --format 9:16
 python sdk_run.py --song track.mp3 --mode motion --dance dance.mp4 --pack spotlight --format 1:1
 ```

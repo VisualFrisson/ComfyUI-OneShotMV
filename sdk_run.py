@@ -79,6 +79,8 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=30.0, help="0 = whole song")
     ap.add_argument("--start", type=float, default=-1.0, help="-1 = strongest stretch")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--theme", default="", help='one line that sets the world, e.g. "an 80s Florida retirement community"')
+    ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become lyric cutaways (0 = none)")
     ap.add_argument("--twins", default="auto", choices=["auto", "loud", "all", "off"])
     ap.add_argument("--retries", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
     ap.add_argument("--fx", type=float, default=1.0, help="FX intensity (0 = clean cut)")
@@ -102,7 +104,7 @@ def main() -> int:
                      ("seconds", a.seconds), ("start", a.start), ("seed", a.seed), ("twins", a.twins),
                      ("run_name", run), ("dance_video_path", a.dance), ("artist_image_path", a.artist),
                      ("framing", a.framing), ("queue_renders", False), ("queue_assemble", False),
-                     ("qc_retries", 0)):
+                     ("qc_retries", 0), ("theme", a.theme), ("broll_share", a.broll)):
             wf.set_input(d, k, v)
         job = client.submit(wf, metadata={"app": "frissonvision", "run": run}).result()
         bundle = fetch_json(job, "jobs.json")
@@ -120,7 +122,11 @@ def main() -> int:
             qj = client.submit(client.workflows.from_json(qc), metadata={"app": "frissonvision", "run": run}).result()
             q = fetch_json(qj, f"qc{p}.json")
             print(f"  {q['message']}")
-            if q["final"] or not q["jobs"]:
+            if q["final"]:  # the last pass returns the b-roll cutaways (stills, then their clips)
+                if q["jobs"]:
+                    run_all(client, [j["graph"] for j in q["jobs"]], "b-roll", run, a.timeout)
+                break
+            if not q["jobs"]:
                 break
             run_all(client, [j["graph"] for j in q["jobs"]], f"re-rolls (pass {p + 1})", run, a.timeout)
 

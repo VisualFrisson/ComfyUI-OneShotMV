@@ -478,10 +478,12 @@ def analyze(samples, sr: int, beats_per_bar: int = 4, min_section_bars: int = 4,
 
 
 # ------------------------------------------------------------ window helpers
-def choose_window(tl: dict, length_s: float, drop_at: float = 0.4, start: float | None = None
-                  ) -> tuple[float, float]:
+def choose_window(tl: dict, length_s: float, drop_at: float = 0.4, start: float | None = None,
+                  phrase_bars: int = 0) -> tuple[float, float]:
     """Pick the stretch of song a clip of `length_s` seconds is cut to.
-    Default: the drop lands `drop_at` of the way in, snapped to a bar line."""
+    Default: the drop lands `drop_at` of the way in, snapped to a bar line. phrase_bars > 0: the
+    end moves to the nearest bar line that closes a phrase of that many bars (counted from the
+    drop, or from the start without one), so the cut ends where the music does."""
     dur = tl["duration"]
     if start is not None and start >= 0:
         s = start
@@ -506,8 +508,23 @@ def choose_window(tl: dict, length_s: float, drop_at: float = 0.4, start: float 
     tol = 30.0 / max(float(tl.get("tempo") or 120.0), 1.0)
     prior = [b for b in bars if b <= s + tol]
     s = prior[-1] if prior else bars[0]
+    if phrase_bars > 0 and (start is None or start < 0) and tl.get("drop") and len(bars) > 2:
+        # an automatic start also lands on a phrase line before the drop (4 bars, not 5)
+        i_drop = min(range(len(bars)), key=lambda i: abs(bars[i] - tl["drop"]["time"]))
+        i_s = bars.index(s) if s in bars else i_drop
+        k = max(phrase_bars, int(round((i_drop - i_s) / phrase_bars)) * phrase_bars)
+        if i_drop - k >= 0:
+            s = bars[i_drop - k]
     s = max(0.0, min(s, max(0.0, dur - length_s)))
-    return round(s, 4), round(min(dur, s + length_s), 4)
+    e = min(dur, s + length_s)
+    if phrase_bars > 0 and len(bars) > 2 and e < dur - 0.05:
+        ref = tl["drop"]["time"] if tl.get("drop") else s
+        i_ref = min(range(len(bars)), key=lambda i: abs(bars[i] - ref))
+        ends = [b for i, b in enumerate(bars) if (i - i_ref) % phrase_bars == 0
+                and 0.75 * length_s <= b - s <= 1.25 * length_s]
+        if ends:
+            e = min(ends, key=lambda b: abs(b - (s + length_s)))
+    return round(s, 4), round(min(dur, e), 4)
 
 
 def slice_timeline(tl: dict, t0: float, t1: float) -> dict:
