@@ -302,6 +302,32 @@ def _articulate_prompt(g: dict) -> None:
             enc["inputs"]["text"] = casting.articulate(enc["inputs"]["text"])
 
 
+STEADY = "The camera holds still at the same distance; the framing never gets closer."
+
+
+def _steady_prompt(g: dict) -> None:
+    """A lead re-rolled for being too close (LTX pushed in on the face, n41) loses its camera-move
+    sentence and holds its distance instead."""
+    import re
+    for node in g.values():
+        if node.get("class_type") != "LTXVConditioning":
+            continue
+        ref = node.get("inputs", {}).get("positive")
+        enc = g.get(str(ref[0])) if isinstance(ref, list) and ref else None
+        if enc and enc.get("class_type") == "CLIPTextEncode" and isinstance(enc["inputs"].get("text"), str):
+            t = enc["inputs"]["text"]
+            if STEADY in t:
+                continue
+            out = []
+            for x in re.split(r"(?<=[.!?])\s+", t):
+                if re.search(r"\bsing", x, re.I) or "lips" in x:  # the subject and the singing stay
+                    x = re.sub(r"(?i)(handheld )?(extreme )?close-up", "head-and-shoulders shot", x)
+                    out.append(x[:1].upper() + x[1:])
+                elif not re.search(r"(?i)\b(camera|close)\b", x):  # the move sentence goes
+                    out.append(x)
+            enc["inputs"]["text"] = " ".join(out + [STEADY])
+
+
 def _refresh_prompt(g: dict) -> None:
     """Bring a saved LTX job's prompt up to date before re-rolling it (jobs queued before the
     continuity sentence existed would otherwise re-roll with the prompt that cut away)."""
@@ -445,6 +471,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             _refresh_prompt(g)
             if r["role"] == "A" and "sync" in next((x.get("fail", []) for x in report if x["id"] == r["id"]), []):
                 _articulate_prompt(g)
+            if r["role"] == "A" and set(next((x.get("fail", []) for x in report if x["id"] == r["id"]), [])) \
+                    & {"tooclose", "noface", "headcut"}:
+                _steady_prompt(g)
             tag = f"{name}_t{pass_idx + 1}"
             for node in g.values():
                 ins = node.get("inputs", {})
@@ -500,7 +529,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 g2, nk = remake(f"k{r['id']:03d}", g)
                 if g2 is not None:
                     g, needs_key, r["key"] = g2, True, nk
-            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity"}:
+            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity", "headcut"}:
                 # a framing / identity fault that is already in the portrait (the head out of
                 # frame in the still itself) needs a new portrait, not just a new seed for LTX
                 pname = f"p{r['performer']:03d}"
@@ -511,6 +540,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     rep = identity.image_report(old_p, ref) if identity.available() else {}
                     lim = qc.THRESH["tooclose"].get(r.get("size", ""))
                     bad = (rep.get("face_frac", 1.0) < 1.0 or (lim is not None and rep.get("face_h", 0.0) > lim)
+                           or (r.get("size") in ("medium", "wide") and rep.get("head_top", 1.0) < 0.0)
                            or (ref is not None and rep.get("face_h", 0.0) >= qc.THRESH["id_face_h"]
                                and rep.get("id_sim", 1.0) < qc.THRESH["id_min_key"]))
                 except Exception:
