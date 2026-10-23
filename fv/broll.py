@@ -17,9 +17,9 @@ import os
 from . import formats, graphs, lyrics
 
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
-Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Make it look like a real photograph of an ordinary moment someone actually took: specific, believable details, nothing magical, surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
-PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Make it look like a real photograph of an ordinary moment: specific, believable details, nothing surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
 # dance filler (the n34-n36 notes: pose-guided full-body dance doesn't hold up in LTX, but a
 # performer grooving to the track in a medium shot works as a cutaway between sung lines)
@@ -35,8 +35,11 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
                 "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
                 "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
 # no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
-STILL = (" A full-frame photograph that fills the whole picture, shallow depth of field, natural colour, subtle "
-         "film grain. No text, no lettering.")
+# the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
+# still (the realism model the portraits use) written as a real photograph, and LTX moves it
+STILL = (" A real candid photograph, not a render: a full frame with true-to-life textures, natural uneven "
+         "light, everyday imperfections and subtle film grain, no glossy CGI look. Nobody in the picture. "
+         "No text, no lettering.")
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
           "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
@@ -153,9 +156,9 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
         key = os.path.join(run_dir, f"k{rid:03d}R_00001_.png")
         seed = p.get("seed", 1) * 1000 + 900 + k
         line = ""
-        # text to video on LTX, which is already loaded after the QC re-rolls: a Krea still first
-        # would mean swapping Krea in and LTX back (about 10 minutes each on a 22B model)
-        stills = bool(p.get("broll_stills", False))
+        # a Krea 2 still first, then LTX image to video: text to video alone looked AI-made (the n39
+        # note); the model swap costs a few minutes per run. broll_stills False goes back to it
+        stills = bool(p.get("broll_stills", True))
         if kind == "dance" and p.get("artist_path"):
             kind = "words"  # the artist's own dance would need an identity edit (another model swap)
         if kind == "dance":
