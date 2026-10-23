@@ -170,11 +170,10 @@ SCENE_MOVES = {
 SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
               "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
 REAL_PHOTO = ("A real candid photograph, not a render: true-to-life skin with pores, fine lines and small "
-              "blemishes, real fabric texture, natural uneven light, no airbrushing, no glossy or plastic skin, "
-              "subtle film grain.")
+              "blemishes, real fabric texture, no airbrushing, no glossy or plastic skin, subtle film grain.")
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
-                  "expressive and a little over the top. {wear}Setting: {place}. {light}. An invented person, the "
-                  "only person in frame. " + REAL_PHOTO)
+                  "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
+                  + REAL_PHOTO)
 SCENE_SING = {
     "medium": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with "
               "open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} "
@@ -185,14 +184,15 @@ SCENE_SING = {
 
 
 def _scene_shot(rng, used, size: str, who: str, short: str, place: str, light: str, wear: str = "",
-                actions: dict | None = None) -> tuple[str, str]:
+                actions: dict | None = None, attitude: str = "") -> tuple[str, str]:
     """(portrait prompt, singing prompt) for an in-scene medium or wide shot."""
     acts = (actions or SCENE_ACTIONS).get(size) or SCENE_ACTIONS[size]
     action = _pick(rng, acts, used, "scene_action_" + size)
     shot, lens = SCENE_SHOT[size]
     light = light[:1].upper() + light[1:] if light else "Natural light"
     portrait = SCENE_PORTRAIT.format(shot=shot, lens=lens, who=who, action=action, place=place, light=light,
-                                     wear=("Wearing " + wear + ". ") if wear else "")
+                                     wear=("Wearing " + wear + ". ") if wear else "",
+                                     attitude=attitude or ATTITUDE)
     move = _pick(rng, SCENE_MOVES[size], used, "scene_move_" + size)
     sing = SCENE_SING[size].format(who=short, action=action, move=move)
     return " ".join(portrait.split()), " ".join((sing[0].upper() + sing[1:]).split())
@@ -228,9 +228,10 @@ def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> 
 
 
 # ------------------------------------------------------------------ themes
-THEME_CLOSE = ("{shot} of {who}, singing straight into the lens with the mouth open mid-word, expressive and a "
-               "little over the top, shot from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An "
-               "invented person, the only one in frame. " + REAL_PHOTO)
+THEME_CLOSE = ("{shot} of {who}, {attitude}, singing straight into the lens with the mouth open mid-word, shot "
+               "from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An invented person, the only "
+               "one in frame. " + REAL_PHOTO)
+ATTITUDE = "expressive and a little over the top"  # without a theme's own poses
 THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} singing straight into the camera. The lips form each word "
                     "clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural "
                     "breathing, small head bobs and eyebrow raises on the beat. {move} The framing stays "
@@ -267,11 +268,14 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         place = _pick(rng, th["places"], used, "place")
         light = _pick(rng, th["light"], used, "light")
         short = _short_who(who)
+        # the theme's own exaggerated poses (fun, but a real photograph: the user's n43 brief)
+        attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE
         if size == "wide" or (size == "medium" and rng.random() < 0.5):
-            portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts)
+            portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts,
+                                         attitude=attitude)
         else:
             f = THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
-            portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear,
+            portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear, attitude=attitude,
                                           angle=_pick(rng, THEME_ANGLES, used, "angle"),
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
             move = _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")

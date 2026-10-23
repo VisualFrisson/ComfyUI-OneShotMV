@@ -35,15 +35,17 @@ GRADES = {
                    "lift": 0.06},
 }
 
-COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10}
+COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses": 10}
+OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
 
 PROMPT = """You design the look of a music video. Theme: "{theme}"
-Invent the world of this video. Answer with one JSON object only, no other text, with these keys:
-"who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin and a silver buzz cut, small gold hoops": age, gender, skin tone, hair and one distinctive detail. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 18 words each.
-"wear": a list of {wear} outfits that fit the theme. Plain clothes with no text, logos or lettering. At most 14 words each.
+Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Answer with one JSON object only, no other text, with these keys:
+"who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain": age, gender, skin tone, a specific hairdo and one or two distinctive details. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 22 words each.
+"wear": a list of {wear} outfits that fit the theme, specific in fabric, colour and cut. Plain clothes with no text, logos or lettering. At most 18 words each.
 "places": a list of {places} specific places in this world, each starting with "in" or "on". At most 16 words each.
-"light": a list of {light} lighting setups with their colours. At most 12 words each.
+"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, signs or backdrops). At most 16 words each.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone. At most 9 words each.
+"poses": a list of {poses} exaggerated, fun poses or expressions for a portrait in this world, like "chin resting on a fist with a huge cheesy grin" or "pointing at the lens with total swagger". At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
 
@@ -52,7 +54,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v2".encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v3".encode("utf-8")).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the language model
@@ -209,7 +211,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             log("[FrissonVision] theme: could not read the model's answer, trying again")
             continue
         lists = {k: _clean_list(d.get(k)) for k in COUNTS}
-        if all(lists.values()):
+        if all(v for k, v in lists.items() if k not in OPTIONAL):
             g = str(d.get("grade", "neutral")).strip().lower()
             bible = {"theme": theme, "source": "gemma-3-12b", **lists,
                      "grade": g if g in GRADES else "neutral", "raw": text}
