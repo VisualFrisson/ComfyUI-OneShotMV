@@ -17,9 +17,10 @@ from .fv import theme as fv_theme
 from .fv import lyrics as fv_lyrics
 from .fv import broll as fv_broll
 from .fv import lipfix as fv_lipfix
+from .fv import identity as fv_identity
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, fv_identity, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():

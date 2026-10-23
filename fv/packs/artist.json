@@ -12,12 +12,12 @@
     "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural breathing, small head bobs and eyebrow raises on the beat. {move} Both hands stay below the frame. No one else in frame."
    },
    "medium": {
-    "shot": "Medium chest-up shot",
-    "lens": "on a 35mm lens at chest height",
+    "shot": "Medium shot from the waist up, taken from about two metres away",
+    "lens": "on a 35mm lens, with clear space above the head, the face small in the frame (about a quarter of its height)",
     "sing": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} No one else in frame."
    },
    "wide": {
-    "shot": "Wide full-body shot",
+    "shot": "Wide full-body shot, the whole person from head to feet in frame with space above the head",
     "lens": "on a 24mm lens a few meters away",
     "sing": "Wide shot of {who} {action}, singing along, the lips forming the words, moving freely with the rhythm. {move} No one else in frame."
    }
@@ -141,7 +141,7 @@
    ],
    "medium": [
     "The camera tracks slowly alongside.",
-    "The camera pushes in slowly.",
+    "The camera holds at the same distance, waist-up.",
     "The handheld camera sways with the rhythm.",
     "The camera arcs slowly around them."
    ],
@@ -172,13 +172,11 @@
    "a short choppy bob",
    "tight braids pulled back",
    "a messy bun with loose strands",
-   "slicked-back wet-look hair",
    "big voluminous curls",
    "a sharp blunt fringe",
    "space buns",
    "a low side part, tucked behind the ears",
-   "a half-up half-down style",
-   "a cropped pixie cut"
+   "a half-up half-down style"
   ],
   "twin_light": [
    "soft daylight",

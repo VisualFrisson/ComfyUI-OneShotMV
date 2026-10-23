@@ -208,6 +208,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             jobs.append((f"k{r['id']:03d}", graphs.twin_key(
                 video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
                 size=rsize, seed=seed + r["id"], editor=editor, start_s=r.get("guide_start", 0.0),
+                identity_path=artist_path if (c.get("artist_edit") and artist_path) else None,
                 prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
                         " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None).nodes))
         for r in twins_:
@@ -329,6 +330,23 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     if voice and os.path.exists(vp):
         vocal, sr = stems.read_wav(vp)
     report, redo = [], []
+    # artist runs: the artist's face, to catch looks that turned into someone else
+    ref = None
+    if voice and p.get("artist_path"):
+        try:
+            from . import identity
+            if identity.available() and os.path.exists(p["artist_path"]):
+                ref = identity.embed_path(p["artist_path"])
+        except Exception as e:
+            log(f"[FrissonVision] identity check off ({e})")
+
+    def checks(r):  # the face checks a render gets: framing for every sung shot, identity for the artist
+        if not voice or r["role"] not in ("A", "B"):
+            return {}
+        # a look takes its lead's framing (Face Match), so only leads are judged for "too close"
+        return {"framing": r.get("size", "close") if r["role"] == "A" else "close", "ref": ref,
+                "key_path": r.get("key") if r["role"] == "B" else None}
+
     for r in p["renders"]:
         seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
         takes = r.setdefault("takes", [])
@@ -344,7 +362,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
                                 vocal=vocal, sr=sr or 44100, seek=seek,
                                 sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
-                                people=not voice)
+                                people=not voice, **checks(r))
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
         entry = {k: v for k, v in res.items() if k != "ok"}
@@ -405,6 +423,25 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             if not jf:
                 continue
             g = _bump(json.load(open(jf, encoding="utf-8")), pass_idx + 1)
+            # the saved job is the first take's: bring it up to the lead clip and the keyframe this
+            # render uses now (a look whose lead was re-rolled in an earlier pass follows the new
+            # lead; a keyframe or portrait re-made in an earlier pass stays)
+            lead = by_id.get(r.get("twin_of")) if r["role"] == "B" else None
+            orig_lead = ((lead or {}).get("takes") or [{}])[0].get("path")
+            cur_lead = (lead or {}).get("path")
+
+            def follow_lead(graph):
+                if orig_lead and cur_lead and orig_lead != cur_lead:
+                    return swap(graph, orig_lead, cur_lead)
+                return graph
+
+            g = follow_lead(g)
+            cur_key = r.get("portrait") if r["role"] == "A" else r.get("key")
+            for gnode in g.values():
+                if gnode.get("class_type") == "FVLoadImagePath":
+                    if cur_key and gnode["inputs"].get("path") not in (None, cur_key):
+                        g = swap(g, gnode["inputs"]["path"], cur_key)
+                    break
             _refresh_prompt(g)
             if r["role"] == "A" and "sync" in next((x.get("fail", []) for x in report if x["id"] == r["id"]), []):
                 _articulate_prompt(g)
@@ -415,42 +452,73 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     ins["filename_prefix"] = f"{rel}/{tag}"
             fails = next((x.get("fail", []) for x in report if x["id"] == r["id"]), [])
             needs_key = False
+
+            def key_in(graph, default):
+                for gnode in graph.values():
+                    if gnode.get("class_type") == "FVLoadImagePath":
+                        return gnode["inputs"].get("path", default)
+                return default
+
+            def remake(kname, graph, bump=True):
+                """Re-make a keyframe / portrait job (new seeds, following the current lead clip);
+                returns the render graph switched to the new image, or None without a job."""
+                kf = _job_file(run_dir, kname)
+                if not kf:
+                    return None, None
+                kg = follow_lead(json.load(open(kf, encoding="utf-8")))
+                if bump:
+                    kg = _bump(kg, pass_idx + 1)
+                ktag = f"{kname}_t{pass_idx + 1}"
+                for node in kg.values():
+                    ins = node.get("inputs", {})
+                    if node.get("class_type") == "SaveImage" and str(ins.get("filename_prefix", "")).endswith(kname):
+                        ins["filename_prefix"] = f"{rel}/{ktag}"
+                json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
+                                   encoding="utf-8"), indent=1)
+                key_jobs.append(kg)
+                new_key = os.path.join(run_dir, f"{ktag}_00001_.png")
+                old_key = key_in(graph, os.path.join(run_dir, f"{kname}_00001_.png"))
+                return swap(graph, old_key, new_key), new_key
+
             if r["role"] in ("M", "MB") and "people" in fails:
                 # a second person came from the character keyframe: re-make it with a new seed
-                kname = f"k{r['id']:03d}"
-                kf = _job_file(run_dir, kname)
-                if kf:
-                    kg = _bump(json.load(open(kf, encoding="utf-8")), pass_idx + 1)
-                    ktag = f"{kname}_t{pass_idx + 1}"
-                    for node in kg.values():
-                        ins = node.get("inputs", {})
-                        if node.get("class_type") == "SaveImage" and str(ins.get("filename_prefix", "")).endswith(kname):
-                            ins["filename_prefix"] = f"{rel}/{ktag}"
-                    old_key = r.get("key") or os.path.join(run_dir, f"{kname}_00001_.png")
-                    g = swap(g, old_key, os.path.join(run_dir, f"{ktag}_00001_.png"))
-                    json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
-                                       encoding="utf-8"), indent=1)
-                    key_jobs.append(kg)
-                    needs_key = True
-            if r["role"] == "B" and r.get("twin_of") in new_paths:  # follow the re-rolled lead clip
-                old = by_id[r["twin_of"]]["takes"][0]["path"]
+                g2, nk = remake(f"k{r['id']:03d}", g)
+                if g2 is not None:
+                    g, needs_key, r["key"] = g2, True, nk
+            if r["role"] == "B" and r.get("twin_of") in new_paths:
+                # follow the lead clip re-rolled in this pass, and re-make the look's keyframe from
+                # it, so its first frame has the new lead's pose (the old keyframe would snap from
+                # the old pose to the new); an identity fault gets new seeds with it
+                old = cur_lead or orig_lead
                 g = swap(g, old, new_paths[r["twin_of"]])
-                # and re-make the twin's keyframe from the new lead, so its first frame has the
-                # new lead's pose (the old keyframe would snap from the old pose to the new)
-                kname = f"k{r['id']:03d}"
-                kf = _job_file(run_dir, kname)
-                if kf:
-                    kg = swap(json.load(open(kf, encoding="utf-8")), old, new_paths[r["twin_of"]])
-                    ktag = f"{kname}_t{pass_idx + 1}"
-                    for node in kg.values():
-                        ins = node.get("inputs", {})
-                        if node.get("class_type") == "SaveImage" and str(ins.get("filename_prefix", "")).endswith(kname):
-                            ins["filename_prefix"] = f"{rel}/{ktag}"
-                    old_key = r.get("key") or os.path.join(run_dir, f"{kname}_00001_.png")
-                    g = swap(g, old_key, os.path.join(run_dir, f"{ktag}_00001_.png"))
-                    json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
-                                       encoding="utf-8"), indent=1)
-                    key_jobs.append(kg)
+                cur_lead = new_paths[r["twin_of"]]
+                g2, nk = remake(f"k{r['id']:03d}", g, bump="identity" in fails)
+                if g2 is not None:
+                    g, needs_key, r["key"] = g2, True, nk
+            elif r["role"] == "B" and "identity" in fails:
+                # the look's keyframe edit turned the artist into someone else: a new edit
+                g2, nk = remake(f"k{r['id']:03d}", g)
+                if g2 is not None:
+                    g, needs_key, r["key"] = g2, True, nk
+            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity"}:
+                # a framing / identity fault that is already in the portrait (the head out of
+                # frame in the still itself) needs a new portrait, not just a new seed for LTX
+                pname = f"p{r['performer']:03d}"
+                old_p = key_in(g, os.path.join(run_dir, f"{pname}_00001_.png"))
+                bad = False
+                try:
+                    from . import identity
+                    rep = identity.image_report(old_p, ref) if identity.available() else {}
+                    lim = qc.THRESH["tooclose"].get(r.get("size", ""))
+                    bad = (rep.get("face_frac", 1.0) < 1.0 or (lim is not None and rep.get("face_h", 0.0) > lim)
+                           or (ref is not None and rep.get("face_h", 0.0) >= qc.THRESH["id_face_h"]
+                               and rep.get("id_sim", 1.0) < qc.THRESH["id_min_key"]))
+                except Exception:
+                    bad = False
+                if bad:
+                    g2, nk = remake(pname, g)
+                    if g2 is not None:
+                        g, needs_key, r["portrait"] = g2, True, nk
             new_paths[r["id"]] = os.path.join(run_dir, f"{tag}_00001_.mp4")
             r["path"] = new_paths[r["id"]]
             json.dump(g, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{tag}.json"), "w", encoding="utf-8"),
@@ -478,7 +546,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
                                             vocal=vocal, sr=sr or 44100, seek=seek,
                                             sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
-                                            people=not voice)
+                                            people=not voice, **checks(r))
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
                     except Exception:
@@ -577,6 +645,12 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
               (f"; kept best take for {', '.join(bad)}" if bad else "") + \
               (f"; lip-sync repair {', '.join(fixed)}" if fixed else "") + \
               (f"; {nb} b-roll cutaway(s) queued" if post else "") + ("; assembling" if then_assemble else "")
+    if ref is not None:
+        try:
+            from . import identity
+            identity.free()
+        except Exception:
+            pass
     json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
     hist = os.path.join(run_dir, "qc.json")
     allq = json.load(open(hist, encoding="utf-8")) if os.path.exists(hist) else []

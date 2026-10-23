@@ -282,6 +282,10 @@ TWIN_PROMPT = ("Recreate image 1 with the person from image 2. Keep image 1's ex
                "hair, skin, makeup, jewelry, clothing, lighting colour and background. Photorealistic.")
 
 
+TWIN_IDENTITY = ("This is the same person as in image 2: keep their exact face, eyes, nose, lips, jawline, skin "
+                 "tone, hair colour and age. Only the hairstyle, outfit and place change.")
+
+
 TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Background: {background}. "
              "Keep the exact same camera angle, framing, head position, head tilt, mouth shape and facial "
              "expression, and the same tight crop: the face stays exactly the same size and in the same place in "
@@ -289,16 +293,22 @@ TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Back
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
-             start_s=0.0):
+             start_s=0.0, identity_path=None):
     """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth).
     editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
-    editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose)."""
+    editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose).
+    identity_path (artist runs, Klein): the artist photo as a second reference image, so a new
+    outfit, hairstyle and place keep the artist's face (without it the n39 looks drifted into
+    other people: ArcFace similarity to the artist 0.20-0.37 without, 0.33-0.63 with)."""
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
                start_seconds=float(start_s), force_fps=0.0)
     if editor == "qwen":
         ref = g.add("FVLoadImagePath", path=portrait_path)
         out = _qwen21(g, O(fr), prompt or TWIN_PROMPT, [O(ref)], seed=seed)
+    elif identity_path:
+        ref = g.add("FVLoadImagePath", path=identity_path)
+        out = _klein(g, O(fr), f"{prompt} {TWIN_IDENTITY}", refs=[O(ref)], seed=seed)
     else:
         out = _klein(g, O(fr), prompt, seed=seed)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size[0], height=size[1], crop="center"))

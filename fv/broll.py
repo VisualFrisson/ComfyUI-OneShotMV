@@ -17,13 +17,13 @@ import os
 from . import formats, graphs, lyrics
 
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
-Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, hands, a landscape, the weather, the sky, a street. No real or famous people, no brands, no logos, no text or lettering anywhere, nothing explicit. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
-PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No real or famous people, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
 # dance filler (the n34-n36 notes: pose-guided full-body dance doesn't hold up in LTX, but a
 # performer grooving to the track in a medium shot works as a cutaway between sung lines)
-DANCE_STILL = ("Cinematic medium shot on a 35mm lens of {who}, wearing {wear}, dancing to the music with loose "
+DANCE_STILL = ("Medium shot on a 35mm lens of {who}, wearing {wear}, dancing to the music with loose "
                "shoulders and one arm raised, eyes half closed, mouth closed in a slight smile, not singing. "
                "{light}. Setting: {place}. Photorealistic film still, an invented person, the only person in frame, "
                "natural colour, subtle film grain. No text, no lettering.")
@@ -34,11 +34,15 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
                 "lens. They are dancing to the music with loose shoulders and one arm raised, eyes half closed, "
                 "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
                 "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
-STILL = " Cinematic film still, shallow depth of field, natural colour, subtle film grain. No text, no lettering."
-MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody sings or speaks. "
-          "No text appears.")
+# no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
+STILL = (" A full-frame photograph that fills the whole picture, shallow depth of field, natural colour, subtle "
+         "film grain. No text, no lettering.")
+MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
+          "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
-            "flicker, deformed hands, distorted faces")
+            "flicker, deformed hands, distorted faces, letterbox, black bars, widescreen bars, frame border")
+# a lyric cutaway has nobody in it (n39: a stranger turned up on the beach in an artist's video)
+NEGATIVE_EMPTY = NEGATIVE + ", person, people, face, crowd, figure, silhouette"
 
 
 def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: float = 0.55,
@@ -160,7 +164,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
             short = d["who"].split(",")[0].split(" with ")[0]
             img = " ".join(DANCE_STILL.format(**d).split())
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
-                f"{d['light']}. Setting: {d['place']}. Photorealistic, natural colour, subtle film grain."
+                f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars, natural colour, " \
+                "subtle film grain."
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
@@ -177,7 +182,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
                 keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
-                                           prompt=img + STILL + MOTION, negative=NEGATIVE, frames=frames,
+                                           prompt=img + STILL + MOTION, negative=NEGATIVE_EMPTY, frames=frames,
                                            seed=seed, prefix=f"{rel}/r{rid:03d}R").nodes)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
              "frames": frames, "fps": rfps, "size": "medium" if kind == "dance" else "wide", "sync_delay": 0.0,

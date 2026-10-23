@@ -37,12 +37,14 @@ def ffmpeg_exe() -> str:
 class ClipReader:
     """Forward-only frame reader (each clip is visited in increasing time)."""
 
-    def __init__(self, path: str, size: tuple[int, int]):
+    def __init__(self, path: str, size: tuple[int, int], trim_bars: bool = False):
         import cv2
         self.cv2, self.path, self.size = cv2, path, size
         self.cap = cv2.VideoCapture(path) if path and os.path.exists(path) else None
         self.pos, self.last = 0, None
         self.n = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) if self.cap else 0
+        # text-to-video b-roll sometimes comes back letterboxed (n39): crop the bars, then cover
+        self.bars = letterbox(path, cv2) if trim_bars and self.ok else (0, 0)
 
     @property
     def ok(self):
@@ -64,9 +66,44 @@ class ClipReader:
         if self.last is None:
             return None
         f = self.last
+        top, bot = self.bars
+        if top or bot:
+            f = f[top:f.shape[0] - bot]
         if (f.shape[1], f.shape[0]) != self.size:
             f = cover(f, self.size, self.cv2)
         return f[:, :, ::-1]  # RGB
+
+
+def letterbox(path: str, cv2, n: int = 5, dark: float = 18.0) -> tuple[int, int]:
+    """Rows of black bar at the top and bottom of a clip (the same in all n sampled frames),
+    (0, 0) when there are none; a bar must be at least 3% of the height to count."""
+    cap = cv2.VideoCapture(path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    tops, bots = [], []
+    for i in np.linspace(0, max(0, total - 1), n).round().astype(int):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
+        ok, f = cap.read()
+        if not ok:
+            continue
+        rows = f.mean(axis=(1, 2))
+        h = len(rows)
+        t = 0
+        while t < h // 3 and rows[t] < dark:
+            t += 1
+        b = 0
+        while b < h // 3 and rows[h - 1 - b] < dark:
+            b += 1
+        tops.append(t)
+        bots.append(b)
+    cap.release()
+    if not tops:
+        return 0, 0
+    h = int(cv2.VideoCapture(path).get(cv2.CAP_PROP_FRAME_HEIGHT) or 1)
+    t, b = min(tops), min(bots)
+    # a letterbox has a bar at both ends, about the same height (a dark sky or floor has one)
+    if min(t, b) < 0.03 * h or abs(t - b) > 0.03 * h:
+        return 0, 0
+    return t + 2, b + 2  # a couple of rows more: the bar edge is soft
 
 
 def cover(f, size, cv2):
@@ -156,7 +193,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
 
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}
-    readers = {rid: ClipReader(r.get("path", ""), (rw, rh)) for rid, r in renders.items()}
+    readers = {rid: ClipReader(r.get("path", ""), (rw, rh), trim_bars=r.get("role") == "R")
+               for rid, r in renders.items()}
     missing = [rid for rid, rd in readers.items() if not rd.ok]
 
     held = {}  # output frames that had to hold a clip's first / last frame (shows as a pause)

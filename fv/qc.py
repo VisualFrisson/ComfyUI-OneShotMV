@@ -16,6 +16,16 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
   people   - motion renders: a second person in the shot (an image edit sometimes turns one
              dancer into two); faces of at least 40% the main face's size in half the sampled frames
+  noface   - voice renders: no face in most sampled frames (the head walked out of the top of a
+             wide shot: n39's r040A; SCRFD via fv/identity.py)
+  tooclose - a medium or wide shot whose face fills too much of the frame (the n30c note, "all
+             mouth"); medium over 0.75 of the frame height, wide over 0.45 (n39 leads: close
+             1.0-1.1, medium 0.59-0.92, wide 0.18)
+  identity - artist runs: the face is no longer the artist's (ArcFace similarity to the artist
+             photo). A look is judged on its keyframe, under 0.40 (n39: the artist's portraits
+             0.60-0.82, looks edited without the artist photo 0.08-0.40, with it 0.33-0.63); a
+             lead on its clip, under 0.30 (LTX softens faces: n39 lead clips 0.37-0.50, the
+             drifted looks' clips 0.17-0.32). Skipped on small faces.
   sync     - lead clips: SyncNet says the mouth doesn't follow the words (fv/lipsync.py; needs the
              SyncNet weights, skipped without them, and on stretches with little singing).
              Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
@@ -35,8 +45,10 @@ import numpy as np
 
 THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mouth_ratio": 0.5,
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
-          "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55}
-VERSION = 3  # takes checked by an older QC are checked again
+          "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
+          "noface": 0.4, "tooclose": {"medium": 0.75, "wide": 0.45}, "id_min": 0.30, "id_min_key": 0.40,
+          "id_face_h": 0.25}
+VERSION = 4  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -193,7 +205,11 @@ def extra_people(frames, n: int = 6) -> float:
 
 
 def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, vocal=None, sr: int = 44100,
-               seek: float = 0.0, sync: bool = False, people: bool = False) -> dict:
+               seek: float = 0.0, sync: bool = False, people: bool = False, framing: str | None = None,
+               ref=None, key_path: str | None = None) -> dict:
+    """framing: the shot size ('close' / 'medium' / 'wide') to check the face against (noface,
+    tooclose); ref: the artist's face embedding (fv/identity.py) for the identity check, judged on
+    key_path (a look's keyframe) when given, else on the clip."""
     r = {"path": path, "ok": True, "fail": [], "score": 1.0, "v": VERSION}
     if not path or not os.path.exists(path):
         r.update(ok=False, fail=["missing"], score=0.0)
@@ -228,6 +244,29 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
                 r["fail"].append("people")
         except Exception as e:  # the check is a nicety: never block the cut
             r["people_error"] = str(e)
+    if framing is not None or ref is not None:
+        try:
+            from . import identity
+            if identity.available():
+                on_key = bool(ref is not None and key_path and os.path.exists(key_path))
+                rep = identity.clip_report(identity.sample_frames(path), None if on_key else ref)
+                if on_key:
+                    kr = identity.image_report(key_path, ref)
+                    if "id_sim" in kr:
+                        rep["id_sim_key"] = kr["id_sim"]
+                r.update(rep)
+                if framing is not None and rep.get("face_frac", 1.0) < THRESH["noface"]:
+                    r["fail"].append("noface")
+                lim = THRESH["tooclose"].get(framing or "")
+                if lim and rep.get("face_h", 0.0) > lim:
+                    r["fail"].append("tooclose")
+                big = rep.get("face_h", 0.0) >= THRESH["id_face_h"]
+                if big and rep.get("id_sim_key") is not None and rep["id_sim_key"] < THRESH["id_min_key"]:
+                    r["fail"].append("identity")
+                elif big and rep.get("id_sim") is not None and rep["id_sim"] < THRESH["id_min"]:
+                    r["fail"].append("identity")
+        except Exception as e:  # never block the cut
+            r["framing_error"] = str(e)[:200]
     if voice:
         box = face_box(frames)
         r["face"] = box is not None

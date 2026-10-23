@@ -65,13 +65,15 @@ The Director does the whole run from one press of Queue:
    - is missing, frozen or blown out;
    - has a dead mouth;
    - cuts away (or slowly drifts) from the planned shot to another person, place or framing mid-take, which LTX sometimes does;
-   - **is out of lip sync**, by SyncNet (`fv/lipsync.py`, see Install). SyncNet also measures how far each take's mouth runs ahead of the voice, and the cut shows that take that much later.
+   - **is out of lip sync**, by SyncNet (`fv/lipsync.py`, see Install). SyncNet also measures how far each take's mouth runs ahead of the voice, and the cut shows that take that much later;
+   - **is badly framed**: no face in most of the shot (the head walked out of frame), or a medium or wide shot whose face fills the frame (`fv/identity.py`, SCRFD; needs the buffalo_l models, see Install). A fault that is already in the portrait gets a new portrait;
+   - **is no longer the artist** (artist pack): a look whose keyframe face doesn't match the artist photo (ArcFace) gets a new keyframe. The looks are edited with the artist photo as a second reference, so a new outfit, hairstyle and place keep the artist's face.
 
    The worst takes are re-rendered first, and re-renders stop once they would double the run's render time. A re-rolled lead clip also re-renders its pose-matched looks. The best take of each shot goes into the cut.
 
    **Lip-sync repair (experimental, off by default).** With `lip_repair` on, a sung lead that SyncNet still scores low after the re-rolls goes through LatentSync 1.6 (`fv/lipfix.py`, vendored in `fv/latentsync/`), which re-draws the mouth to the vocal; the repaired take replaces the original only when SyncNet scores it clearly higher. In our tests it smeared the mouth on fast head and camera moves, which LTX shots have a lot of, so it is off unless you turn it on.
 
-   **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world; Krea 2 makes the still and LTX moves it.
+   **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world, and LTX renders it straight from text (it is already loaded after the re-rolls). Lyric cutaways have nobody in them; any letterbox bars are cropped in the cut.
 6. **Cuts it together** (`fv/assemble.py`):
    - **The edit.** Every shot plays its lead performer, and the cut never goes back to a shot it has left. Quiet stretches hold; the build tightens; the drop steps through each group's chain of looks on the beat.
    - **Match cuts.** Fast cutting only works when the eye has somewhere to rest. Each look in a drop chain is rendered from the lead's own pose and words (DWPose plus the LTX union-control IC-LoRA, keyframed from the lead's frame at that beat), so the next look lands on the same pose and syllable. The assembler tracks every face (`fv/faces.py`), nudges each look so the faces line up exactly, and skips a look whose face doesn't land. Motion runs get the same effect on the drop: each segment is rendered twice from the same pose guide, so every flicker lands on the same move.
@@ -157,7 +159,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
    - `latentsync_unet.pt` and `whisper/tiny.pt` from [ByteDance/LatentSync-1.6](https://huggingface.co/ByteDance/LatentSync-1.6);
    - `sd-vae-ft-mse/` (`config.json` and `diffusion_pytorch_model.safetensors`) from [stabilityai/sd-vae-ft-mse](https://huggingface.co/stabilityai/sd-vae-ft-mse).
 
-   It also needs insightface's buffalo_l face models (`det_10g.onnx`, `2d106det.onnx`) in `ComfyUI/models/insightface/models/buffalo_l/`; many face-swap packs install them. They run with onnxruntime, so the insightface package itself isn't needed. The buffalo_l models are for non-commercial research use. The LatentSync code is vendored under Apache-2.0 (see `fv/latentsync/NOTICE`); the weights are not shipped.
+   It also needs insightface's buffalo_l face models (`det_10g.onnx`, `2d106det.onnx`) in `ComfyUI/models/insightface/models/buffalo_l/`; many face-swap packs install them. Take QC's framing and identity checks use the same folder (`det_10g.onnx`, `w600k_r50.onnx`) and are skipped without it. They run with onnxruntime, so the insightface package itself isn't needed. The buffalo_l models are for non-commercial research use. The LatentSync code is vendored under Apache-2.0 (see `fv/latentsync/NOTICE`); the weights are not shipped.
 
 ## Use it
 
