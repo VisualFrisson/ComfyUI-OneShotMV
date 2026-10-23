@@ -285,9 +285,31 @@ def _bump(graph: dict, k: int) -> dict:
     return graph
 
 
+def _video_in(graph: dict) -> str | None:
+    """The clip a job reads (a look's lead clip, for the pose guide)."""
+    for node in graph.values():
+        if node.get("class_type") == "FVLoadVideoPath":
+            return node.get("inputs", {}).get("path")
+    return None
+
+
 def _job_file(run_dir: str, name: str) -> str | None:
     hits = sorted(f for f in os.listdir(os.path.join(run_dir, "jobs")) if f.endswith(f"_{name}.json"))
     return os.path.join(run_dir, "jobs", hits[0]) if hits else None
+
+
+def _take_inputs(run_dir: str, path: str) -> tuple[str | None, str | None]:
+    """The clip and the image a take's job read (a look take: the lead take it follows and its
+    keyframe), from the saved job of that take (r039B_t2_00001_.mp4 -> jobs/qc2_r039B_t2.json)."""
+    stem = os.path.basename(str(path).replace("\\", "/")).rsplit("_00001_", 1)[0]
+    try:
+        jf = _job_file(run_dir, stem)
+        g = json.load(open(jf, encoding="utf-8")) if jf else {}
+    except Exception:
+        return None, None
+    img = next((n.get("inputs", {}).get("path") for n in g.values() if n.get("class_type") == "FVLoadImagePath"),
+               None)
+    return _video_in(g), img
 
 
 def _articulate_prompt(g: dict) -> None:
@@ -567,8 +589,16 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             f"r{r['id']:03d}{r['role']}" for r in redo) + \
             (f" ({skipped} more over the re-render budget)" if skipped else "")
     else:
-        for r in p["renders"]:  # best take of each shot
+        # best take of each shot: leads first, so each look then picks among the takes made from
+        # the lead take that is kept (n46: lead r037A kept its first re-roll while its looks kept
+        # takes made from the original lead and from the second re-roll, so their poses and
+        # mouths no longer followed the lead in the cut)
+        for r in sorted(p["renders"], key=lambda x: x["role"] in ("B", "MB")):
             takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
+            lead = by_id.get(r.get("twin_of")) if r["role"] == "B" else None
+            if lead is not None and len(takes) > 1:
+                same = [t for t in takes if _take_inputs(run_dir, t["path"])[0] == lead.get("path")]
+                takes = same or takes
             for t in takes:  # takes judged by an older QC (before the cut / sync checks): judge again
                 if t.get("v", 0) < qc.VERSION and t.get("frames"):
                     try:
@@ -585,6 +615,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
                 best = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]
                 r["path"] = best["path"]
+                if r["role"] == "B":  # the keyframe of the take that is kept
+                    r["key"] = _take_inputs(run_dir, best["path"])[1] or r.get("key")
                 # a twin only ever appears as a flash, so one that still fails is left out of the
                 # cut rather than flashing a wrong person in (a lead clip has no stand-in and stays)
                 if r["role"] in ("B", "MB") and best.get("fail"):
