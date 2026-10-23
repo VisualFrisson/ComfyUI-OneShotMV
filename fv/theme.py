@@ -39,11 +39,11 @@ COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses
 OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
 
 PROMPT = """You design the look of a music video. Theme: "{theme}"
-Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Never use brand or product names. Answer with one JSON object only, no other text, with these keys:
+Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Never use brand or product names, and nothing carries writing: no signs, posters, banners, menus or scoreboards. Answer with one JSON object only, no other text, with these keys:
 "who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain": age, gender, skin tone, a specific hairdo and one or two distinctive details. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 22 words each.
 "wear": a list of {wear} outfits that fit the theme, specific in fabric, colour and cut. Plain clothes with no text, logos or lettering. At most 18 words each.
 "places": a list of {places} specific places in this world, each starting with "in" or "on". At most 16 words each.
-"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, signs or backdrops). At most 16 words each.
+"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, neon tubes or backdrops). At most 16 words each.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone. At most 9 words each.
 "poses": a list of {poses} exaggerated, fun poses or expressions for a portrait in this world, like "chin resting on a fist with a huge cheesy grin" or "pointing at the lens with total swagger". At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -133,11 +133,24 @@ BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|f
                     r"sony|gameboy|game boy|nintendo|casio|swatch|members only)\b", re.I)
 
 
+_SIGNS = "signs?|banners?|posters?|billboards?|marquees?|placards?|menu boards?"
+
+
+def _design(s: str) -> str:
+    """Signs come out as garbled lettering (n45's "neon signs reflecting off the floor", n46's
+    "neon pink and blue signs advertising early-bird specials" and "a bench adorned with
+    hand-painted signs"): plain light or plain decoration instead, and never what they say."""
+    s = re.sub(rf"(?i)\b({_SIGNS})\s+(advertising|reading|saying|announcing|promoting|offering|for|that say)\b[^,.;:]*",
+               r"\1", s)
+    s = re.sub(r"(?i)\b(neon(?:\s+[a-z-]+){0,4}?)\s+signs\b(?!-)", r"\1 tube lights", s)
+    s = re.sub(r"(?i)\b(neon(?:\s+[a-z-]+){0,4}?)\s+sign\b(?!-)", r"\1 tube light", s)
+    s = re.sub(rf"(?i)\b(?:hand-painted|painted|handwritten|hand-lettered|wooden|vintage|faded|old)?\s*"
+               rf"(?:{_SIGNS})\b(?!-)", " pastel bunting", s)
+    return re.sub(r"  +", " ", s).strip()
+
+
 def _debrand(s: str) -> str:
-    s = BRANDS.sub("designer", s)
-    # signs come out as garbled lettering (n45's "neon signs reflecting off the floor"): plain light
-    s = re.sub(r"(?i)\bneon signs\b", "neon tube lights", s)
-    s = re.sub(r"(?i)\bneon sign\b", "neon tube light", s)
+    s = _design(BRANDS.sub("designer", s))
     return re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
 
 
@@ -172,6 +185,9 @@ def _people(who: list[str]) -> list[str]:
             s = f"a {m.group(1)}-year-old {g}" + (f", {m.group(3)}" if m.group(3) else "")
         elif not re.match(r"^(a|an|the)\b", s, flags=re.I):
             s = "a " + s
+        # "a woman in her sixty-three" (n46's bible) -> "a woman aged sixty-three"
+        s = re.sub(r"(?i)\bin (?:her|his|their) ((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-"
+                   r"(?:one|two|three|four|five|six|seven|eight|nine)|\d{2})\b", r"aged \1", s)
         out.append(s)
     return out
 
@@ -215,9 +231,11 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         if os.path.exists(path):
             try:
                 cached = json.load(open(path, encoding="utf-8"))
-                for k in COUNTS:  # bibles cached before the brand scrub
+                for k in COUNTS:  # bibles cached before the brand and sign scrubs
                     if isinstance(cached.get(k), list):
                         cached[k] = [_debrand(x) for x in cached[k]]
+                if isinstance(cached.get("who"), list):
+                    cached["who"] = _people(cached["who"])
                 return cached
             except Exception:
                 pass
