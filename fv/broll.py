@@ -126,7 +126,7 @@ def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: s
         text = themes.llm(q, seed=seed, max_length=160, log=log)
         if text:
             return _clean(text), ""
-        return f"An empty scene {place}, {light}, a telling detail of this world, no people", ""
+        return f"An ordinary, empty view {place}, {light}, no people", ""
     text = themes.llm(PROMPT_NO_WORDS.format(world=_world(p, pack)), seed=seed, max_length=160, log=log)
     if text:
         return _clean(text), ""
