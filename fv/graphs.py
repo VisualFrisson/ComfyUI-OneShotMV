@@ -318,7 +318,7 @@ TWIN_IDENTITY = ("This is the same person as in image 2: keep their exact face, 
 TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Background: {background}. "
              "Keep the exact same camera angle, framing, head position, head tilt, mouth shape and facial "
              "expression, and the same tight crop: the face stays exactly the same size and in the same place in "
-             "the frame. A completely different person. Photorealistic photo with natural skin texture.")
+             "the frame. A completely different person.")  # + casting.edit_realism() (the realism brief)
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,

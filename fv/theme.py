@@ -64,6 +64,12 @@ def _adults(s: str) -> str:
     s = re.sub(r"(?i)\bteenage (girl|boy|kid)\b", lambda m: "young " + {"girl": "woman", "boy": "man"}.get(
         m.group(1).lower(), "adult"), s)
     s = re.sub(r"(?i)\bteen(?:ager|age)?s?\b", "young adult", s)
+    # "girl" and "boy" on their own (not "boy-band", "girl-group") draw children
+    s = re.sub(r"(?i)(?<![\w-])girls(?![\w-])", "women", s)
+    s = re.sub(r"(?i)(?<![\w-])girl(?![\w-])", "woman", s)
+    s = re.sub(r"(?i)(?<![\w-])boys(?![\w-])", "men", s)
+    s = re.sub(r"(?i)(?<![\w-])boy(?![\w-])", "man", s)
+    s = re.sub(r"(?i)\b(kids?|child(?:ren)?|minors?|underage|schoolgirls?|schoolboys?)\b", "adults", s)
     return re.sub(r"(?i)\b(a|an) young adult (woman|man)\b", r"a young \2", s)
 
 
@@ -258,39 +264,30 @@ def _role(role: str) -> str:
 
 def _role_first(s: str) -> str:
     """'a Firefighter, 20s, female, light skin, ...' (how Gemma writes whole characters) ->
-    'a female firefighter in her twenties, light skin, ...'; 'a Rapper, 26, male, ...' ->
-    'a 26-year-old rapper, ...' (ages under 21 become 21: a margin above the adults rule, the
-    Y2K retest wrote 18- and 19-year-old pop stars)."""
+    'a firefighter, a woman in her twenties, light skin, ...'; 'a Boy-band member, 19, male, ...' ->
+    'a boy-band member, a 21-year-old man, ...'. The role stays first so it reads at a glance, and
+    an adult noun (man, woman) is always there: role words like "princess" or "boy-band" alone let
+    the image model draw someone too young (the user's note of Oct 24: none of them may look like
+    kids). Ages under 21 become 21, a margin above the adults rule."""
     m = re.match(r"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{1,40}?),\s*(\d{2})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
     if m:
         age = max(21, int(m.group(2)))
-        g = m.group(3).lower()
-        noun = _GENDER.get(g, ("person", "their"))[0]
-        role = _role(m.group(1))
-        gendered = r"(?i)(woman|man|person|lady|guy|boy|girl|princess|prince|queen|king|diva|waitress|actress)"
-        lead = f"{age}-year-old " + (role if re.search(gendered, role) else
-                                     ("female " if noun == "woman" else "male " if noun == "man" else "") + role)
-        rest = m.group(4)
-        return f"{_article(lead)} {lead}" + (f", {rest}" if rest else "")
+        noun = _GENDER.get(m.group(3).lower(), ("person", "their"))[0]
+        role, rest = _role(m.group(1)), m.group(4)
+        adult = f"a {age}-year-old {'adult' if noun == 'person' else noun}"
+        return f"{_article(role)} {role}, {adult}" + (f", {rest}" if rest else "")
     m = re.match(rf"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{{1,40}}?),\s*(?:(?:early|mid|late)-?\s*)?(?:{_DECADE})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
     if not m:
         return s
-    role, d1, d2, g, rest = m.group(1).strip(), m.group(2), m.group(3), m.group(4).lower(), m.group(5)
+    role, d1, d2, g, rest = _role(m.group(1)), m.group(2), m.group(3), m.group(4).lower(), m.group(5)
     words = {"2": "twenties", "3": "thirties", "4": "forties", "5": "fifties", "6": "sixties", "7": "seventies",
              "8": "eighties", "9": "nineties"}
     decade = words.get(d1[0], "twenties") if d1 else d2.lower()
     noun, pron = _GENDER.get(g, ("person", "their"))
-    acronym = len(role) > 1 and not role[1].islower()  # "R&B diva", "DJ"
-    if not acronym:
-        role = role[0].lower() + role[1:]
-    gendered = r"(?i)(woman|man|person|lady|guy|boy|girl|princess|prince|queen|king|diva|waitress|actress|wife|husband)"
-    lead = f"{role} in {pron} {decade}" if re.search(gendered, role) else \
-        f"{'female ' if noun == 'woman' else 'male ' if noun == 'man' else ''}{role} in {pron} {decade}"
-    art = "an" if (lead[0] in "AEFHILMNORSX" if lead[:1].isupper() and len(lead) > 1 and not lead[1].islower()
-                   else lead[0].lower() in "aeiou") else "a"
-    return f"{art} {lead}" + (f", {rest}" if rest else "")
+    adult = f"{'an adult' if noun == 'person' else 'a ' + noun} in {pron} {decade}"
+    return f"{_article(role)} {role}, {adult}" + (f", {rest}" if rest else "")
 
 
 def _people(who: list[str]) -> list[str]:

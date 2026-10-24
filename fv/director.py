@@ -229,7 +229,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 size=rsize, seed=seed + r["id"], editor=editor, start_s=r.get("guide_start", 0.0),
                 identity_path=artist_path if (c.get("artist_edit") and artist_path) else None,
                 prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
-                        " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None,
+                        " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split()) + " " +
+                        casting.edit_realism(cast[a["performer"]].get("size", "close") == "close"))
+                if editor != "qwen" else None,
                 keep=keep).nodes))
         if groups:  # each drop group's chain of looks: one clip, made after singer QC (_looks_jobs)
             p["look_groups"] = []

@@ -69,6 +69,16 @@ def _frame(c: dict, size: str) -> dict:
 
 
 def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
+    """n performers, every portrait prompt finished with the realism brief (finish_prompt)."""
+    out = _cast_voice(pack, n, seed, sizes, fmt)
+    for c in out:
+        c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"))
+        if c.get("twin_prompt"):
+            c["twin_prompt"] = c["twin_prompt"].rstrip() + " " + edit_realism(c.get("size", "close") == "close")
+    return out
+
+
+def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
     """n performers for a voice pack: portrait prompt + singing (video) prompt.
     sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close).
     fmt '16:9': a pack's `framing_landscape` overrides its framing (an extreme close-up on a
@@ -169,10 +179,51 @@ SCENE_MOVES = {
 }
 SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
               "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
-# softer than before (Oct 24 note: the sample images looked too gritty): natural skin and fabric,
-# no pores-and-blemishes push and no grain in the still (the Edit's finish adds the film look)
-REAL_PHOTO = ("A real photograph, not a render: natural skin and real fabric texture, true-to-life light and "
-              "colour, clean and in focus. No text, signs or lettering anywhere.")
+# The user's realism brief (Oct 24, 12:40: "the look feels really AI"): every image prompt ends with
+# REALISM, close-up portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only
+# say no text; finish_prompt adds the photograph wording last.
+REALISM_PERSON = ("Unretouched photograph with true-to-life detail: natural skin with visible pores, fine facial "
+                  "hair, uneven tone and small blemishes, slightly asymmetrical features, flyaway hairs, creased "
+                  "and worn fabric, everyday wear and clutter in the surroundings.")
+REALISM_CAMERA = ("Light comes from real sources with mixed colour temperatures and natural falloff, a few clipped "
+                  "highlights and deep, dense shadows. Muted, true-to-life colour, moderate depth of field, fine "
+                  "grain, slight lens softness toward the edges, imperfect off-centre framing.")
+REALISM = REALISM_PERSON + " " + REALISM_CAMERA
+CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, faint redness around the nostrils, "
+              "fine lines at the corners of the eyes, a light natural sheen on the forehead, natural eye whites "
+              "with tiny visible veins, a single soft catchlight, dry texture on the lips.")
+# nobody in the picture (cutaways): the brief without the skin and hair
+REALISM_SCENE = ("Unretouched photograph with true-to-life detail: everyday wear and clutter in the surroundings. "
+                 + REALISM_CAMERA)
+REAL_PHOTO = "No text, signs or lettering anywhere."
+# one grown adult and nobody else: the Y2K retest drew two identical boy-band members in one
+# portrait and photographers in a mirror; and nobody may look like a child (user, Oct 24)
+ONE_ADULT = "A single grown adult in frame and nobody else, no other people in mirrors or reflections."
+# the older photo wording at the end of the packs' templates, replaced by the brief
+_OLD_TAIL = re.compile(r"(?i)(?:,\s*)?(?:visible pores and natural skin texture|natural colou?r|subtle film grain|"
+                       r"photorealistic(?: film still)?|candid(?: [a-z-]+)? photograph|photorealistic photo with "
+                       r"natural skin texture)\b\.?")
+
+
+def finish_prompt(prompt: str, size: str = "close", people: bool = True) -> str:
+    """An image prompt with the realism brief at the end (CLOSE_SKIN too for close-ups)."""
+    p = _OLD_TAIL.sub("", prompt)
+    p = re.sub(r"\s*,\s*,", ",", p)
+    p = re.sub(r"\s+([,.])", r"\1", p)
+    p = re.sub(r"(?:,\s*)+\.", ".", p)
+    p = re.sub(r"\.\s*\.", ".", p).strip(" ,")
+    if not p.endswith("."):
+        p += "."
+    if not people:
+        return " ".join(f"{p} {REALISM_SCENE}".split())
+    tail = ONE_ADULT + " " + REALISM + (" " + CLOSE_SKIN if size == "close" else "")
+    return " ".join(f"{p} {tail}".split())
+
+
+def edit_realism(close: bool = True) -> str:
+    """For image edits that must keep the frame (the looks on the drop): the skin and fabric part of
+    the brief, without the framing and depth of field."""
+    return REALISM_PERSON + (" " + CLOSE_SKIN if close else "")
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
@@ -294,10 +345,15 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     rng, used, out = random.Random(seed), {}, []
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
+    # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
+    order = []
     for i in range(n):
         size = sizes[i] if i < len(sizes) else "close"
         if chars:
-            ch = _pick(rng, chars, used, "character")
+            if not order:
+                order = chars[:]
+                rng.shuffle(order)
+            ch = order.pop()
             who, wear = ch["who"], ch["wear"]
             place = ch.get("place") or _pick(rng, th["places"], used, "place")
         else:

@@ -17,6 +17,7 @@ import os
 import re
 
 from . import formats, graphs, lyrics
+from .casting import finish_prompt
 
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
 Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Make it look like a real photograph of an ordinary moment someone actually took: specific, believable details, nothing magical, surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
@@ -41,8 +42,7 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
 # no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
 # the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
 # still (the realism model the portraits use) written as a real photograph, and LTX moves it
-STILL = (" A real photograph, not a render: a full frame with true-to-life textures and natural light, no "
-         "glossy CGI look. Nobody in the picture. No text, no lettering.")
+STILL = " Nobody in the picture. No text, no lettering."  # + casting.REALISM_SCENE (finish_prompt)
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
           "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
@@ -203,11 +203,12 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
             img = " ".join(DANCE_STILL.format(**d).split())
+            img_still = finish_prompt(img, "medium")
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
                 f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars, natural colour, " \
                 "subtle film grain."
             if stills:
-                keys.append(graphs.krea2_portrait(prompt=img, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             # the drum stem drives the movement (no vocal, so nobody starts singing)
             seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
@@ -219,7 +220,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         else:
             img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, k=k, style=style, log=log)
             if stills:
-                keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                keys.append(graphs.krea2_portrait(prompt=finish_prompt(img + STILL, people=False), seed=seed,
+                                                  prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
                                            prompt=img + STILL + MOTION, negative=NEGATIVE_EMPTY, frames=frames,
