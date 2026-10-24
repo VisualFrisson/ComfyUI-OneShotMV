@@ -54,13 +54,14 @@ The Director does the whole run from one press of Queue:
    - wide, medium and close shots in the quiet stretches (`mixed` framing).
 3. **Casts** every performer from the pack's casting grammar, or from the theme (`fv/casting.py`, `fv/theme.py`). It writes the portrait prompt and the performance prompt for each. Wide shots, and half the medium ones, are in-scene shots: the performer walks toward the camera, leans in a doorway or works at something in their world while singing, instead of standing at the lens.
    - **Lyrics.** Whisper large-v3-turbo transcribes the vocal stem with word timings (`fv/lyrics.py`), for the b-roll below.
-4. **Queues the renders, grouped by model** so each model loads once:
-   1. Krea 2 portraits (or Qwen-Image identity edits of the artist photo);
-   2. LTX lip-sync clips;
-   3. keyframes for the pose-matched looks;
-   4. the pose-guided LTX looks;
-   5. take QC;
-   6. the final cut.
+4. **Queues the renders in four model stages** (`staged`, the default when the Director queues the run itself), so each model loads as few times as possible:
+   1. **Krea 2:** every portrait (or Qwen-Image identity edits of the artist photo), plus stills for a few b-roll candidates;
+   2. **LTX:** every lip-sync clip and the b-roll clips. Take QC checks the singer shots and re-renders the bad ones while LTX stays loaded (**Keep Models Loaded** wires LTX's loaders into the QC and Klein jobs, so ComfyUI doesn't drop the model between video jobs);
+   3. **Klein:** the keyframes for the pose-matched looks, made from the final singer takes, so no look is ever made twice;
+   4. **LTX:** the looks. With `look_groups` (default), each drop group's looks are **one** clip: the lead's pose guide, with each look's keyframe pinned on its beat, so LTX cuts from person to person inside the clip. The assembler finds where each switch actually lands and lines it up with its beat;
+   5. take QC for the looks, then the final cut.
+
+   A test 30 s run went from 12 model loads to 4. A three-look drop group renders in about 65 s instead of about 156 s as three clips.
 5. **Checks every take** (`fv/qc.py`). A take is re-rendered with a new seed before the cut if it:
    - is missing, frozen or blown out;
    - has a dead mouth;
@@ -69,11 +70,11 @@ The Director does the whole run from one press of Queue:
    - **is badly framed**: no face in most of the shot (the head walked out of frame), or a medium or wide shot whose face fills the frame (`fv/identity.py`, SCRFD; needs the buffalo_l models, see Install). A fault that is already in the portrait gets a new portrait;
    - **is no longer the artist** (artist pack): a look whose keyframe face doesn't match the artist photo (ArcFace) gets a new keyframe. The looks are edited with the artist photo as a second reference, so a new outfit, hairstyle and place keep the artist's face.
 
-   The worst takes are re-rendered first, and re-renders stop once they would double the run's render time. A re-rolled lead clip also re-renders its pose-matched looks. The best take of each shot goes into the cut.
+   The worst takes are re-rendered first, and re-renders stop once they would double the run's render time. In staged runs the looks are made only after their lead is final; otherwise a re-rolled lead clip also re-renders its pose-matched looks, and each look keeps a take made from the lead take that is kept. The best take of each shot goes into the cut.
 
    **Lip-sync repair (experimental, off by default).** With `lip_repair` on, a sung lead that SyncNet still scores low after the re-rolls goes through LatentSync 1.6 (`fv/lipfix.py`, vendored in `fv/latentsync/`), which re-draws the mouth to the vocal; the repaired take replaces the original only when SyncNet scores it clearly higher. In our tests it smeared the mouth on fast head and camera moves, which LTX shots have a lot of, so it is off unless you turn it on.
 
-   **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world, and LTX renders it straight from text (it is already loaded after the re-rolls). Lyric cutaways have nobody in them; any letterbox bars are cropped in the cut.
+   **B-roll.** About one shot in eight (`broll_share`) becomes a cutaway where nobody sings and the picture shows what the words are about (`fv/broll.py`): first where lip sync is still weak, then over instrumental gaps; never on the drop, never twice in a row. The language model turns the line sung there into an image prompt in the theme's (or pack's) world; Krea 2 makes it as a real photograph and LTX moves it. In staged runs, twice the slots are rendered up front (with the portraits and singer clips, so no extra model load), and the best ones are kept once singer QC knows where lip sync is weak. Lyric cutaways have nobody in them; any letterbox bars are cropped in the cut.
 6. **Cuts it together** (`fv/assemble.py`):
    - **The edit.** Every shot plays its lead performer, and the cut never goes back to a shot it has left. Quiet stretches hold; the build tightens; the drop steps through each group's chain of looks on the beat.
    - **Match cuts.** Fast cutting only works when the eye has somewhere to rest. Each look in a drop chain is rendered from the lead's own pose and words (DWPose plus the LTX union-control IC-LoRA, keyframed from the lead's frame at that beat), so the next look lands on the same pose and syllable. The assembler tracks every face (`fv/faces.py`), nudges each look so the faces line up exactly, and skips a look whose face doesn't land. Motion runs get the same effect on the drop: each segment is rendered twice from the same pose guide, so every flicker lands on the same move.
@@ -200,7 +201,7 @@ python sdk_run.py --song track.mp3 --mode motion --dance dance.mp4 --pack spotli
   - quality: about 1 minute per clip, about 45 minutes for a 30 s run;
   - fast: about 15 s per clip.
   
-  Model loads dominate a cold start: about 4 minutes per model from a hard disk.
+  Model loads dominate a cold start: LTX-2.3 and its Gemma 3 text encoder (about 65 GB) take 5–9 minutes from a SATA drive, about a minute from NVMe. The staged order loads LTX twice per run.
 - **Re-cuts are free.** Face tracks are cached in `<run>/faces.json`, and Assemble re-derives the edit from the pack each time. You can change a pack's edit settings (`match_threshold`, `insert_on_beat`, and so on) and re-queue Recut without re-rendering.
 - **`--highvram` and LoRAs.** In high-VRAM mode ComfyUI keeps the original weights behind every LoRA patch on the GPU. With the quality preset's four LoRAs on a 22B model, that doubles its footprint. On Windows the overflow spills into shared memory, and sampling gets many times slower. The Director inserts **Weight Backups to RAM** after the LTX loaders to prevent this.
 
