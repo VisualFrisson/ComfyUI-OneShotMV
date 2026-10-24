@@ -300,7 +300,7 @@ def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> 
 
 
 # ------------------------------------------------------------------ themes
-THEME_CLOSE = ("{shot} of {who}, {attitude}, singing straight into the lens with the mouth open mid-word, shot "
+THEME_CLOSE = ("{shot} of {who}, standing upright, {attitude}, singing straight into the lens with the mouth open mid-word, shot "
                "from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An invented person, the only "
                "one in frame. " + REAL_PHOTO)
 ATTITUDE = "expressive and a little over the top"  # without a theme's own poses
@@ -314,7 +314,17 @@ THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} singing straight into the 
 THEME_CLOSE_FRAME = {"shot": "Head-and-shoulders portrait",
                      "lens": "from about one and a half metres away on a 50mm lens, with clear space above the "
                              "head and both shoulders in frame, the face about a third of the frame height"}
-THEME_ANGLES = ["slightly below", "eye level", "slightly above", "a low angle", "a three-quarter angle"]
+# Head-and-shoulders portraits from above or below, or with a hands-on-hips pose, came out with the
+# singer bent toward the lens (the user on Y2K v4, 0:14: "unnaturally leaned forward"). An A/B at the
+# same seeds: dropping the close-up skin line changed nothing; eye level and a face-only pose fixed it.
+THEME_ANGLES = ["eye level", "a three-quarter angle", "eye level, a little off to one side"]
+# poses that need the body or hands, which a head-and-shoulders frame can only fit by bending the person
+_BODY_POSE = re.compile(r"(?i)\b(hands?|fingers?|fists?|hips?|arms?|elbows?|knees?|lean(?:s|ing)?|point(?:s|ing)?|cross(?:es|ing|ed)?|"
+                        r"pos(?:e|es|ing)|stance|bend(?:s|ing)?|bent|crouch(?:ing)?|kneel(?:ing)?|squat(?:ting)?|"
+                        r"sit(?:s|ting)?|seated|jump(?:s|ing)?|shrug(?:s|ging)?|twirl(?:s|ing)?|spin(?:s|ning)?|"
+                        r"danc(?:e|es|ing)|kiss)\b")
+CLOSE_ATTITUDES = ["a big open smile", "a confident half-smile", "eyes bright and eyebrows raised", "a cool, steady look",
+                   "a cheeky grin"]
 
 
 def _place_noun(p: str) -> str:
@@ -405,10 +415,15 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         # preview put studio softboxes in a shopping mall), else one from the world's list
         light = (ch.get("light") if chars else None) or _pick(rng, _lights_for(th["light"], place), used, "light")
         short = _short_who(who)
-        # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief)
-        attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE
+        scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
+        # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief);
+        # portraits take the face-only ones (_BODY_POSE)
+        poses = th.get("poses") or [ATTITUDE]
+        if not scene:
+            poses = [x for x in poses if not _BODY_POSE.search(x)] or CLOSE_ATTITUDES
+        attitude = _pick(rng, poses, used, "pose" if scene else "pose_close")
         attitude = attitude[:1].lower() + attitude[1:]
-        if size == "wide" or (size == "medium" and rng.random() < 0.5):
+        if scene:
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts,
                                          attitude=attitude)
         else:

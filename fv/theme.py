@@ -212,7 +212,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v4".encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v5".encode("utf-8")).hexdigest()[:16]  # v5: camera + character lights
 
 
 # ------------------------------------------------------------------ the language model
@@ -303,8 +303,9 @@ def _design(s: str) -> str:
                r"\1", s)
     s = re.sub(r"(?i)\b(neon(?:\s+[a-z-]+){0,4}?)\s+signs\b(?!-)", r"\1 tube lights", s)
     s = re.sub(r"(?i)\b(neon(?:\s+[a-z-]+){0,4}?)\s+sign\b(?!-)", r"\1 tube light", s)
+    s = re.sub(r"(?i)\b(peace|v|victory|thumbs-up|ok|rock|horns|hand|heart)\s+(sign)s?\b", r"\1 gesture", s)
     s = re.sub(rf"(?i)\b(?:hand-painted|painted|handwritten|hand-lettered|wooden|vintage|faded|old)?\s*"
-               rf"(?:{_SIGNS})\b(?!-)", " pastel bunting", s)
+               rf"(?<!gesture )(?:{_SIGNS})\b(?!-)", " pastel bunting", s)
     return re.sub(r"  +", " ", s).strip()
 
 
