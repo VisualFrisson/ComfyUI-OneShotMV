@@ -48,7 +48,7 @@ PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
 "characters": a list of {characters} different characters, each an object with three keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
-"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, tube lights or backdrops), coming from fixtures, never from photographers, crowds or other people. At most 16 words each.
+"light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -93,14 +93,38 @@ def _no_props(s: str) -> str:
 _CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing cameras|press pit|crowds?|audiences?|"
                     r"fans|onlookers|spectators|bystanders|passers-?by|backing dancers|dancers|backing band|"
                     r"performers?|players|people|patrons|customers|guests|partygoers)\b")
-_LIGHT_SPARE = ["soft side light from a tall lamp beside the camera", "hard top light from a single bare fixture",
-                "warm glow from practical lamps in the room", "cool backlight with a bright rim on the hair",
-                "soft pink and blue gel light from two lamps beside the camera"]
+_LIGHT_SPARE = ["soft daylight from a large window to one side", "warm light from a lamp in the room",
+                "bright, even light from large softboxes, like a magazine studio shoot",
+                "hard light from a single bare bulb overhead", "the camera's own flash, with dark falloff behind"]
+# Coloured washes and gels read as AI, not as a photograph (the user on Y2K v3: "weird unnatural
+# blue pink lighting", where the singers lit by plain window or lamp light looked real). A light
+# has to be a source you could point at; mood clauses ("creating a dreamy atmosphere", "casting a
+# nostalgic glow", "simulating a nighttime sky") go.
+_WASH = re.compile(r"(?i)\b(gels?|wash(?:es|ed)?|backdrop|hues|swirl(?:s|ing)?|dreamy|accents|bathed|haze of|"
+                   r"reflect(?:s|ing|ions?|ed)?)\b")  # reflections: Y2K v3's chrome light gave a mirror twin
+_SOURCE = re.compile(r"(?i)\b(windows?|sun|sunlight|daylight|golden hour|moonlight|lamps?|bulbs?|tubes?|fluorescents?|"
+                     r"neon|flash|softbox(?:es)?|street ?lights?|spotlights?|spots|candles?|fire|firelight|screens?|"
+                     r"headlights?|fixtures?|lanterns?|torch(?:es)?|chandeliers?|curtains?|skylights?|overhead|"
+                     r"ring light|work light|strobes?|oven|console|monitors?)\b")
+_MOOD = re.compile(r"(?i),?\s+\b(creating|casting|simulating|mimicking|highlighting|evoking|giving|adding|"
+                   r"lending|bathing|illuminating)\b.*$")
+
+
+def _real_light(v: list[str]) -> list[str]:
+    """Lights from real sources only, said plainly; topped up from plain spares."""
+    out = []
+    for x in v:
+        x = _MOOD.sub("", x).strip(" ,")
+        if len(x) > 8 and _SOURCE.search(x) and not _WASH.search(x) and x not in out:
+            out.append(x)
+    return out
 
 
 def _alone(v: list[str], spare: list[str] | None = None, n_min: int = 3) -> list[str]:
     """Drop the lights or places that put other people in the picture; top up from spares."""
     keep = [x for x in v if not _CROWD.search(x)]
+    if spare is not None:
+        keep = _real_light(keep)
     for s in spare or []:
         if len(keep) >= n_min:
             break
@@ -391,7 +415,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                 if isinstance(cached.get("wear"), list):
                     cached["wear"] = [_plain(x) for x in cached["wear"]]
                 if isinstance(cached.get("light"), list):
-                    cached["light"] = _alone(cached["light"], _LIGHT_SPARE)
+                    cached["light"] = _alone(cached["light"], _LIGHT_SPARE, n_min=4)
                 if isinstance(cached.get("places"), list):
                     cached["places"] = _alone(cached["places"])
                 if isinstance(cached.get("characters"), list):
@@ -417,7 +441,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         for k in ("actions", "places", "poses"):
             lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
         lists["wear"] = [_plain(x) for x in lists["wear"]]
-        lists["light"] = _alone(lists["light"], _LIGHT_SPARE)
+        lists["light"] = _alone(lists["light"], _LIGHT_SPARE, n_min=4)
         lists["places"] = _alone(lists["places"])
         chars = _characters(d.get("characters"))
         if len(chars) >= 6:  # who and wear come from the whole characters
