@@ -513,7 +513,7 @@ def _attach_groups(p: dict, run_dir: str, log=print) -> None:
             f"(pins {gs.get('pins')}); " + ", ".join(notes))
 
 
-def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict]]:
+def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict], set]:
     """Looks a group clip didn't deliver (no clean switch, or it didn't fit its beat) get their
     own clip, as without look groups: a keyframe from the lead's frame at the look's own start
     (Klein) and a pose-guided LTX clip. n47: only 10 of 36 group looks came out clean (the
@@ -561,7 +561,7 @@ def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[
         ids.append(r["id"])
     if ids:
         log(f"[FrissonVision] looks: {len(ids)} group looks get their own clip")
-    return keys, clips
+    return keys, clips, set(ids)
 
 
 GROUP_FAULTS = ("group_switch", "group_timing", "group_pin")
@@ -640,11 +640,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if stage == "looks":
             return r["role"] == "B"
         return not r.get("broll_candidate") or not r.get("unused")
-    fb_keys, fb_clips = [], []
+    fb_keys, fb_clips, fb_ids = [], [], set()
     if stage == "looks":
         _attach_groups(p, run_dir, log=log)
         if pass_idx < max_passes and queue_rerolls:
-            fb_keys, fb_clips = _fallback_looks(p, run_dir, log=log)
+            fb_keys, fb_clips, fb_ids = _fallback_looks(p, run_dir, log=log)
     tm = p.setdefault("timing", {})
     tm[f"qc_{stage}_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
     voice = p.get("mode", "voice") == "voice"
@@ -671,7 +671,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 "key_path": r.get("key") if r["role"] == "B" else None}
 
     for r in p["renders"]:
-        if not in_stage(r) or (stage == "looks" and r.get("unusable") and r.get("group") is not None):
+        if not in_stage(r) or (stage == "looks" and r.get("unusable") and r.get("group") is not None) \
+                or r["id"] in fb_ids:  # a look just given its own clip is checked next pass
             continue
         seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
         takes = r.setdefault("takes", [])
