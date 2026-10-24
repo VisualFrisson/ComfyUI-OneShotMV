@@ -314,6 +314,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         short = _short_who(who)
         # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief)
         attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE
+        attitude = attitude[:1].lower() + attitude[1:]
         if size == "wide" or (size == "medium" and rng.random() < 0.5):
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts,
                                          attitude=attitude)

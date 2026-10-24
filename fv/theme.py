@@ -85,6 +85,8 @@ def _characters(v) -> list[dict]:
         place = low.get("place") or low.get("where") or low.get("location") or ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
         wear = _debrand(" ".join(wear.split()).strip(" ,."))
+        if len(wear) > 1 and wear[1].islower():
+            wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"
         place = _debrand(" ".join(place.split()).strip(" ,."))
         if len(who) < 4 or len(wear) < 4 or _copied(who):
             continue
@@ -217,11 +219,39 @@ def _clean_list(v, n_min: int = 3) -> list[str]:
     return out if len(out) >= n_min else []
 
 
+_DECADE = r"(\d0)s|(twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)"
+_GENDER = {"female": ("woman", "her"), "woman": ("woman", "her"), "male": ("man", "his"), "man": ("man", "his"),
+           "non-binary": ("person", "their"), "nonbinary": ("person", "their"), "person": ("person", "their")}
+
+
+def _role_first(s: str) -> str:
+    """'a Firefighter, 20s, female, light skin, ...' (how Gemma writes whole characters) ->
+    'a female firefighter in her twenties, light skin, ...'."""
+    m = re.match(rf"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{{1,40}}?),\s*(?:(?:early|mid|late)-?\s*)?(?:{_DECADE})\s*,\s*"
+                 r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
+    if not m:
+        return s
+    role, d1, d2, g, rest = m.group(1).strip(), m.group(2), m.group(3), m.group(4).lower(), m.group(5)
+    words = {"2": "twenties", "3": "thirties", "4": "forties", "5": "fifties", "6": "sixties", "7": "seventies",
+             "8": "eighties", "9": "nineties"}
+    decade = words.get(d1[0], "twenties") if d1 else d2.lower()
+    noun, pron = _GENDER.get(g, ("person", "their"))
+    acronym = len(role) > 1 and not role[1].islower()  # "R&B diva", "DJ"
+    if not acronym:
+        role = role[0].lower() + role[1:]
+    gendered = r"(?i)(woman|man|person|lady|guy|boy|girl|princess|prince|queen|king|diva|waitress|actress|wife|husband)"
+    lead = f"{role} in {pron} {decade}" if re.search(gendered, role) else \
+        f"{'female ' if noun == 'woman' else 'male ' if noun == 'man' else ''}{role} in {pron} {decade}"
+    art = "an" if (lead[0] in "AEFHILMNORSX" if lead[:1].isupper() and len(lead) > 1 and not lead[1].islower()
+                   else lead[0].lower() in "aeiou") else "a"
+    return f"{art} {lead}" + (f", {rest}" if rest else "")
+
+
 def _people(who: list[str]) -> list[str]:
     """'23, female, dark skin, afro, ...' reads badly in a prompt: make it 'a 23-year-old woman ...'."""
     out = []
     for w in who:
-        s = w
+        s = _role_first(w)
         m = re.match(r"^(\d{2})\s*(?:-?year-old|yo|years old)?\s*,?\s*(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$",
                      s, flags=re.I)
         if m:
@@ -238,7 +268,11 @@ def _people(who: list[str]) -> list[str]:
 
 
 def _places(pl: list[str]) -> list[str]:
-    return [p if re.match(r"^(in|on|at|inside|under|beside|by|near|atop|among)\b", p, flags=re.I) else "in " + p
+    _PREP = (r"behind|outside|around|along|beneath|across|through|over|onto|against|next to|in front of|"
+             r"inside|under|beside|by|near|atop|among|at|on")
+    pl = [re.sub(rf"(?i)^in\s+(?=(?:{_PREP})\b)", "", p.strip()) for p in pl]  # "in behind the wheel"
+    return [p if re.match(r"^(in|on|at|inside|under|beside|by|near|atop|among|behind|outside|around|along|beneath|"
+                          r"across|through|over|onto|against|next to|in front of)\b", p, flags=re.I) else "in " + p
             for p in pl]
 
 
@@ -286,6 +320,9 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                     cached["poses"] = [x for x in cached["poses"] if not _copied(x)]
                 if isinstance(cached.get("characters"), list):
                     cached["characters"] = _characters(cached["characters"])
+                    for c in cached["characters"]:
+                        c["who"] = _people([c["who"]])[0]
+                        c["place"] = _places([c["place"]])[0] if c["place"] else ""
                 return cached
             except Exception:
                 pass

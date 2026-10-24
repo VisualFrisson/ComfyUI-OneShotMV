@@ -21,7 +21,7 @@ from . import formats, graphs, lyrics
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
 Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Make it look like a real photograph of an ordinary moment someone actually took: specific, believable details, nothing magical, surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
-PROMPT_WORLD = """You are editing a music video set in this world: "{world}". Write the image prompt for one b-roll cutaway where nobody appears, set {place}, {light}. Show one telling, specific detail that could only belong to this world: an object, a prop, a corner of the room, a vehicle, the view outside, as if someone just stepped out of the frame. No people at all, no brands, no logos, no recognisable car or product models, no text, screens or lettering anywhere. A real photograph of an ordinary moment: believable, nothing magical or surreal. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+PROMPT_WORLD = """You are editing a music video set in this world: "{world}". Write the image prompt for one b-roll cutaway: an ordinary, everyday view {place}, {light}, exactly as it really looks at that moment, with the things normally found there, and nobody in it. Nothing odd, symbolic, dramatic, sad or out of place, no story and no metaphor. No people, no brands, no logos, no recognisable car or product models, no text, screens or lettering anywhere. Answer with one sentence of at most 40 words that describes the image, and nothing else."""
 
 PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Make it look like a real photograph of an ordinary moment: specific, believable details, nothing surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
@@ -116,7 +116,10 @@ def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: s
             if text:
                 return _clean(text), ln["text"]
     if th.get("theme") and th.get("places"):
-        places, lights = th["places"], th.get("light") or ["natural light"]
+        # the characters' own workplaces first: the extra places drift off-world (Night Shift
+        # retest: a record store, a bowling alley, a theatre lobby)
+        places = [c["place"] for c in th.get("characters") or [] if c.get("place")] or th["places"]
+        lights = th.get("light") or ["natural light"]
         place = places[(seed + k * 5) % len(places)]
         light = lights[(seed + k * 3) % len(lights)]
         q = PROMPT_WORLD.format(world=th["theme"].replace('"', "'"), place=place, light=light)
