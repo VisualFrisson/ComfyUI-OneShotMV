@@ -67,6 +67,25 @@ def _adults(s: str) -> str:
     return re.sub(r"(?i)\b(a|an) young adult (woman|man)\b", r"a young \2", s)
 
 
+_PROPS = re.compile(r"(?i)\b(guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
+                    r"saxophones?|trumpets?|instruments?|microphones?|mics?|mic stands?|headsets?|phones?|"
+                    r"cell ?phones?|flip ?phones?|smartphones?|turntables?)\b")
+
+
+def _no_props(s: str) -> str:
+    """Drop the clauses of a place or action that put an instrument, a microphone or a phone in
+    someone's hands (Y2K retest: 'strumming a guitar', 'slamming a drum')."""
+    if not _PROPS.search(s):
+        return s
+    parts = [p for p in re.split(r",\s*", s) if not _PROPS.search(p)]
+    return ", ".join(parts).strip(" ,")
+
+
+def _plain(wear: str) -> str:
+    """A 'graphic tee' or 'band tee' comes out with garbled print on it."""
+    return re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
+
+
 def _copied(x: str) -> bool:
     return any(c in x.lower() for c in COPIED)
 
@@ -84,10 +103,12 @@ def _characters(v) -> list[dict]:
         wear = low.get("wear") or low.get("outfit") or low.get("clothes") or ""
         place = low.get("place") or low.get("where") or low.get("location") or ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
-        wear = _debrand(" ".join(wear.split()).strip(" ,."))
-        if len(wear) > 1 and wear[1].islower():
+        wear = _plain(_debrand(" ".join(wear.split()).strip(" ,.")))
+        if re.match(r"^(?:[A-Z][a-z]|A\s)", wear):
             wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"
-        place = _debrand(" ".join(place.split()).strip(" ,."))
+        place = _no_props(_debrand(" ".join(place.split()).strip(" ,.")))
+        # "in the white infinity studio, posing for photos": the place only (actions come separately)
+        place = re.sub(r",\s*[a-z]+ing\b.*$", "", place)
         if len(who) < 4 or len(wear) < 4 or _copied(who):
             continue
         if _WORDS.search(wear) and not _NO_WORDS.search(wear):
@@ -224,9 +245,34 @@ _GENDER = {"female": ("woman", "her"), "woman": ("woman", "her"), "male": ("man"
            "non-binary": ("person", "their"), "nonbinary": ("person", "their"), "person": ("person", "their")}
 
 
+def _article(lead: str) -> str:
+    if lead[:1].isupper() and len(lead) > 1 and not lead[1].islower():  # "R&B", "DJ"
+        return "an" if lead[0] in "AEFHILMNORSX" else "a"
+    return "an" if lead[:1].lower() in "aeiou" else "a"
+
+
+def _role(role: str) -> str:
+    role = role.strip()
+    return role if len(role) > 1 and not role[1].islower() else role[:1].lower() + role[1:]
+
+
 def _role_first(s: str) -> str:
     """'a Firefighter, 20s, female, light skin, ...' (how Gemma writes whole characters) ->
-    'a female firefighter in her twenties, light skin, ...'."""
+    'a female firefighter in her twenties, light skin, ...'; 'a Rapper, 26, male, ...' ->
+    'a 26-year-old rapper, ...' (ages under 21 become 21: a margin above the adults rule, the
+    Y2K retest wrote 18- and 19-year-old pop stars)."""
+    m = re.match(r"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{1,40}?),\s*(\d{2})\s*,\s*"
+                 r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
+    if m:
+        age = max(21, int(m.group(2)))
+        g = m.group(3).lower()
+        noun = _GENDER.get(g, ("person", "their"))[0]
+        role = _role(m.group(1))
+        gendered = r"(?i)(woman|man|person|lady|guy|boy|girl|princess|prince|queen|king|diva|waitress|actress)"
+        lead = f"{age}-year-old " + (role if re.search(gendered, role) else
+                                     ("female " if noun == "woman" else "male " if noun == "man" else "") + role)
+        rest = m.group(4)
+        return f"{_article(lead)} {lead}" + (f", {rest}" if rest else "")
     m = re.match(rf"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{{1,40}}?),\s*(?:(?:early|mid|late)-?\s*)?(?:{_DECADE})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
     if not m:
@@ -318,6 +364,11 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                     cached["who"] = _people([_adults(w) for w in cached["who"] if not _copied(w)])
                 if isinstance(cached.get("poses"), list):
                     cached["poses"] = [x for x in cached["poses"] if not _copied(x)]
+                for k in ("actions", "places", "poses"):
+                    if isinstance(cached.get(k), list):
+                        cached[k] = [y for y in (_no_props(x) for x in cached[k]) if len(y) > 3]
+                if isinstance(cached.get("wear"), list):
+                    cached["wear"] = [_plain(x) for x in cached["wear"]]
                 if isinstance(cached.get("characters"), list):
                     cached["characters"] = _characters(cached["characters"])
                     for c in cached["characters"]:
@@ -338,6 +389,9 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             log("[FrissonVision] theme: could not read the model's answer, trying again")
             continue
         lists = {k: _clean_list(d.get(k)) for k in COUNTS}
+        for k in ("actions", "places", "poses"):
+            lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
+        lists["wear"] = [_plain(x) for x in lists["wear"]]
         chars = _characters(d.get("characters"))
         if len(chars) >= 6:  # who and wear come from the whole characters
             lists["who"] = [c["who"] for c in chars]
