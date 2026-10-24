@@ -169,9 +169,10 @@ SCENE_MOVES = {
 }
 SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
               "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
-REAL_PHOTO = ("A real candid photograph, not a render: true-to-life skin with pores, fine lines and small "
-              "blemishes, real fabric texture, no airbrushing, no glossy or plastic skin, subtle film grain. "
-              "No text, signs or lettering anywhere.")
+# softer than before (Oct 24 note: the sample images looked too gritty): natural skin and fabric,
+# no pores-and-blemishes push and no grain in the still (the Edit's finish adds the film look)
+REAL_PHOTO = ("A real photograph, not a render: natural skin and real fabric texture, true-to-life light and "
+              "colour, clean and in focus. No text, signs or lettering anywhere.")
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
@@ -254,28 +255,64 @@ def _short_who(who: str) -> str:
     return re.split(r",| with ", who)[0].strip()
 
 
-FEET = re.compile(r"\b(shoes?|sneakers?|sandals?|slippers?|boots?|loafers?|heels|socks?|clogs?|flip-flops?|"
-                  r"footwear|wedges|moccasins?|espadrilles?)\b", re.I)
+_FEET = (r"shoes?|sneakers?|trainers|sandals?|slippers?|boots?|loafers?|heels|socks?|clogs?|flip-flops?|"
+         r"footwear|wedges|moccasins?|espadrilles?|platforms?|mules|pumps|stilettos?|slingbacks?|brogues|oxfords")
+FEET = re.compile(rf"\b({_FEET})\b", re.I)
+# a woman's cut on a man reads as costume (the Y2K sample: men in white lace corsets)
+WOMENS_WEAR = re.compile(r"\b(dress|skirt|miniskirt|corset|bustier|bralette|bra|halter|lingerie|gown|blouse|"
+                         r"camisole|tube top|bodysuit|heels|stilettos?|pumps)\b", re.I)
+MAN = re.compile(r"\b(man|men|guy|boy|gentleman|male|father|grandfather|husband)\b", re.I)
+WOMAN = re.compile(r"\b(woman|women|girl|lady|female|mother|grandmother|wife)\b", re.I)
+
+
+def _no_feet(wear: str) -> str:
+    """The outfit without its footwear, for close and medium shots (n47: a look edit drew a head
+    standing on shoes). Drops the clause that names the shoes instead of dropping the outfit:
+    filtering whole outfits left two in the Y2K and Florida samples, so everyone wore them."""
+    if not FEET.search(wear):
+        return wear
+    out = wear
+    for _ in range(3):
+        # from the last joiner before the shoes ("and", "with", a comma) to the end of that clause
+        seg = r"(?:(?!\s(?:and|with|paired with|plus|over)\s)[^,;])"
+        nxt = re.sub(rf"(?:,\s*|\s+(?:and|with|paired with|plus|over)\s+){seg}*?\b(?:{_FEET})\b{seg}*",
+                     "", out, flags=re.I)
+        if nxt == out:
+            break
+        out = nxt
+    out = out.strip(" ,;")
+    return out if len(out) >= 8 and not FEET.search(out) else wear
 
 
 def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     """Voice casting from a theme's world bible (fv/theme.py): every performer a new character,
     outfit, place and light from the theme; wide shots (and half the medium ones) are in-scene
-    shots of the character doing something there."""
+    shots of the character doing something there. Bibles with whole characters (who + outfit +
+    place) keep them together, so a role reads at a glance and the outfit fits the person."""
     th = c["theme"]
     fr = c.get("framing") or DEFAULT_FRAMING
     rng, used, out = random.Random(seed), {}, []
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
+    chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     for i in range(n):
         size = sizes[i] if i < len(sizes) else "close"
-        who = _pick(rng, th["who"], used, "who")
+        if chars:
+            ch = _pick(rng, chars, used, "character")
+            who, wear = ch["who"], ch["wear"]
+            place = ch.get("place") or _pick(rng, th["places"], used, "place")
+        else:
+            who = _pick(rng, th["who"], used, "who")
+            pool = th["wear"]
+            if MAN.search(who) and not WOMAN.search(who):
+                pool = [w for w in pool if not WOMENS_WEAR.search(w)] or pool
+            wear = _pick(rng, pool, used, "wear")
+            place = _pick(rng, th["places"], used, "place")
         # shoes in a head-and-shoulders frame: n47's look edit drew a head standing on shoes
-        pool = th["wear"] if size == "wide" else ([w for w in th["wear"] if not FEET.search(w)] or th["wear"])
-        wear = _pick(rng, pool, used, "wear")
-        place = _pick(rng, th["places"], used, "place")
+        if size != "wide":
+            wear = _no_feet(wear)
         light = _pick(rng, th["light"], used, "light")
         short = _short_who(who)
-        # the theme's own exaggerated poses (fun, but a real photograph: the user's n43 brief)
+        # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief)
         attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE
         if size == "wide" or (size == "medium" and rng.random() < 0.5):
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts,

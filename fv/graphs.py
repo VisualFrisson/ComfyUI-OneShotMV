@@ -49,9 +49,11 @@ def _save_video(g, images, fps, prefix, audio=None):
 
 
 # ------------------------------------------------------------------ Krea 2 W5
-def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.40, turbo_only=False):
+def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_only=False):
     """Krea 2 W5 hybrid (Turbo composes, RAW + Turbo LoRA redetails). turbo_only=True uses the
-    Turbo model for both passes: one model to load instead of two (the fast preset)."""
+    Turbo model for both passes: one model to load instead of two (the fast preset).
+    denoise: how hard the RAW pass redetails the upscaled image; 0.40 looked too gritty in the
+    Oct 24 samples, so 0.25 keeps Turbo's cleaner composition and adds less texture."""
     g = Graph()
     turbo = g.add("UNETLoader", unet_name=M["krea_turbo"], weight_dtype="default")
     if turbo_only:

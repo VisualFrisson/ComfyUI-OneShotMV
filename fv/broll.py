@@ -1,23 +1,27 @@
-"""B-roll: a few cutaways where nobody sings: shots that show what the words are about, and
-performers dancing to the track (medium shots, not full body) as filler.
+"""B-roll (Second Unit): a few cutaways where nobody sings: shots of the World itself (a telling
+detail of one of its places), and performers dancing to the track (medium shots, not full body) as
+filler. Cutaways that illustrate the lyrics (broll_style 'lyrics') are still there, but no longer
+the default: in the Oct 24 samples they came out as a rock on concrete and a fruit bowl.
 
 About one shot in eight (`broll_share`), never on the drop and never the opening shot, never
 two in a row. Slots are filled first where lip sync is still weak after the re-rolls (a sung
 shot whose SyncNet confidence stayed low), then in instrumental gaps (a lead with almost no
-vocal under it). Each cutaway illustrates the line sung there (Whisper, fv/lyrics.py), written
-as an image prompt by the same local language model as themes (fv/theme.py), in the theme's or
-pack's world; Krea 2 makes the still and LTX moves it. broll_style 'mix' (default) puts the
-lyric cutaways over weak lip sync and the dance filler in instrumental gaps; 'lyrics' or 'dance'
-uses one kind everywhere."""
+vocal under it). Each world cutaway is written as an image prompt by the same local language
+model as themes (fv/theme.py), from one of the World's places and lights; Krea 2 makes the still
+and LTX moves it. broll_style 'mix' (default) puts the world cutaways over weak lip sync and the
+dance filler in instrumental gaps; 'world', 'lyrics' or 'dance' uses one kind everywhere."""
 from __future__ import annotations
 
 import json
 import os
+import re
 
 from . import formats, graphs, lyrics
 
 PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
 Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Make it look like a real photograph of an ordinary moment someone actually took: specific, believable details, nothing magical, surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
+
+PROMPT_WORLD = """You are editing a music video set in this world: "{world}". Write the image prompt for one b-roll cutaway where nobody appears, set {place}, {light}. Show one telling, specific detail that could only belong to this world: an object, a prop, a corner of the room, a vehicle, the view outside, as if someone just stepped out of the frame. No people at all, no brands, no logos, no recognisable car or product models, no text, screens or lettering anywhere. A real photograph of an ordinary moment: believable, nothing magical or surreal. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
 PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Make it look like a real photograph of an ordinary moment: specific, believable details, nothing surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
@@ -26,7 +30,7 @@ PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image promp
 DANCE_STILL = ("Medium shot on a 35mm lens of {who}, wearing {wear}, dancing to the music with loose "
                "shoulders and one arm raised, eyes half closed, mouth closed in a slight smile, not singing. "
                "{light}. Setting: {place}. Photorealistic film still, an invented person, the only person in frame, "
-               "natural colour, subtle film grain. No text, no lettering.")
+               "natural colour. No text, no lettering.")
 DANCE_MOTION = ("Medium shot of {who} dancing to the beat: shoulders, hips and arms move with the rhythm, the head "
                 "bobs, a relaxed smile, the mouth stays closed, not singing. The handheld camera sways with the "
                 "rhythm. No one else in frame. No text appears.")
@@ -37,9 +41,8 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
 # no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
 # the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
 # still (the realism model the portraits use) written as a real photograph, and LTX moves it
-STILL = (" A real candid photograph, not a render: a full frame with true-to-life textures, natural uneven "
-         "light, everyday imperfections and subtle film grain, no glossy CGI look. Nobody in the picture. "
-         "No text, no lettering.")
+STILL = (" A real photograph, not a render: a full frame with true-to-life textures and natural light, no "
+         "glossy CGI look. Nobody in the picture. No text, no lettering.")
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
           "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
@@ -91,22 +94,40 @@ def _world(p: dict, pack: dict) -> str:
     return f" ({about})" if about else ""
 
 
-def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, log=print) -> tuple[str, str]:
-    """(image prompt, the line it illustrates)."""
+def _clean(text: str) -> str:
     from . import theme as themes
-    lns = (p.get("lyrics") or {}).get("lines", [])
-    ln = lyrics.line_near(lns, shot["t0"], shot["t1"])
-    q = PROMPT.format(world=_world(p, pack), line=ln["text"].replace('"', "'")) if ln else \
-        PROMPT_NO_WORDS.format(world=_world(p, pack))
-    text = themes.llm(q, seed=seed, max_length=160, log=log)
+    text = " ".join(text.strip().strip('"').split()).split("\n")[0][:400]
+    # a recognisable car model is a brand (the Y2K sample opened on a blue sports car)
+    text = re.sub(r"(?i)\b(sports|supercar|luxury|vintage|classic|muscle)\s+cars?\b", "car", text)
+    return themes._debrand(text)
+
+
+def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: str = "mix",
+                log=print) -> tuple[str, str]:
+    """(image prompt, the line it illustrates: '' for world cutaways)."""
+    from . import theme as themes
+    th = p.get("theme") or {}
+    if style == "lyrics":
+        lns = (p.get("lyrics") or {}).get("lines", [])
+        ln = lyrics.line_near(lns, shot["t0"], shot["t1"])
+        if ln:
+            q = PROMPT.format(world=_world(p, pack), line=ln["text"].replace('"', "'"))
+            text = themes.llm(q, seed=seed, max_length=160, log=log)
+            if text:
+                return _clean(text), ln["text"]
+    if th.get("theme") and th.get("places"):
+        places, lights = th["places"], th.get("light") or ["natural light"]
+        place = places[(seed + k * 5) % len(places)]
+        light = lights[(seed + k * 3) % len(lights)]
+        q = PROMPT_WORLD.format(world=th["theme"].replace('"', "'"), place=place, light=light)
+        text = themes.llm(q, seed=seed, max_length=160, log=log)
+        if text:
+            return _clean(text), ""
+        return f"An empty scene {place}, {light}, a telling detail of this world, no people", ""
+    text = themes.llm(PROMPT_NO_WORDS.format(world=_world(p, pack)), seed=seed, max_length=160, log=log)
     if text:
-        text = " ".join(text.strip().strip('"').split())
-        text = text.split("\n")[0][:400]
-    if not text:  # no language model: the world itself
-        th = p.get("theme") or {}
-        place = (th.get("places") or ["a quiet street at dusk"])[seed % max(1, len(th.get("places") or [1]))]
-        text = f"An empty scene {place}, atmospheric, no people"
-    return text, (ln or {}).get("text", "")
+        return _clean(text), ""
+    return "An empty quiet street at dusk, atmospheric, no people", ""
 
 
 def _dancer(p: dict, pack: dict, k: int) -> dict:
@@ -114,6 +135,12 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
     import random
     rng = random.Random(p.get("seed", 1) * 31 + k)
     th = p.get("theme") or {}
+    if th.get("characters"):  # a whole character, so the outfit fits the dancer
+        from .casting import _no_feet
+        ch = rng.choice(th["characters"])
+        place = ch.get("place") or rng.choice(th["places"])
+        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1],
+                "light": rng.choice(th["light"])}
     if th.get("who"):
         return {"who": rng.choice(th["who"]), "wear": rng.choice(th["wear"]),
                 "place": rng.choice(th["places"]).split(" ", 1)[-1], "light": rng.choice(th["light"])}
@@ -131,7 +158,7 @@ def kind_for(why: str, style: str) -> str:
     """'words' (a cutaway that shows the lyric) or 'dance' (a performer dancing, not singing)."""
     if style == "dance":
         return "dance"
-    if style == "lyrics":
+    if style in ("lyrics", "world"):
         return "words"
     return "dance" if why == "instrumental gap" else "words"  # mix
 
@@ -187,7 +214,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
                                            audio_path=drums if os.path.exists(drums) else None,
                                            audio_seek=seek).nodes)
         else:
-            img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, log=log)
+            img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, k=k, style=style, log=log)
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img + STILL, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)

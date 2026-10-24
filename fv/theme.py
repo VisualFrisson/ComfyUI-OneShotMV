@@ -37,16 +37,61 @@ GRADES = {
 
 COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses": 10}
 OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
+N_CHARACTERS = 14
 
+# Characters come whole (who + outfit + place), so a role reads at a glance and an outfit always
+# fits the person wearing it. The sample runs of Oct 24 picked who and wear separately: men in lace
+# corsets (Y2K Pop Star) and night-shift workers you couldn't place (Night Shift). The prompt also
+# carries no example phrases any more: Gemma copied the old ones into every bible (the same
+# silver-beehive woman and the same two poses in all three sample casts).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
-Invent the world of this video. Push everything to fun, specific, exaggerated, era-perfect detail, as if the stylist, the hair and make-up team and the set designer all went a little too far: name the exact hairdo, glasses, jewellery, fabrics, colours and props. Everything must still be physically real, things that existed and could be photographed. Never use brand or product names, and nothing carries writing: no signs, posters, banners, menus or scoreboards. Answer with one JSON object only, no other text, with these keys:
-"who": a list of {who} different characters who belong in this theme, each written like "a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain": age, gender, skin tone, a specific hairdo and one or two distinctive details. All adults, 18 or older; vary ages within what the theme describes, and vary genders, skin tones and builds. No names, never real or famous people. At most 22 words each.
-"wear": a list of {wear} outfits that fit the theme, specific in fabric, colour and cut. Plain clothes with no text, logos or lettering. At most 18 words each.
-"places": a list of {places} specific places in this world, each starting with "in" or "on". At most 16 words each.
-"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, neon tubes or backdrops). At most 16 words each.
-"actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone. At most 9 words each.
-"poses": a list of {poses} exaggerated, fun poses or expressions for a portrait in this world, like "chin resting on a fist with a huge cheesy grin" or "pointing at the lens with total swagger". At most 12 words each.
+Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
+"characters": a list of {characters} different characters, each an object with three keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
+"places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
+"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, tube lights or backdrops). At most 16 words each.
+"actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
+"poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
+
+# phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
+COPIED = {"a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain",
+          "chin resting on a fist with a huge cheesy grin", "pointing at the lens with total swagger"}
+
+
+def _adults(s: str) -> str:
+    """Every character is an adult: 'in her late teens' (Night Shift sample, Oct 24) -> 'in her early twenties'."""
+    s = re.sub(r"(?i)\b(in (?:his|her|their)) (?:late |early |mid-?)?teens\b", r"\1 early twenties", s)
+    s = re.sub(r"(?i)\bteenage (girl|boy|kid)\b", lambda m: "young " + {"girl": "woman", "boy": "man"}.get(
+        m.group(1).lower(), "adult"), s)
+    s = re.sub(r"(?i)\bteen(?:ager|age)?s?\b", "young adult", s)
+    return re.sub(r"(?i)\b(a|an) young adult (woman|man)\b", r"a young \2", s)
+
+
+def _copied(x: str) -> bool:
+    return any(c in x.lower() for c in COPIED)
+
+
+def _characters(v) -> list[dict]:
+    """[{who, wear, place}] from the model's 'characters', tolerating strings and odd keys."""
+    if not isinstance(v, list):
+        return []
+    out = []
+    for x in v:
+        if not isinstance(x, dict):
+            continue
+        low = {str(k).strip().lower(): str(val) for k, val in x.items()}
+        who = low.get("who") or low.get("character") or low.get("person") or ""
+        wear = low.get("wear") or low.get("outfit") or low.get("clothes") or ""
+        place = low.get("place") or low.get("where") or low.get("location") or ""
+        who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
+        wear = _debrand(" ".join(wear.split()).strip(" ,."))
+        place = _debrand(" ".join(place.split()).strip(" ,."))
+        if len(who) < 4 or len(wear) < 4 or _copied(who):
+            continue
+        if _WORDS.search(wear) and not _NO_WORDS.search(wear):
+            continue  # lettering on clothes comes out as garbled text
+        out.append({"who": who, "wear": wear, "place": place})
+    return out
 
 
 def cache_dir(out_root: str) -> str:
@@ -54,7 +99,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v3".encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v4".encode("utf-8")).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the language model
@@ -167,7 +212,7 @@ def _clean_list(v, n_min: int = 3) -> list[str]:
         x = " ".join(x.split()).strip(" ,")
         if _WORDS.search(x) and not _NO_WORDS.search(x):
             continue  # lettering on clothes and walls comes out as garbled text
-        if len(x) > 3 and x not in out:
+        if len(x) > 3 and x not in out and not _copied(x):
             out.append(x)
     return out if len(out) >= n_min else []
 
@@ -204,7 +249,8 @@ def fallback(theme: str) -> dict:
         "theme": theme, "source": "templates",
         "who": [f"{a} who belongs in {t}" for a in (
             "a young woman", "a young man", "a woman in her thirties", "a man in his forties", "an older woman",
-            "an older man", "a teenage girl", "a teenage boy", "a woman in her fifties", "a man in his twenties")],
+            "an older man", "a woman in her early twenties", "a man in his early twenties", "a woman in her fifties",
+            "a man in his twenties")],
         "wear": [f"{a} styled for {t}" for a in (
             "a long coat", "a fitted jacket", "layered streetwear", "a sharp suit", "a flowing dress",
             "practical work clothes", "a bold statement outfit", "a knitted sweater")],
@@ -235,14 +281,19 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                     if isinstance(cached.get(k), list):
                         cached[k] = [_debrand(x) for x in cached[k]]
                 if isinstance(cached.get("who"), list):
-                    cached["who"] = _people(cached["who"])
+                    cached["who"] = _people([_adults(w) for w in cached["who"] if not _copied(w)])
+                if isinstance(cached.get("poses"), list):
+                    cached["poses"] = [x for x in cached["poses"] if not _copied(x)]
+                if isinstance(cached.get("characters"), list):
+                    cached["characters"] = _characters(cached["characters"])
                 return cached
             except Exception:
                 pass
-    prompt = PROMPT.format(theme=theme.replace('"', "'"), grades=", ".join(GRADES), **COUNTS)
+    prompt = PROMPT.format(theme=theme.replace('"', "'"), grades=", ".join(GRADES), characters=N_CHARACTERS,
+                           **COUNTS)
     bible = None
     for attempt in range(2):
-        text = llm(prompt, seed=seed + attempt, log=log)
+        text = llm(prompt, seed=seed + attempt, max_length=3200, log=log)  # whole characters run long
         if text is None:
             break
         d = _parse(text)
@@ -250,16 +301,26 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             log("[FrissonVision] theme: could not read the model's answer, trying again")
             continue
         lists = {k: _clean_list(d.get(k)) for k in COUNTS}
+        chars = _characters(d.get("characters"))
+        if len(chars) >= 6:  # who and wear come from the whole characters
+            lists["who"] = [c["who"] for c in chars]
+            lists["wear"] = [c["wear"] for c in chars]
+            lists["places"] = lists["places"] or [c["place"] for c in chars if c["place"]]
         if all(v for k, v in lists.items() if k not in OPTIONAL):
             g = str(d.get("grade", "neutral")).strip().lower()
             bible = {"theme": theme, "source": "gemma-3-12b", **lists,
                      "grade": g if g in GRADES else "neutral", "raw": text}
+            if len(chars) >= 6:
+                bible["characters"] = chars
             break
         log("[FrissonVision] theme: the model's answer was missing lists, trying again")
     if bible is None:
         bible = fallback(theme)
-    bible["who"] = _people(bible["who"])
+    bible["who"] = _people([_adults(w) for w in bible["who"]])
     bible["places"] = _places(bible["places"])
+    for c in bible.get("characters") or []:
+        c["who"] = _people([c["who"]])[0]
+        c["place"] = _places([c["place"]])[0] if c["place"] else ""
     if path:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
