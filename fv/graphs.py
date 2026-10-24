@@ -163,17 +163,28 @@ CONTINUITY = "One continuous take with no cuts: the same person in the same plac
 
 def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
                audio_path=None, audio_seek=0.0, guide_video=None, guide_start=0.0,
-               guide_strength=1.0, guide_face=True, save_pose=False, key_strengths=None):
+               guide_strength=1.0, guide_face=True, save_pose=False, key_strengths=None,
+               keyframes=None, continuity=True):
     """One LTX clip. audio_path -> lip sync on a frozen vocal latent (voice);
-    guide_video -> DWPose union-control guide (twins, motion)."""
+    guide_video -> DWPose union-control guide (twins, motion).
+    keyframes: [(image_path, frame_idx, strength)] pinned at later frames of the clip, in every
+    stage (a look group: one clip that switches person on the beat, each look's keyframe pinned
+    at its cut frame; continuity=False, since the clip is meant to change person)."""
     pr = formats.PRESETS[preset]
     fps = pr["fps"]
     sizes = formats.stage_sizes(fmt, preset)
     g = Graph()
     union = guide_video is not None
     m = _ltx23(g, union) if pr["engine"] == "ltx23_r8" else _ltx25(g, union)
-    if CONTINUITY not in prompt:
+    if continuity and CONTINUITY not in prompt:
         prompt = f"{prompt.rstrip()} {CONTINUITY}"
+
+    def pin(stage, pos_, neg_, lat_):
+        for per, idx, st in extra:
+            ag = g.add("LTXVAddGuide", positive=pos_, negative=neg_, vae=m["vae"], latent=lat_,
+                       image=per[stage], frame_idx=idx, strength=st)
+            pos_, neg_, lat_ = O(ag, 0), O(ag, 1), O(ag, 2)
+        return pos_, neg_, lat_
     pos = g.add("CLIPTextEncode", clip=m["clip"], text=prompt)
     neg = g.add("CLIPTextEncode", clip=m["clip"], text=negative)
     cond = g.add("LTXVConditioning", positive=O(pos), negative=O(neg), frame_rate=float(fps))
@@ -184,6 +195,14 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
         for (w, h) in sizes:
             k = g.add("ImageScale", image=O(key), upscale_method="lanczos", width=w, height=h, crop="center")
             keys.append(O(g.add("LTXVPreprocess", image=O(k), img_compression=33)))
+    extra = []  # per later keyframe: its image at each stage size (after the main key: the
+    for path, idx, st in (keyframes or []):  # first image a job loads is its keyframe)
+        im = g.add("FVLoadImagePath", path=path)
+        per = []
+        for (w, h) in sizes:
+            k = g.add("ImageScale", image=O(im), upscale_method="lanczos", width=w, height=h, crop="center")
+            per.append(O(g.add("LTXVPreprocess", image=O(k), img_compression=33)))
+        extra.append((per, int(idx), float(st)))
     ks = key_strengths or ((0.7, 0.75, 0.8) if pr["stages"] == 3 else (0.9, 0.9))
     w1, h1 = sizes[0]
     lat = g.add("EmptyLTXVLatentVideo", width=w1, height=h1, length=frames, batch_size=1)
@@ -197,6 +216,8 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
         p_ref, n_ref, lat_ref = O(gd, 0), O(gd, 1), O(gd, 2)
         if save_pose:
             _save_video(g, ctl, fps, prefix + "_pose")
+    if extra:
+        p_ref, n_ref, lat_ref = pin(0, p_ref, n_ref, lat_ref)
     au = None
     if audio_path:
         au = O(g.add("FVLoadAudioPath", path=audio_path, seek_seconds=float(audio_seek),
@@ -228,13 +249,19 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
         up = g.add("LTXVLatentUpsampler", samples=vlat, upscale_model=m["ups"], vae=m["vae"])
         li = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[i], latent=O(up), strength=ks[i],
                      bypass=False)) if keys else O(up)
+        spos, sneg = cpos, cneg
+        if extra:  # pin the later keyframes again at this stage's size, crop them after
+            spos, sneg, li = pin(i, cpos, cneg, li)
         av = g.add("LTXVConcatAVLatent", video_latent=li, audio_latent=a_ref if audio_path else O(sep, 1))
-        gd2 = g.add("CFGGuider", model=m["model"], positive=cpos, negative=cneg, cfg=1.0)
+        gd2 = g.add("CFGGuider", model=m["model"], positive=spos, negative=sneg, cfg=1.0)
         s = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=12345 + seed % 1000)),
                   guider=O(gd2), sampler=O(g.add("KSamplerSelect", sampler_name=sname)),
                   sigmas=O(g.add("ManualSigmas", sigmas=sigs)), latent_image=O(av))
         sep = g.add("LTXVSeparateAVLatent", av_latent=O(s))
         vlat = O(sep, 0)
+        if extra:
+            cr = g.add("LTXVCropGuides", positive=spos, negative=sneg, latent=vlat)
+            vlat, cpos, cneg = O(cr, 2), O(cr, 0), O(cr, 1)
     dec = g.add("VAEDecodeTiled", samples=vlat, vae=m["vae"], tile_size=512, overlap=64,
                 temporal_size=64, temporal_overlap=8)
     _save_video(g, O(dec), fps, prefix, audio=au)
@@ -293,7 +320,7 @@ TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Back
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
-             start_s=0.0, identity_path=None):
+             start_s=0.0, identity_path=None, keep=None):
     """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth).
     editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
     editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose).
@@ -315,6 +342,8 @@ def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, p
     if _has_node("FVFaceMatch"):  # the edit pulls the camera back: put the face back where the lead's is
         out = O(g.add("FVFaceMatch", image=out, reference=O(fr), max_scale=2.2))
     g.add("SaveImage", images=out, filename_prefix=prefix)
+    if keep:  # staged runs: LTX stays loaded between the singer clips and the look clips
+        keep_ltx(g, keep)
     return g
 
 
@@ -346,7 +375,22 @@ def assemble(*, run_dir, prefix):
     return g
 
 
-def qc(*, run_dir, pass_index=0, max_passes=1, then_assemble=True):
+def keep_ltx(g, preset="quality"):
+    """Wire LTX's loaders into an FVKeep node of graph g, so a job that doesn't use LTX (a QC
+    pass, a Klein edit) keeps it loaded for the next video job instead of a reload from disk."""
+    if not _has_node("FVKeep"):
+        return g
+    pr = formats.PRESETS.get(preset, formats.PRESETS["quality"])
+    m = _ltx23(g) if pr["engine"] == "ltx23_r8" else _ltx25(g)
+    g.add("FVKeep", model=m["model"], clip=m["clip"], vae=m["vae"], audio_vae=m["avae"], upscaler=m["ups"])
+    return g
+
+
+def qc(*, run_dir, pass_index=0, max_passes=1, then_assemble=True, stage="all", keep=None):
+    """keep: the preset whose LTX stays loaded through this pass (staged runs)."""
     g = Graph()
-    g.add("FVQC", run_dir=run_dir, pass_index=pass_index, max_passes=max_passes, then_assemble=then_assemble)
+    kw = {"stage": stage} if stage != "all" else {}
+    g.add("FVQC", run_dir=run_dir, pass_index=pass_index, max_passes=max_passes, then_assemble=then_assemble, **kw)
+    if keep:
+        keep_ltx(g, keep)
     return g

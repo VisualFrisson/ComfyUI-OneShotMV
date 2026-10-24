@@ -49,15 +49,16 @@ NEGATIVE_EMPTY = NEGATIVE + ", person, people, face, crowd, figure, silhouette"
 
 
 def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: float = 0.55,
-           gap_below: float = 0.3) -> list[tuple[dict, str]]:
-    """[(shot, reason)] for the b-roll slots of a voice run."""
+           gap_below: float = 0.3, n: int | None = None, only: set | None = None) -> list[tuple[dict, str]]:
+    """[(shot, reason)] for the b-roll slots of a voice run. n: how many (default: share of the
+    shots); only: shot indices to choose among (the candidates rendered up front)."""
     if share <= 0 or not p.get("shots"):
         return []
     by_id = {r["id"]: r for r in p["renders"]}
     shots = p["shots"]
-    n = max(1, int(round(len(shots) * share)))
+    n = n or max(1, int(round(len(shots) * share)))
     cands = [s for s in shots if s.get("phase", "quiet") in ("quiet", "build") and s.get("index", 0) > 0
-             and s["t1"] - s["t0"] >= 1.0 and "A" in s]
+             and s["t1"] - s["t0"] >= 1.0 and "A" in s and (only is None or s["index"] in only)]
 
     def lead(s):
         return by_id.get(s["A"], {})
@@ -135,12 +136,18 @@ def kind_for(why: str, style: str) -> str:
     return "dance" if why == "instrumental gap" else "words"  # mix
 
 
-def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
+def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False):
     """Pick the slots, write the prompts, add the b-roll renders to the plan; returns the job
-    graphs (stills first, then the LTX clips) to queue before assembly."""
-    picks = choose(p, share=float(p.get("broll_share", 0.0)))
+    graphs (stills first, then the LTX clips) to queue before assembly.
+    candidates (staged runs): made before any QC, so the weak lip-sync shots aren't known yet:
+    twice the slots are rendered up front (stills with the portraits, clips with the singer
+    shots, so no model swap is spent on them) and finalize() keeps the best after singer QC.
+    Returns (stills, clips) then."""
+    share = float(p.get("broll_share", 0.0))
+    n = max(1, int(round(len(p.get("shots", [])) * share))) if share > 0 else 0
+    picks = choose(p, share=share, n=2 * n if candidates else None)
     if not picks:
-        return []
+        return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
     drums = os.path.join(run_dir, "drums.wav")
     rel = p.get("run_rel", "")
@@ -192,9 +199,38 @@ def plan(p: dict, run_dir: str, pack: dict, log=print) -> list[dict]:
              "key": key, "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"),
              "broll": {"kind": kind, "why": why, "line": line, "prompt": img}}
         p["renders"].append(r)
-        s["broll"] = rid
+        if candidates:
+            r["broll_candidate"] = True
+            p.setdefault("broll_candidates", []).append(rid)
+        else:
+            s["broll"] = rid
         made.append(f"shot {s['index']} ({why}, {kind}): {line!r} -> {img[:120]}")
     for i, g in enumerate(keys + clips):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"broll_{i:02d}.json"), "w", encoding="utf-8"), indent=1)
-    log("[FrissonVision] b-roll: " + " | ".join(made))
+    log("[FrissonVision] b-roll" + (" candidates" if candidates else "") + ": " + " | ".join(made))
+    if candidates:
+        return keys, clips
     return (keys + [graphs.free_memory("after b-roll stills").nodes] if keys else []) + clips
+
+
+def finalize(p: dict, log=print) -> list[int]:
+    """Staged runs, after singer QC: keep the b-roll candidates whose shots are now the best
+    slots (weak lip sync first, then instrumental gaps), as plan() would have chosen them."""
+    by_id = {r["id"]: r for r in p["renders"]}
+    cand = [by_id[i] for i in p.get("broll_candidates", []) if i in by_id]
+    ok = [r for r in cand if r.get("path") and os.path.exists(r["path"])]
+    shots = {s["index"]: s for s in p.get("shots", [])}
+    share = float(p.get("broll_share", 0.0))
+    n = max(1, int(round(len(shots) * share))) if share > 0 else 0
+    picks = choose(p, share=share, n=n, only={r["shot"] for r in ok})
+    chosen = []
+    for s, why in picks:
+        r = next(x for x in ok if x["shot"] == s["index"])
+        s["broll"] = r["id"]
+        r["broll"]["why_final"] = why
+        chosen.append(r["id"])
+    for r in cand:
+        if r["id"] not in chosen:
+            r["unused"] = True
+    log(f"[FrissonVision] b-roll: kept {len(chosen)} of {len(cand)} candidates")
+    return chosen

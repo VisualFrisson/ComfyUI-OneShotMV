@@ -70,6 +70,33 @@ def cut_jump(frames) -> tuple[float, float, int]:
     return float(inner[i]), float(np.median(d)), i + 3
 
 
+def switch_frames(path: str, pins: list[int], before: int = 12, after: int = 6) -> list[dict]:
+    """Where a look group's clip actually switches person, near each pinned keyframe: the frame
+    that starts the new person (the largest frame-to-frame change in [pin - before, pin + after])
+    and how clearly it stands out from the clip's ordinary motion (a hard cut is many times the
+    median change; a morph spreads over several frames and stays low). LTX lands the cut within
+    a few frames of the pin (n46 test: 1 and 6 frames early at 50 fps)."""
+    import cv2
+    frames, _ = _read(path, size=128)
+    th = [cv2.resize(f, (48, 80), interpolation=cv2.INTER_AREA).astype(np.float32) / 255 for f in frames]
+    d = np.array([np.abs(b - a).mean() for a, b in zip(th, th[1:])])  # d[i]: frame i -> i + 1
+    med = float(np.median(d)) if len(d) else 0.0
+    out = []
+    for pin in pins:
+        lo, hi = max(1, pin - before), min(len(d) - 1, pin + after)
+        if hi <= lo:
+            out.append({"pin": pin, "frame": None, "jump": 0.0, "ratio": 0.0})
+            continue
+        i = lo + int(np.argmax(d[lo:hi]))
+        jump = float(d[i])
+        # a morph: the change is spread, so the second-largest step nearby is close to the largest
+        near = np.sort(d[max(lo, i - 3):min(hi, i + 4)])[::-1]
+        spread = float(near[1] / max(jump, 1e-6)) if len(near) > 1 else 0.0
+        out.append({"pin": pin, "frame": i + 1, "jump": round(jump, 4), "ratio": round(jump / max(med, 1e-4), 1),
+                    "spread": round(spread, 2)})
+    return out
+
+
 def _read(path: str, size: int = 256, max_frames: int = 400):
     import cv2
     cap = cv2.VideoCapture(path)

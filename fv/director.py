@@ -72,7 +72,17 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
-           broll_style: str = "mix", lip_repair: bool = False, log=print) -> dict:
+           broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
+           look_groups: bool = True, log=print) -> dict:
+    """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
+    the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
+    re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
+    the final singer takes and LTX the look clips (QC passes and Klein edits keep LTX loaded,
+    FVKeep). n46 spent 65 of 155 minutes on 12 model loads; this order loads 4 times and never
+    re-makes a look because its singer was re-rolled.
+    look_groups (staged): each drop group's looks are one LTX clip that switches person on the
+    beat (the lead's pose guide, each look's keyframe pinned at its cut) instead of one clip per
+    look; the edit reads each look from it (n46 test: clean hard cuts, 65 s instead of 156 s)."""
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
@@ -150,6 +160,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
 
     rsize = formats.render_size(fmt, preset)
     jobs: list[tuple[str, dict]] = []
+    staged = bool(staged) and mode == "voice" and queue and queue_assemble and qc_retries > 0 \
+        and _node_available("FVQC") and _node_available("FVKeep")
+    groups = bool(look_groups) and staged
+    keep = preset if staged else None
+    free_idx = 0
     if mode == "voice":
         sizes = ["close"] * p["performers"]
         for r in p["renders"]:
@@ -170,6 +185,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                                                            prefix=f"{rel}/{name}", size1=s1, size2=s2,
                                                            turbo_only=(label == "fast")).nodes))
             port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
+        free_idx = len(jobs)
         jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
         neg = pk["casting"]["negative"]
         by_id = {r["id"]: r for r in p["renders"]}
@@ -210,8 +226,26 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 size=rsize, seed=seed + r["id"], editor=editor, start_s=r.get("guide_start", 0.0),
                 identity_path=artist_path if (c.get("artist_edit") and artist_path) else None,
                 prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
-                        " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None).nodes))
+                        " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split())) if editor != "qwen" else None,
+                keep=keep).nodes))
+        if groups:  # each drop group's chain of looks: one clip, made after singer QC (_looks_jobs)
+            p["look_groups"] = []
+            for s in p.get("shots", []):
+                ch = [by_id[i] for i in s.get("chain", []) if by_id[i]["role"] == "B" and "cut_at" in by_id[i]]
+                if not ch:
+                    continue
+                a = by_id[s["A"]]
+                first = cast[ch[0]["performer"]]
+                sing = casting.articulate(first["sing"]) if a.get("vocal_density", 0.0) >= dense_from else first["sing"]
+                p["look_groups"].append({"shot": s["index"], "lead": a["id"], "looks": [b["id"] for b in ch],
+                                         "who": [_who_short(cast[b["performer"]]) for b in ch], "sing": sing,
+                                         "seed": first["seed"], "neg": neg, "guide_strength": guide_strength,
+                                         "shot_t1": s["t1"]})
+                for b in ch:
+                    b["group"] = s["index"]
         for r in twins_:
+            if r.get("group") is not None:
+                continue
             a = by_id[r["twin_of"]]
             c = cast[r["performer"]]
             text = casting.articulate(c["sing"]) if a.get("vocal_density", 0.0) >= dense_from else c["sing"]
@@ -238,18 +272,37 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 prefix=f"{rel}/r{r['id']:03d}{r['role']}",
                 guide_video=dance_path, guide_start=r["src_start"], guide_strength=guide_strength,
                 guide_face=False, key_strengths=(1.0, 1.0, 1.0) if preset == "quality" else (1.0, 1.0)).nodes))
-    use_qc = qc_retries > 0 and queue_assemble and _node_available("FVQC")
-    if use_qc:  # QC re-rolls bad takes, then queues free + assemble itself
-        jobs.append(("zz_qc", graphs.qc(run_dir=run_dir, pass_index=0, max_passes=qc_retries).nodes))
-    else:
-        jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
-    jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
-
     p["cast"] = cast
     if bible:
         p["theme"] = {k: v for k, v in bible.items() if k != "raw"}
         p["finish"] = pk["finish"]
     p["run_dir"], p["run_rel"] = run_dir, rel
+    deferred = set()
+    if staged:
+        # the looks wait for the final singer takes (queued by the last singer QC pass)
+        deferred = {n for n, _ in jobs if re.match(r"^(k\d{3}|r\d{3}B)$", n)}
+        if broll_share > 0:  # b-roll candidates ride along with the portraits and the singer clips
+            from . import broll
+            try:
+                stills, clips = broll.plan(p, run_dir, pk, log=log, candidates=True)
+            except Exception as e:  # never let b-roll block a run
+                log(f"[FrissonVision] b-roll skipped ({e})")
+                stills, clips = [], []
+            jobs[free_idx:free_idx] = [(f"brollk{i:02d}", g) for i, g in enumerate(stills)]
+            last_a = max([i for i, (n, _) in enumerate(jobs) if re.match(r"^r\d{3}A$", n)] + [len(jobs) - 1])
+            jobs[last_a + 1:last_a + 1] = [(f"brollr{i:02d}", g) for i, g in enumerate(clips)]
+            p["broll_planned"] = True  # broll.finalize() picks the slots after singer QC
+        p["staged"] = True
+    use_qc = qc_retries > 0 and queue_assemble and _node_available("FVQC")
+    if use_qc:  # QC re-rolls bad takes, then queues free + assemble itself
+        jobs.append(("zz_qc", graphs.qc(run_dir=run_dir, pass_index=0, max_passes=qc_retries,
+                                        stage="leads" if staged else "all", keep=keep).nodes))
+    else:
+        jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
+    jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
+    if staged:
+        p["deferred_jobs"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs) if n in deferred]
+        p["timing"] = {"queued": _dt.datetime.now().isoformat(timespec="seconds")}
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"{i:03d}_{name}.json"), "w", encoding="utf-8"), indent=1)
@@ -263,6 +316,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         url = server_url()
         for name, g in jobs:
             if name == "zz_assemble" and (not queue_assemble or use_qc):
+                continue
+            if name in deferred:
                 continue
             ids.append(queue_prompt(g, url))
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
@@ -310,6 +365,149 @@ def _take_inputs(run_dir: str, path: str) -> tuple[str | None, str | None]:
     img = next((n.get("inputs", {}).get("path") for n in g.values() if n.get("class_type") == "FVLoadImagePath"),
                None)
     return _video_in(g), img
+
+
+# LTX lands a pinned switch a little early (n46 test: 6 and 2 frames at 50 fps), so the pins sit
+# this much after the beat; _attach_groups then lines each real switch up with its beat
+PIN_LATE = 0.06
+GROUP_MAX_SHIFT = 0.14  # s: how far a look may be moved off its lip sync to fit its beat
+
+
+def _who_short(c: dict) -> str:
+    """'a woman aged seventy-seven' from a cast entry (the look's keyframe shows the rest)."""
+    w = (c.get("twin") or {}).get("who") or c.get("who") or "a person"
+    return w.split(",")[0].split(" with ")[0].strip()
+
+
+GROUP_OPEN = ("Head-and-shoulders shots of {n} different people, one after another, singing the same words "
+              "straight into the camera: {who}. Hard cuts on the beat from one person to the next, each one in "
+              "exactly the same pose, framing and head position as the one before; no dissolves and no morphing "
+              "between faces.")
+GROUP_NEG = ", dissolve, crossfade, morphing, blended faces"
+
+
+def _group_prompt(gs: dict) -> str:
+    who = gs["who"]
+    seq = "first " + ", then ".join(who) if len(who) > 1 else who[0]
+    rest = re.sub(r"^[^.]*\.\s*", "", gs["sing"], count=1)  # drop "Head-and-shoulders shot of X singing ..."
+    rest = rest.replace(graphs.CONTINUITY, "").strip()
+    return GROUP_OPEN.format(n=len(who), who=seq) + " " + rest
+
+
+def _looks_jobs(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict]]:
+    """Staged runs, after the last singer QC pass: the look jobs (Klein keyframes, then the LTX
+    look clips), following each lead's final take. A look group's later keyframes are taken from
+    the lead's frame at their cut (minus the lead's lip-sync delay, so the switch lands on the
+    beat on screen) and pinned there in the group's clip."""
+    by_id = {r["id"]: r for r in p["renders"]}
+    rel = p.get("run_rel", "")
+    orig = {r["id"]: os.path.join(run_dir, f"r{r['id']:03d}A_00001_.mp4") for r in p["renders"] if r["role"] == "A"}
+    grp_of = {i: gs for gs in p.get("look_groups", []) for i in gs["looks"]}
+
+    def swap(g, old, new):
+        return json.loads(json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new)[1:-1]))
+
+    key_jobs, clip_jobs = [], []
+    for fn in p.get("deferred_jobs", []):
+        path = os.path.join(run_dir, "jobs", fn)
+        if not os.path.exists(path):
+            continue
+        g = json.load(open(path, encoding="utf-8"))
+        name = fn.split("_", 1)[1][:-5]
+        r = by_id.get(int(name[1:4]))
+        if r is None or r.get("twin_of") not in by_id:
+            continue
+        a = by_id[r["twin_of"]]
+        if a.get("path") and orig.get(a["id"]) != a["path"]:
+            g = swap(g, orig[a["id"]], a["path"])
+        gs = grp_of.get(r["id"])
+        if name.startswith("k") and gs is not None and gs["looks"].index(r["id"]) > 0:
+            lead_t = r["cut_at"] - a["t_start"] - float(a.get("sync_delay", 0.0) or 0.0)
+            for node in g.values():
+                if node.get("class_type") == "FVLoadVideoPath":
+                    node["inputs"]["start_seconds"] = round(max(0.0, lead_t), 4)
+        json.dump(g, open(path, "w", encoding="utf-8"), indent=1)  # the saved job is the one that runs
+        (key_jobs if name.startswith("k") else clip_jobs).append(g)
+    vocals = os.path.join(run_dir, "vocals.wav")
+    vp = vocals if os.path.exists(vocals) else os.path.join(run_dir, "song.wav")
+    for gs in p.get("look_groups", []):
+        looks = [by_id[i] for i in gs["looks"]]
+        a = by_id[gs["lead"]]
+        d = float(a.get("sync_delay", 0.0) or 0.0)
+        rfps = float(looks[0]["fps"])
+        t0g = looks[0]["t_start"]
+        end = looks[-1]["t_start"] + looks[-1]["frames"] / rfps
+        frames = formats.ltx_frames(end - t0g, rfps)
+        a_end = a["t_start"] + a["frames"] / rfps
+        while frames > 9 and t0g + frames / rfps > a_end + 1e-6:  # the pose guide is the lead's clip
+            frames -= 8
+        pins = []
+        late = int(round(PIN_LATE * rfps))
+        for b in looks[1:]:
+            tau = int(round((b["cut_at"] - t0g - d) * rfps)) + late
+            if 4 <= tau <= frames - 6:
+                pins.append((b["key"], tau, 1.0))
+            else:
+                b["unusable"] = ["group_pin"]
+        name = f"g{gs['shot']:03d}"
+        g = graphs.ltx_render(preset=p["preset"], fmt=p["format"], key_path=looks[0]["key"], prompt=_group_prompt(gs),
+                              negative=gs["neg"] + GROUP_NEG, frames=frames, seed=gs["seed"], prefix=f"{rel}/{name}",
+                              audio_path=vp, audio_seek=round(t0g + p["song_t0"] - p.get("stems_t0", 0.0), 4),
+                              guide_video=a["path"], guide_start=looks[0].get("guide_start", 0.0),
+                              guide_strength=gs.get("guide_strength", 1.0), guide_face=True, keyframes=pins,
+                              continuity=False).nodes
+        json.dump(g, open(os.path.join(run_dir, "jobs", f"look_{name}.json"), "w", encoding="utf-8"), indent=1)
+        gs.update(t_start=t0g, frames=frames, fps=rfps, delay=d, pins=[t for _, t, _ in pins],
+                  pinned=[b["id"] for b in looks[1:] if not b.get("unusable")],
+                  path=os.path.join(run_dir, f"{name}_00001_.mp4"))
+        clip_jobs.append(g)
+    log(f"[FrissonVision] looks: {len(key_jobs)} keyframes, {len(clip_jobs)} clips "
+        f"({len(p.get('look_groups', []))} look groups)")
+    return key_jobs, clip_jobs
+
+
+def _attach_groups(p: dict, run_dir: str, log=print) -> None:
+    """Point each look of a rendered group at its stretch of the group's clip: find where the
+    clip really switches person (qc.switch_frames), then give each look a start time that shows
+    its own person for its whole beat, as close to lip sync as the switch allows (at most
+    GROUP_MAX_SHIFT off); a look whose switch isn't a clean cut, or doesn't fit, is left out (the look before it
+    plays on)."""
+    from . import qc
+    by_id = {r["id"]: r for r in p["renders"]}
+    for gs in p.get("look_groups", []):
+        if gs.get("attached") or not gs.get("path") or not os.path.exists(gs["path"]):
+            continue
+        looks = [by_id[i] for i in gs["looks"]]
+        sw = qc.switch_frames(gs["path"], gs.get("pins", []))
+        found = {pid: (x["frame"] if x["frame"] is not None and x["ratio"] >= 6 and x.get("spread", 1.0) <= 0.6
+                       else None) for pid, x in zip(gs.get("pinned", []), sw)}
+        fps, d, t0g = gs["fps"], gs["delay"], gs["t_start"]
+        notes = []
+        for j, b in enumerate(looks):
+            sj = 0 if j == 0 else found.get(b["id"])  # where this look's person starts in the clip
+            later = [k for k in range(j + 1, len(looks)) if looks[k]["id"] in found]
+            # where the next person starts (None: that switch isn't a clean cut, so this look may
+            # melt into the next one)
+            sn = found[looks[later[0]]["id"]] if later else gs["frames"]
+            if sj is None or sn is None or b.get("unusable"):
+                b["unusable"] = sorted(set(b.get("unusable") or []) | {"group_switch"})
+                notes.append(f"r{b['id']:03d}B out")
+                continue
+            nxt = looks[j + 1]["cut_at"] if j + 1 < len(looks) else gs.get("shot_t1", b["cut_at"] + 0.5)
+            win = (nxt - b["cut_at"]) * fps
+            tau = (b["cut_at"] - t0g - d) * fps
+            o = min(max(tau, sj + 1), sn - 1 - win) if j + 1 < len(looks) else max(tau, sj + 1)
+            if o < sj + 1 - 1e-6 or abs(o - tau) > GROUP_MAX_SHIFT * fps:
+                b["unusable"] = sorted(set(b.get("unusable") or []) | {"group_timing"})
+                notes.append(f"r{b['id']:03d}B out ({o - tau:+.0f} f)")
+                continue
+            b.update(path=gs["path"], t_start=round(b["cut_at"] - d - o / fps, 4), frames=int(sn),
+                     group_offset=round(o - tau, 1), takes=[])
+            b.pop("unusable", None)
+            notes.append(f"r{b['id']:03d}B {o - tau:+.0f} f")
+        gs["attached"], gs["switches"] = True, sw
+        log(f"[FrissonVision] look group g{gs['shot']:03d}: switches {[x['frame'] for x in sw]} "
+            f"(pins {gs.get('pins')}); " + ", ".join(notes))
 
 
 def _articulate_prompt(g: dict) -> None:
@@ -366,12 +564,29 @@ def _refresh_prompt(g: dict) -> None:
 
 
 def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool = True,
-            then_assemble: bool = True, queue_rerolls: bool = True, log=print) -> dict:
+            then_assemble: bool = True, queue_rerolls: bool = True, stage: str = "all", log=print) -> dict:
     """Check every render of a run; re-roll the bad ones (new seeds) and queue the next QC pass,
-    or, when all pass / retries are spent, keep the best take of each shot and queue assembly."""
+    or, when all pass / retries are spent, keep the best take of each shot and queue assembly.
+    stage (staged runs, see direct()): 'leads' checks and re-rolls the singer shots only and, when
+    they are final, queues the looks made from them plus a 'looks' pass; 'looks' checks the looks
+    and queues assembly. 'all' is the single-pass order."""
     from . import qc
     pj = os.path.join(run_dir, "plan.json")
     p = json.load(open(pj, encoding="utf-8"))
+    if stage not in ("all", "leads", "looks"):
+        stage = "all"
+    keep = p.get("preset") if stage != "all" else None
+
+    def in_stage(r):
+        if stage == "leads":
+            return r["role"] == "A"
+        if stage == "looks":
+            return r["role"] == "B"
+        return not r.get("broll_candidate") or not r.get("unused")
+    if stage == "looks":
+        _attach_groups(p, run_dir, log=log)
+    tm = p.setdefault("timing", {})
+    tm[f"qc_{stage}_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
     voice = p.get("mode", "voice") == "voice"
     vocal = sr = None
     vp = os.path.join(run_dir, "vocals.wav")
@@ -396,6 +611,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 "key_path": r.get("key") if r["role"] == "B" else None}
 
     for r in p["renders"]:
+        if not in_stage(r) or (stage == "looks" and r.get("unusable") and r.get("group") is not None):
+            continue
         seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
         takes = r.setdefault("takes", [])
         done = next((t for t in takes if t.get("path") == r.get("path") and t.get("v", 0) >= qc.VERSION
@@ -413,6 +630,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                                 people=not voice, **checks(r))
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
+        if r.get("group") is not None and set(res.get("fail", [])) & {"cut", "drift"}:
+            # a look group's clip cuts on purpose (its switches were checked by _attach_groups),
+            # and its face sizes step from person to person
+            res["fail"] = [f for f in res["fail"] if f not in ("cut", "drift")]
+            res["ok"] = not res["fail"]
         entry = {k: v for k, v in res.items() if k != "ok"}
         for t in takes:  # a re-check (new checks, e.g. `cut`) replaces the old verdict on a take
             if t["path"] == res["path"]:
@@ -441,9 +663,12 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     for r in sorted(redo, key=severity):
         if r["id"] in redo_ids:
             continue
+        if r.get("group") is not None:  # a look group isn't re-rolled: a bad look stays out of the cut
+            continue
         # a re-rolled lead clip invalidates its pose-matched twins: re-render them on the new lead
-        group = [r] + [t for t in p["renders"] if t.get("twin_of") == r["id"] and t["role"] == "B"
-                       and t["id"] not in redo_ids]
+        # (staged runs make the looks after their lead is final)
+        group = [r] + ([t for t in p["renders"] if t.get("twin_of") == r["id"] and t["role"] == "B"
+                        and t["id"] not in redo_ids] if stage == "all" else [])
         cost = sum(x.get("frames", 0) for x in group)
         if spent + cost > budget:
             continue
@@ -582,7 +807,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         rerolls = list(jobs)
         if queue_rerolls:  # chain the next pass on the server
             jobs.append(graphs.qc(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes,
-                                  then_assemble=then_assemble).nodes)
+                                  then_assemble=then_assemble, stage=stage, keep=keep).nodes)
         if queue and queue_rerolls:
             queued = queue_chain_front(jobs, server_url())
         msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
@@ -594,6 +819,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         # takes made from the original lead and from the second re-roll, so their poses and
         # mouths no longer followed the lead in the cut)
         for r in sorted(p["renders"], key=lambda x: x["role"] in ("B", "MB")):
+            if not in_stage(r):
+                continue
             takes = [t for t in r.get("takes", []) if t.get("path") and os.path.exists(t["path"])]
             lead = by_id.get(r.get("twin_of")) if r["role"] == "B" else None
             if lead is not None and len(takes) > 1:
@@ -615,7 +842,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
                 best = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]
                 r["path"] = best["path"]
-                if r["role"] == "B":  # the keyframe of the take that is kept
+                if r["role"] == "B" and r.get("group") is None:  # the keyframe of the take that is kept
                     r["key"] = _take_inputs(run_dir, best["path"])[1] or r.get("key")
                 # a twin only ever appears as a flash, so one that still fails is left out of the
                 # cut rather than flashing a wrong person in (a lead clip has no stand-in and stays)
@@ -631,7 +858,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         # lip-sync repair: LatentSync re-draws the mouth of the leads SyncNet still scores low
         # (fv/lipfix.py); a repaired take replaces the original only if it scores clearly higher
         fixed = []
-        if voice and vocal is not None and p.get("lipfix", False) and not p.get("lipfix_done"):
+        if voice and vocal is not None and stage != "looks" and p.get("lipfix", False) and not p.get("lipfix_done"):
             from . import lipfix
             if lipfix.available():
                 thr = qc.THRESH.get("sync_conf", 4.5)
@@ -696,7 +923,25 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 post = []
             p["broll_planned"] = True
         rerolls = list(post)  # SDK clients run these themselves (qc bundle)
-        if queue and then_assemble and queue_rerolls:
+        looks_msg = ""
+        if stage == "leads":
+            # the singer takes are final: keep the best b-roll candidates, then make the looks from
+            # the final singer takes (Klein keyframes, LTX look clips) and check them
+            from . import graphs
+            if p.get("broll_candidates"):
+                try:
+                    from . import broll
+                    broll.finalize(p, log=log)
+                except Exception as e:  # never let b-roll block the cut
+                    log(f"[FrissonVision] b-roll finalize skipped ({e})")
+            key_jobs, clip_jobs = _looks_jobs(p, run_dir, log=log)
+            rerolls = key_jobs + clip_jobs
+            looks_msg = f"; {len(key_jobs)} look keyframes and {len(clip_jobs)} look clips queued"
+            if queue and queue_rerolls:
+                queued = queue_chain_front(rerolls + [graphs.qc(run_dir=run_dir, pass_index=0, max_passes=1,
+                                                                then_assemble=then_assemble, stage="looks",
+                                                                keep=keep).nodes], server_url())
+        elif queue and then_assemble and queue_rerolls:
             from . import graphs
             queued = queue_chain_front(post + [graphs.free_memory("before assembly").nodes,
                                                graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes],
@@ -706,7 +951,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         msg = f"QC pass {pass_idx}: {len(report) - len(bad)}/{len(report)} takes pass" + \
               (f"; kept best take for {', '.join(bad)}" if bad else "") + \
               (f"; lip-sync repair {', '.join(fixed)}" if fixed else "") + \
-              (f"; {nb} b-roll cutaway(s) queued" if post else "") + ("; assembling" if then_assemble else "")
+              (f"; {nb} b-roll cutaway(s) queued" if post else "") + looks_msg + \
+              ("; assembling" if then_assemble and stage != "leads" else "")
     if ref is not None:
         try:
             from . import identity

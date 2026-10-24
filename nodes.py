@@ -260,6 +260,13 @@ class FVDirector:
                                       "from the shot, and lip sync with SyncNet if its weights are installed) and "
                                       "re-roll bad ones, up to this many rounds and at most doubling the render time; "
                                       "0 = off"}),
+            "staged": ("BOOLEAN", {"default": True,
+                       "tooltip": "Voice runs queued here: load each model as few times as possible (Krea for "
+                                  "every image, LTX for every singer clip and its QC, Klein for every look, LTX "
+                                  "for every look clip) and make the looks only from the final singer takes"}),
+            "look_groups": ("BOOLEAN", {"default": True,
+                            "tooltip": "With staged: each drop group's looks come from one LTX clip that switches "
+                                       "person on the beat (faster than one clip per look)"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -274,7 +281,8 @@ class FVDirector:
 
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False):
+            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False,
+            staged=True, look_groups=True):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -288,7 +296,8 @@ class FVDirector:
                               queue_assemble=queue_assemble, framing=framing,
                               artist_path=_resolve(artist_image_path) if artist_image_path else "",
                               qc_retries=qc_retries, theme=theme or "", broll_share=broll_share,
-                              broll_style=broll_style, lip_repair=lip_repair)
+                              broll_style=broll_style, lip_repair=lip_repair, staged=staged,
+                              look_groups=look_groups)
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
@@ -351,7 +360,11 @@ class FVQC:
                 "optional": {"then_assemble": ("BOOLEAN", {"default": True}),
                              "queue_rerolls": ("BOOLEAN", {"default": True,
                                                "tooltip": "off = return the re-roll jobs (qcN.json) for an "
-                                                          "SDK client to submit"})}}
+                                                          "SDK client to submit"}),
+                             "stage": (["all", "leads", "looks"], {"default": "all",
+                                       "tooltip": "all = every take at once; leads / looks = the Director's "
+                                                  "staged order: singer shots first, then the looks made from "
+                                                  "the final singer takes"})}}
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("report",)
@@ -363,10 +376,10 @@ class FVQC:
     def IS_CHANGED(cls, **kw):
         return random.random()
 
-    def run(self, run_dir, pass_index, max_passes, then_assemble=True, queue_rerolls=True):
+    def run(self, run_dir, pass_index, max_passes, then_assemble=True, queue_rerolls=True, stage="all"):
         _reload()
         res = director.qc_pass(_resolve(run_dir), pass_idx=pass_index, max_passes=max_passes,
-                               then_assemble=then_assemble, queue_rerolls=queue_rerolls)
+                               then_assemble=then_assemble, queue_rerolls=queue_rerolls, stage=stage)
         return {"ui": {"text": [res["message"], _file_ref(res["bundle"])]}, "result": (res["message"],)}
 
 
@@ -585,6 +598,27 @@ class FVFreeMemory:
         return {"ui": {"text": ["models unloaded"]}}
 
 
+class FVKeep:
+    """Keeps models loaded across jobs that don't use them. ComfyUI drops a cached model when a
+    job without its loader runs (a QC pass, a Klein edit), and LTX-2.3 then reloads from disk
+    (5-9 min on a slow drive, n46). The Director wires LTX's loaders in here in those jobs: they
+    come from the cache instantly, and the model stays loaded for the next video job."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {},
+                "optional": {"model": ("MODEL",), "clip": ("CLIP",), "vae": ("VAE",), "audio_vae": ("VAE",),
+                             "upscaler": ("LATENT_UPSCALE_MODEL",)}}
+
+    RETURN_TYPES = ()
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, **kw):
+        return {"ui": {"text": [f"kept {len(kw)} model(s) loaded"]}}
+
+
 class FVTheme:
     """Preview what a theme turns into before a run: the characters, outfits, places, light,
     in-scene actions and colour grade the Director will cast from (Gemma 3, the LTX-2.3 text
@@ -657,6 +691,7 @@ class FVLipFix:
 
 NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
+    "FVKeep": FVKeep,
     "FVOffloadToCPU": FVOffloadToCPU,
     "FVLeadPose": FVLeadPose,
     "FVLeadMask": FVLeadMask,
@@ -675,6 +710,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FVDirector": "Frisson Vision: Director",
     "FVFreeMemory": "Frisson Vision: Free Memory",
+    "FVKeep": "Frisson Vision: Keep Models Loaded",
     "FVOffloadToCPU": "Frisson Vision: Weight Backups to RAM",
     "FVLeadPose": "Frisson Vision: Lead Dancer Pose",
     "FVLeadMask": "Frisson Vision: Lead Dancer Only",
