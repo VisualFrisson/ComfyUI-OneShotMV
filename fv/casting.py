@@ -254,6 +254,10 @@ def _short_who(who: str) -> str:
     return re.split(r",| with ", who)[0].strip()
 
 
+FEET = re.compile(r"\b(shoes?|sneakers?|sandals?|slippers?|boots?|loafers?|heels|socks?|clogs?|flip-flops?|"
+                  r"footwear|wedges|moccasins?|espadrilles?)\b", re.I)
+
+
 def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     """Voice casting from a theme's world bible (fv/theme.py): every performer a new character,
     outfit, place and light from the theme; wide shots (and half the medium ones) are in-scene
@@ -265,7 +269,9 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     for i in range(n):
         size = sizes[i] if i < len(sizes) else "close"
         who = _pick(rng, th["who"], used, "who")
-        wear = _pick(rng, th["wear"], used, "wear")
+        # shoes in a head-and-shoulders frame: n47's look edit drew a head standing on shoes
+        pool = th["wear"] if size == "wide" else ([w for w in th["wear"] if not FEET.search(w)] or th["wear"])
+        wear = _pick(rng, pool, used, "wear")
         place = _pick(rng, th["places"], used, "place")
         light = _pick(rng, th["light"], used, "light")
         short = _short_who(who)
