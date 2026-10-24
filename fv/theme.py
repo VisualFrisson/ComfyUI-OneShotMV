@@ -48,7 +48,7 @@ PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
 "characters": a list of {characters} different characters, each an object with three keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
-"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, tube lights or backdrops). At most 16 words each.
+"light": a list of {light} lighting setups with their colours, specific to this world (its flash, sun, lamps, tube lights or backdrops), coming from fixtures, never from photographers, crowds or other people. At most 16 words each.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -87,6 +87,28 @@ def _no_props(s: str) -> str:
     return ", ".join(parts).strip(" ,")
 
 
+# Light and places that bring other people into a one-person shot. Y2K v3 (Oct 24): the bible's
+# "intense flashes of white light mimicking paparazzi cameras" put photographers behind three of
+# the singers' portraits.
+_CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing cameras|press pit|crowds?|audiences?|"
+                    r"fans|onlookers|spectators|bystanders|passers-?by|backing dancers|dancers|backing band|"
+                    r"performers?|players|people|patrons|customers|guests|partygoers)\b")
+_LIGHT_SPARE = ["soft side light from a tall lamp beside the camera", "hard top light from a single bare fixture",
+                "warm glow from practical lamps in the room", "cool backlight with a bright rim on the hair",
+                "soft pink and blue gel light from two lamps beside the camera"]
+
+
+def _alone(v: list[str], spare: list[str] | None = None, n_min: int = 3) -> list[str]:
+    """Drop the lights or places that put other people in the picture; top up from spares."""
+    keep = [x for x in v if not _CROWD.search(x)]
+    for s in spare or []:
+        if len(keep) >= n_min:
+            break
+        if s not in keep:
+            keep.append(s)
+    return keep or v
+
+
 def _plain(wear: str) -> str:
     """A 'graphic tee' or 'band tee' comes out with garbled print on it."""
     return re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
@@ -115,6 +137,8 @@ def _characters(v) -> list[dict]:
         place = _no_props(_debrand(" ".join(place.split()).strip(" ,.")))
         # "in the white infinity studio, posing for photos": the place only (actions come separately)
         place = re.sub(r",\s*[a-z]+ing\b.*$", "", place)
+        if _CROWD.search(place):
+            place = ""  # the cast then takes a place from the world's list
         if len(who) < 4 or len(wear) < 4 or _copied(who):
             continue
         if _WORDS.search(wear) and not _NO_WORDS.search(wear):
@@ -366,6 +390,10 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                         cached[k] = [y for y in (_no_props(x) for x in cached[k]) if len(y) > 3]
                 if isinstance(cached.get("wear"), list):
                     cached["wear"] = [_plain(x) for x in cached["wear"]]
+                if isinstance(cached.get("light"), list):
+                    cached["light"] = _alone(cached["light"], _LIGHT_SPARE)
+                if isinstance(cached.get("places"), list):
+                    cached["places"] = _alone(cached["places"])
                 if isinstance(cached.get("characters"), list):
                     cached["characters"] = _characters(cached["characters"])
                     for c in cached["characters"]:
@@ -389,6 +417,8 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         for k in ("actions", "places", "poses"):
             lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
         lists["wear"] = [_plain(x) for x in lists["wear"]]
+        lists["light"] = _alone(lists["light"], _LIGHT_SPARE)
+        lists["places"] = _alone(lists["places"])
         chars = _characters(d.get("characters"))
         if len(chars) >= 6:  # who and wear come from the whole characters
             lists["who"] = [c["who"] for c in chars]
