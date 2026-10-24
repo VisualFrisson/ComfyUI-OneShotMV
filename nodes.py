@@ -642,6 +642,8 @@ class FVTheme:
         if not b:
             return {"ui": {"text": ["(no theme)"]}, "result": ("",)}
         lines = [f"Theme: {b['theme']}  ({b.get('source')}, grade: {b.get('grade')})"]
+        if b.get("camera"):
+            lines.append(f"camera: {b['camera']}")
         for k in ("who", "wear", "places", "light", "actions"):
             lines.append(f"\n{k}:")
             lines += [f"  - {x}" for x in b.get(k, [])]

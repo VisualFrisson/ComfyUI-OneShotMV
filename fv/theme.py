@@ -49,6 +49,7 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "characters": a list of {characters} different characters, each an object with three keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
+"camera": one sentence of at most 25 words: how this world would have been photographed in its own time, the kind of camera, film or video and the colour, grain and flash it gives; no brand or model names. For a present-day world: an unretouched modern digital photograph.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -131,6 +132,24 @@ def _alone(v: list[str], spare: list[str] | None = None, n_min: int = 3) -> list
         if s not in keep:
             keep.append(s)
     return keep or v
+
+
+_CAM_BRANDS = re.compile(r"(?i)\b(kodak|fuji(?:film)?|ilford|agfa|canon|nikon|leica|olympus|minolta|pentax|"
+                         r"panasonic|jvc|sony|handycam|contax|yashica|ricoh|konica|lomo(?:graphy)?|polaroid)\b\s*"
+                         r"(?:(?:gold|portra|ektar|ektachrome|kodachrome|superia|velvia|tri-x|hp5|vista|max|"
+                         r"ultramax|colorplus|instax|mju|stylus|t4|t2|g2|elph|sure ?shot)\b\s*)?(?:\d{2,4}\b\s*)?")
+
+
+def _camera(v) -> str:
+    """The world's period camera line, without brand or model names."""
+    if not isinstance(v, str):
+        return ""
+    v = _CAM_BRANDS.sub("", " ".join(v.split())).strip(" .,")
+    v = re.sub(r"\b(a|an)\s+(an?)\b", r"\2", v)
+    v = re.sub(r"\s+([,.])", r"\1", v)
+    if len(v) < 12 or _CROWD.search(v) or re.search(r"(?i)\b(modern|contemporary|present-day|smartphone)\b", v):
+        return ""  # present day: the brief's own modern look
+    return v
 
 
 def _plain(wear: str) -> str:
@@ -451,7 +470,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         if all(v for k, v in lists.items() if k not in OPTIONAL):
             g = str(d.get("grade", "neutral")).strip().lower()
             bible = {"theme": theme, "source": "gemma-3-12b", **lists,
-                     "grade": g if g in GRADES else "neutral", "raw": text}
+                     "grade": g if g in GRADES else "neutral", "camera": _camera(d.get("camera")), "raw": text}
             if len(chars) >= 6:
                 bible["characters"] = chars
             break

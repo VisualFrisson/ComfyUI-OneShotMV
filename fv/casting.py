@@ -71,8 +71,9 @@ def _frame(c: dict, size: str) -> dict:
 def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
     """n performers, every portrait prompt finished with the realism brief (finish_prompt)."""
     out = _cast_voice(pack, n, seed, sizes, fmt)
+    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
     for c in out:
-        c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"))
+        c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
         if c.get("twin_prompt"):
             c["twin_prompt"] = c["twin_prompt"].rstrip() + " " + edit_realism(c.get("size", "close") == "close")
     return out
@@ -185,9 +186,11 @@ SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest heigh
 REALISM_PERSON = ("Unretouched photograph with true-to-life detail: natural skin with visible pores, fine facial "
                   "hair, uneven tone and small blemishes, slightly asymmetrical features, flyaway hairs, creased "
                   "and worn fabric, everyday wear and clutter in the surroundings.")
-REALISM_CAMERA = ("Light comes from real sources with mixed colour temperatures and natural falloff, a few clipped "
-                  "highlights and deep, dense shadows. Muted, true-to-life colour, moderate depth of field, fine "
-                  "grain, slight lens softness toward the edges, imperfect off-centre framing.")
+REALISM_LIGHT = ("Light comes from real sources with mixed colour temperatures and natural falloff, a few clipped "
+                 "highlights and deep, dense shadows.")
+REALISM_LOOK = ("Muted, true-to-life colour, moderate depth of field, fine grain, slight lens softness toward the "
+                "edges, imperfect off-centre framing.")
+REALISM_CAMERA = REALISM_LIGHT + " " + REALISM_LOOK
 REALISM = REALISM_PERSON + " " + REALISM_CAMERA
 CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, faint redness around the nostrils, "
               "fine lines at the corners of the eyes, a light natural sheen on the forehead, natural eye whites "
@@ -205,8 +208,19 @@ _OLD_TAIL = re.compile(r"(?i)(?:,\s*)?(?:visible pores and natural skin texture|
                        r"natural skin texture)\b\.?")
 
 
-def finish_prompt(prompt: str, size: str = "close", people: bool = True) -> str:
-    """An image prompt with the realism brief at the end (CLOSE_SKIN too for close-ups)."""
+def _camera_part(camera: str | None) -> str:
+    """The brief's camera half: the modern unretouched look, or the world's own period camera
+    (theme bible "camera", e.g. a 35mm point-and-shoot with direct flash for 1999-2002: the user,
+    Oct 24, on Y2K v3, "I don't feel that nostalgia from the time period")."""
+    cam = " ".join((camera or "").split()).strip(" .")
+    if not cam:
+        return REALISM_CAMERA
+    return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}. Imperfect off-centre framing."
+
+
+def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera: str | None = None) -> str:
+    """An image prompt with the realism brief at the end (CLOSE_SKIN too for close-ups); camera: the
+    world's period camera in place of the modern look."""
     p = _OLD_TAIL.sub("", prompt)
     p = re.sub(r"\s*,\s*,", ",", p)
     p = re.sub(r"\s+([,.])", r"\1", p)
@@ -214,9 +228,10 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True) -> str:
     p = re.sub(r"\.\s*\.", ".", p).strip(" ,")
     if not p.endswith("."):
         p += "."
+    cam = _camera_part(camera)
     if not people:
-        return " ".join(f"{p} {REALISM_SCENE}".split())
-    tail = ONE_ADULT + " " + REALISM + (" " + CLOSE_SKIN if size == "close" else "")
+        return " ".join(f"{p} {REALISM_SCENE.replace(REALISM_CAMERA, cam)}".split())
+    tail = ONE_ADULT + " " + REALISM_PERSON + " " + cam + (" " + CLOSE_SKIN if size == "close" else "")
     return " ".join(f"{p} {tail}".split())
 
 

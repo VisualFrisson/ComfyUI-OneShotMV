@@ -179,6 +179,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     if not picks:
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
+    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
     drums = os.path.join(run_dir, "drums.wav")
     rel = p.get("run_rel", "")
     preset, fmt = p["preset"], p["format"]
@@ -203,7 +204,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
             img = " ".join(DANCE_STILL.format(**d).split())
-            img_still = finish_prompt(img, "medium")
+            img_still = finish_prompt(img, "medium", camera=camera)
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
                 f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars, natural colour, " \
                 "subtle film grain."
@@ -220,7 +221,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         else:
             img, line = _prompt_for(p, pack, s, seed=p.get("seed", 1) * 100 + k, k=k, style=style, log=log)
             if stills:
-                keys.append(graphs.krea2_portrait(prompt=finish_prompt(img + STILL, people=False), seed=seed,
+                keys.append(graphs.krea2_portrait(prompt=finish_prompt(img + STILL, people=False, camera=camera), seed=seed,
                                                   prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
