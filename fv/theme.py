@@ -306,7 +306,9 @@ def _design(s: str) -> str:
 
 def _debrand(s: str) -> str:
     s = _design(BRANDS.sub("designer", s))
-    return re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
+    s = re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
+    # a brand that was the whole item ("fishnet stockings, Doc Martens" in v4b) leaves a bare word
+    return re.sub(r"(?:,\s*|\s+(?:and|with)\s+)designer(?=\s*(?:[,;.]|$))", "", s).strip(" ,")
 
 
 def _clean_list(v, n_min: int = 3) -> list[str]:
