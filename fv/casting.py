@@ -336,7 +336,8 @@ def _short_who(who: str) -> str:
 
 
 _FEET = (r"shoes?|sneakers?|trainers|sandals?|slippers?|boots?|loafers?|heels|socks?|clogs?|flip-flops?|"
-         r"footwear|wedges|moccasins?|espadrilles?|platforms?|mules|pumps|stilettos?|slingbacks?|brogues|oxfords")
+         r"footwear|wedges|moccasins?|espadrilles?|platforms?|mules|pumps|stilettos?|slingbacks?|brogues|oxfords|"
+         r"flats|go-go boots|high-tops|kicks")
 FEET = re.compile(rf"\b({_FEET})\b", re.I)
 # a woman's cut on a man reads as costume (the Y2K sample: men in white lace corsets)
 WOMENS_WEAR = re.compile(r"\b(dress|skirt|miniskirt|corset|bustier|bralette|bra|halter|lingerie|gown|blouse|"
