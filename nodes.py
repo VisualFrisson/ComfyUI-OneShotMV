@@ -264,9 +264,10 @@ class FVDirector:
                        "tooltip": "Voice runs queued here: load each model as few times as possible (Krea for "
                                   "every image, LTX for every singer clip and its QC, Klein for every look, LTX "
                                   "for every look clip) and make the looks only from the final singer takes"}),
-            "look_groups": ("BOOLEAN", {"default": True,
-                            "tooltip": "With staged: each drop group's looks come from one LTX clip that switches "
-                                       "person on the beat (faster than one clip per look)"}),
+            "look_groups": ("BOOLEAN", {"default": False,
+                            "tooltip": "Experimental, with staged: each drop group's looks come from one LTX clip "
+                                       "that switches person on the beat. Faster when it works; looks it doesn't "
+                                       "deliver cleanly get their own clip"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -282,7 +283,7 @@ class FVDirector:
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
             framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False,
-            staged=True, look_groups=True):
+            staged=True, look_groups=False):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)

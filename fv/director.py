@@ -73,16 +73,19 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
            broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
-           look_groups: bool = True, log=print) -> dict:
+           look_groups: bool = False, log=print) -> dict:
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
     the final singer takes and LTX the look clips (QC passes and Klein edits keep LTX loaded,
     FVKeep). n46 spent 65 of 155 minutes on 12 model loads; this order loads 4 times and never
     re-makes a look because its singer was re-rolled.
-    look_groups (staged): each drop group's looks are one LTX clip that switches person on the
-    beat (the lead's pose guide, each look's keyframe pinned at its cut) instead of one clip per
-    look; the edit reads each look from it (n46 test: clean hard cuts, 65 s instead of 156 s)."""
+    look_groups (staged, experimental, off by default): each drop group's looks are one LTX clip
+    that switches person on the beat (the lead's pose guide, each look's keyframe pinned at its
+    cut) instead of one clip per look; the edit reads each look from it. The n46 test cut
+    cleanly (65 s instead of 156 s), but in n47 only 10 of 36 looks did (the clip left the
+    first look within its first frames, morphed instead of cutting, or showed three people), so
+    looks a group doesn't deliver get their own clip after all (_fallback_looks)."""
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
@@ -510,6 +513,60 @@ def _attach_groups(p: dict, run_dir: str, log=print) -> None:
             f"(pins {gs.get('pins')}); " + ", ".join(notes))
 
 
+def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict]]:
+    """Looks a group clip didn't deliver (no clean switch, or it didn't fit its beat) get their
+    own clip, as without look groups: a keyframe from the lead's frame at the look's own start
+    (Klein) and a pose-guided LTX clip. n47: only 10 of 36 group looks came out clean (the
+    clip left the first look in its first frames, or morphed instead of cutting)."""
+    by_id = {r["id"]: r for r in p["renders"]}
+    cast = p.get("cast", [])
+    pk = casting.load_pack(p["pack"])
+    dense_from = float(pk["casting"].get("dense_from", 0.6))
+    grp = {gs["shot"]: gs for gs in p.get("look_groups", [])}
+    rel = p.get("run_rel", "")
+    vocals = os.path.join(run_dir, "vocals.wav")
+    vp = vocals if os.path.exists(vocals) else os.path.join(run_dir, "song.wav")
+    fb = set(GROUP_FAULTS)
+    keys, clips, ids = [], [], []
+    for r in p["renders"]:
+        if r["role"] != "B" or r.get("group") is None or not (set(r.get("unusable") or []) & fb):
+            continue
+        gs, a = grp.get(r["group"]), by_id.get(r["twin_of"])
+        kf = _job_file(run_dir, f"k{r['id']:03d}")
+        if gs is None or a is None or kf is None or r["performer"] >= len(cast):
+            continue
+        kg = json.load(open(kf, encoding="utf-8"))
+        name = f"k{r['id']:03d}_s"
+        for node in kg.values():
+            ins = node.get("inputs", {})
+            if node.get("class_type") == "FVLoadVideoPath":
+                ins["path"], ins["start_seconds"] = a["path"], float(r.get("guide_start", 0.0))
+            if node.get("class_type") == "SaveImage":
+                ins["filename_prefix"] = f"{rel}/{name}"
+        json.dump(kg, open(os.path.join(run_dir, "jobs", f"fb_{name}.json"), "w", encoding="utf-8"), indent=1)
+        key = os.path.join(run_dir, f"{name}_00001_.png")
+        c = cast[r["performer"]]
+        text = casting.articulate(c["sing"]) if a.get("vocal_density", 0.0) >= dense_from else c["sing"]
+        rg = graphs.ltx_render(preset=p["preset"], fmt=p["format"], key_path=key, prompt=text, negative=gs["neg"],
+                               frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B",
+                               audio_path=vp, audio_seek=round(r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0), 4),
+                               guide_video=a["path"], guide_start=r.get("guide_start", 0.0),
+                               guide_strength=gs.get("guide_strength", 1.0), guide_face=True).nodes
+        json.dump(rg, open(os.path.join(run_dir, "jobs", f"fb_r{r['id']:03d}B.json"), "w", encoding="utf-8"), indent=1)
+        keys.append(kg)
+        clips.append(rg)
+        r.update(path=os.path.join(run_dir, f"r{r['id']:03d}B_00001_.mp4"), key=key, takes=[],
+                 group_fallback=r.pop("group"))
+        r.pop("unusable", None)
+        ids.append(r["id"])
+    if ids:
+        log(f"[FrissonVision] looks: {len(ids)} group looks get their own clip")
+    return keys, clips
+
+
+GROUP_FAULTS = ("group_switch", "group_timing", "group_pin")
+
+
 def _articulate_prompt(g: dict) -> None:
     """A lead re-rolled for lip sync switches to the articulation prompt (casting.articulate)."""
     from . import casting
@@ -583,8 +640,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if stage == "looks":
             return r["role"] == "B"
         return not r.get("broll_candidate") or not r.get("unused")
+    fb_keys, fb_clips = [], []
     if stage == "looks":
         _attach_groups(p, run_dir, log=log)
+        if pass_idx < max_passes and queue_rerolls:
+            fb_keys, fb_clips = _fallback_looks(p, run_dir, log=log)
     tm = p.setdefault("timing", {})
     tm[f"qc_{stage}_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
     voice = p.get("mode", "voice") == "voice"
@@ -679,7 +739,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     skipped = len({r["id"] for r in redo} - redo_ids)
     redo = chosen
     p["qc_spent_frames"] = spent
-    last = pass_idx >= max_passes or not redo
+    last = pass_idx >= max_passes or not (redo or fb_clips)
     queued, rerolls = [], []
     if not last:
         redo.sort(key=lambda r: (r["role"] == "B", r["id"]))
@@ -802,7 +862,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                       indent=1)
             # renders that wait on a new keyframe run after the keyframe jobs
             (twin_jobs if (r["role"] == "B" or needs_key) else lead_jobs).append(g)
-        jobs = lead_jobs + key_jobs + twin_jobs  # grouped by model: LTX, Klein, LTX (renders after their keys)
+        # grouped by model: LTX, Klein, LTX (renders after their keys)
+        jobs = lead_jobs + key_jobs + fb_keys + twin_jobs + fb_clips
         from . import graphs
         rerolls = list(jobs)
         if queue_rerolls:  # chain the next pass on the server
@@ -812,6 +873,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             queued = queue_chain_front(jobs, server_url())
         msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
             f"r{r['id']:03d}{r['role']}" for r in redo) + \
+            (f"; {len(fb_clips)} group looks get their own clip" if fb_clips else "") + \
             (f" ({skipped} more over the re-render budget)" if skipped else "")
     else:
         # best take of each shot: leads first, so each look then picks among the takes made from
