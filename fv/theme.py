@@ -201,7 +201,9 @@ def _characters(v) -> list[dict]:
             wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"
         place = _no_props(_debrand(" ".join(place.split()).strip(" ,.")))
         # "in the white infinity studio, posing for photos": the place only (actions come separately)
-        place = re.sub(r",\s*[a-z]+ing\b.*$", "", place)
+        cut = re.sub(r",\s*[a-z]+ing\b.*$", "", place)
+        # "on the floor of a vast, humming factory" is an adjective, not an action
+        place = place if re.search(r"(?i)\b(a|an|the|of|in|on|at|vast|huge|large|small|big|old|busy|dark|quiet|empty)$", cut) else cut
         if _CROWD.search(place):
             place = ""  # the cast then takes a place from the world's list
         if len(who) < 4 or len(wear) < 4 or _copied(who):
@@ -404,10 +406,10 @@ def _people(who: list[str]) -> list[str]:
 
 
 def _places(pl: list[str]) -> list[str]:
-    _PREP = (r"behind|outside|around|along|beneath|across|through|over|onto|against|next to|in front of|"
+    _PREP = (r"behind|outside|around|along|beneath|underneath|across|through|over|onto|against|next to|in front of|"
              r"inside|under|beside|by|near|atop|among|at|on")
     pl = [re.sub(rf"(?i)^in\s+(?=(?:{_PREP})\b)", "", p.strip()) for p in pl]  # "in behind the wheel"
-    return [p if re.match(r"^(in|on|at|inside|under|beside|by|near|atop|among|behind|outside|around|along|beneath|"
+    return [p if re.match(r"^(in|on|at|inside|under|underneath|beside|by|near|atop|among|behind|outside|around|along|beneath|"
                           r"across|through|over|onto|against|next to|in front of)\b", p, flags=re.I) else "in " + p
             for p in pl]
 
