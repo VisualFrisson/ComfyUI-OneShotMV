@@ -194,11 +194,12 @@ CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, f
               "with tiny visible veins, a single soft catchlight, dry texture on the lips.")
 # nobody in the picture (cutaways): the brief without the skin and hair
 REALISM_SCENE = ("Unretouched photograph with true-to-life detail: everyday wear and clutter in the surroundings. "
-                 + REALISM_CAMERA)
+                 + REALISM_CAMERA + " No microphones or instruments.")
 REAL_PHOTO = "No text, signs or lettering anywhere."
 # one grown adult and nobody else: the Y2K retest drew two identical boy-band members in one
 # portrait and photographers in a mirror; and nobody may look like a child (user, Oct 24)
-ONE_ADULT = "A single grown adult in frame and nobody else, no other people in mirrors or reflections."
+ONE_ADULT = ("A single grown adult in frame and nobody else, no other people in mirrors or reflections. No "
+             "microphones, microphone stands, drum kits, guitars or other instruments anywhere in the picture.")
 # the older photo wording at the end of the packs' templates, replaced by the brief
 _OLD_TAIL = re.compile(r"(?i)(?:,\s*)?(?:visible pores and natural skin texture|natural colou?r|subtle film grain|"
                        r"photorealistic(?: film still)?|candid(?: [a-z-]+)? photograph|photorealistic photo with "
