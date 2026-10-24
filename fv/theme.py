@@ -165,7 +165,11 @@ def _camera(v) -> str:
 
 def _plain(wear: str) -> str:
     """A 'graphic tee' or 'band tee' comes out with garbled print on it."""
-    return re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
+    wear = re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
+    # caps come out with a real team or brand logo on the front (v4c: a league logo on a cap)
+    if "no logo" not in wear.lower():
+        wear = re.sub(r"(?i)\b(baseball caps?|trucker hats?|snapbacks?|ball caps?)\b", r"\1 with no logo", wear, count=1)
+    return wear
 
 
 def _copied(x: str) -> bool:
