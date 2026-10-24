@@ -381,7 +381,9 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         # shoes in a head-and-shoulders frame: n47's look edit drew a head standing on shoes
         if size != "wide":
             wear = _no_feet(wear)
-        light = _pick(rng, th["light"], used, "light")
+        # the character's own light where the bible has one (the light of its place: v4's first
+        # preview put studio softboxes in a shopping mall), else one from the world's list
+        light = (ch.get("light") if chars else None) or _pick(rng, th["light"], used, "light")
         short = _short_who(who)
         # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief)
         attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE

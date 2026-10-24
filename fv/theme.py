@@ -46,10 +46,10 @@ N_CHARACTERS = 14
 # silver-beehive woman and the same two poses in all three sample casts).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
-"characters": a list of {characters} different characters, each an object with three keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
+"characters": a list of {characters} different characters, each an object with four keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at (a window, the sun, a lamp, overhead tubes, the camera's own flash); at most 10 words. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
-"camera": one sentence of at most 25 words: how this world would have been photographed in its own time, the kind of camera, film or video and the colour, grain and flash it gives; no brand or model names. For a present-day world: an unretouched modern digital photograph.
+"camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
 "actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -93,7 +93,7 @@ def _no_props(s: str) -> str:
 # the singers' portraits.
 _CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing cameras|press pit|crowds?|audiences?|"
                     r"fans|onlookers|spectators|bystanders|passers-?by|backing dancers|dancers|backing band|"
-                    r"performers?|players|people|patrons|customers|guests|partygoers)\b")
+                    r"performers?|players|people|patrons|customers|guests|partygoers|bustling|crowded|packed)\b")
 _LIGHT_SPARE = ["soft daylight from a large window to one side", "warm light from a lamp in the room",
                 "bright, even light from large softboxes, like a magazine studio shoot",
                 "hard light from a single bare bulb overhead", "the camera's own flash, with dark falloff behind"]
@@ -145,6 +145,17 @@ def _camera(v) -> str:
     if not isinstance(v, str):
         return ""
     v = _CAM_BRANDS.sub("", " ".join(v.split())).strip(" .,")
+    # "The video was captured using X, utilizing Y for a nostalgic feel, resulting in a grainy
+    # aesthetic" (the first v4 bible) -> "Shot on X, Y, a grainy look"
+    v = re.sub(r"(?i)^(?:the\s+)?(?:video|footage|photos?|photographs?|images?|pictures?|world|scenes?)\s+"
+               r"(?:was|were|is|are|would be|would have been)\s+(?:captured|shot|taken|filmed|recorded|photographed)"
+               r"\s+(?:using|with|on)\s+", "Shot on ", v)
+    v = re.sub(r"(?i),?\s*\b(?:for|giving|lending|creating|evoking)\s+(?:it\s+)?an?\s+[a-z -]*?"
+               r"(?:feel|vibe|atmosphere|mood|look)\b", "", v)
+    v = re.sub(r"(?i)\butili[sz]ing\b", "on", v)
+    v = re.sub(r"(?i),?\s*resulting in\b", ",", v)
+    v = re.sub(r"(?i)\baesthetic\b", "look", v)
+    v = re.sub(r"\s+,", ",", re.sub(r",\s*,", ",", v)).strip(" .,")
     v = re.sub(r"\b(a|an)\s+(an?)\b", r"\2", v)
     v = re.sub(r"\s+([,.])", r"\1", v)
     if len(v) < 12 or _CROWD.search(v) or re.search(r"(?i)\b(modern|contemporary|present-day|smartphone)\b", v):
@@ -173,6 +184,8 @@ def _characters(v) -> list[dict]:
         who = low.get("who") or low.get("character") or low.get("person") or ""
         wear = low.get("wear") or low.get("outfit") or low.get("clothes") or ""
         place = low.get("place") or low.get("where") or low.get("location") or ""
+        light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
+        light = (_real_light([light]) or [""])[0] if light and not _CROWD.search(light) else ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
         wear = _plain(_debrand(" ".join(wear.split()).strip(" ,.")))
         if re.match(r"^(?:[A-Z][a-z]|A\s)", wear):
@@ -186,7 +199,7 @@ def _characters(v) -> list[dict]:
             continue
         if _WORDS.search(wear) and not _NO_WORDS.search(wear):
             continue  # lettering on clothes comes out as garbled text
-        out.append({"who": who, "wear": wear, "place": place})
+        out.append({"who": who, "wear": wear, "place": place, **({"light": light} if light else {})})
     return out
 
 
@@ -271,7 +284,8 @@ BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|f
                     r"cartier|rolex|ray-?ban|oakley|nike|adidas|reebok|puma|converse|vans|levi'?s|calvin klein|"
                     r"tommy hilfiger|ralph lauren|lacoste|fila|champion|supreme|coca-?cola|pepsi|mcdonald'?s|"
                     r"cadillac|rolls-?royce|ferrari|lamborghini|porsche|mercedes(-benz)?|bmw|polaroid|walkman|"
-                    r"sony|gameboy|game boy|nintendo|casio|swatch|members only)\b", re.I)
+                    r"sony|gameboy|game boy|nintendo|casio|swatch|members only|timberlands?|dr\.? martens|doc martens|"
+                    r"skechers|juicy couture|von dutch|fubu|tommy|abercrombie|hollister|ugg|crocs|heelys)\b", re.I)
 
 
 _SIGNS = "signs?|banners?|posters?|billboards?|marquees?|placards?|menu boards?"
