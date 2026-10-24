@@ -94,6 +94,10 @@ def _no_props(s: str) -> str:
 _CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing cameras|press pit|crowds?|audiences?|"
                     r"fans|onlookers|spectators|bystanders|passers-?by|backing dancers|dancers|backing band|"
                     r"performers?|players|people|patrons|customers|guests|partygoers|bustling|crowded|packed)\b")
+# a character doing something to someone ("a barber ..., trimming hair" in Night Shift v3) brings
+# the customer into a one-person portrait
+_NO_OTHERS = re.compile(r"(?i),\s*(?:trimming|cutting|styling|shaving|serving|helping|checking on|tending to|"
+                        r"talking to|chatting with|waiting on|greeting|handing|pouring for)\b[^,]*")
 _LIGHT_SPARE = ["soft daylight from a large window to one side", "warm light from a lamp in the room",
                 "bright, even light from large softboxes, like a magazine studio shoot",
                 "hard light from a single bare bulb overhead", "the camera's own flash, with dark falloff behind"]
@@ -191,6 +195,7 @@ def _characters(v) -> list[dict]:
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
         light = (_real_light([light]) or [""])[0] if light and not _CROWD.search(light) else ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
+        who = _NO_OTHERS.sub("", who).strip(" ,")
         wear = _plain(_debrand(" ".join(wear.split()).strip(" ,.")))
         if re.match(r"^(?:[A-Z][a-z]|A\s)", wear):
             wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"

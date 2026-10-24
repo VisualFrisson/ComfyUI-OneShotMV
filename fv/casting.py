@@ -345,6 +345,20 @@ MAN = re.compile(r"\b(man|men|guy|boy|gentleman|male|father|grandfather|husband)
 WOMAN = re.compile(r"\b(woman|women|girl|lady|female|mother|grandmother|wife)\b", re.I)
 
 
+# Trousers in a head-and-shoulders prompt pull the camera down to the waist and cut the head off
+# (Night Shift v3's barber, twice). Close-ups name only what is above the chest.
+_BOTTOMS = re.compile(r"(?i)\b(pants|trousers|jeans|shorts|skirts?|miniskirts?|leggings|stockings|tights|fishnets?|"
+                      r"socks|slacks|khakis|chinos|flares|bell-bottoms|belts?)\b")
+
+
+def _top_only(wear: str) -> str:
+    if not _BOTTOMS.search(wear):
+        return wear
+    parts = [x for x in re.split(r",\s*|\s+and\s+(?=[a-z])", wear) if x.strip() and not _BOTTOMS.search(x)]
+    out = ", ".join(parts).strip(" ,;")
+    return out if len(out) >= 8 else wear
+
+
 def _no_feet(wear: str) -> str:
     """The outfit without its footwear, for close and medium shots (n47: a look edit drew a head
     standing on shoes). Drops the clause that names the shoes instead of dropping the outfit:
@@ -411,6 +425,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         # shoes in a head-and-shoulders frame: n47's look edit drew a head standing on shoes
         if size != "wide":
             wear = _no_feet(wear)
+        if size == "close":
+            wear = _top_only(wear)
         # the character's own light where the bible has one (the light of its place: v4's first
         # preview put studio softboxes in a shopping mall), else one from the world's list
         light = (ch.get("light") if chars else None) or _pick(rng, _lights_for(th["light"], place), used, "light")
