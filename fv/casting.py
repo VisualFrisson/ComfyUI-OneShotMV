@@ -68,9 +68,12 @@ def _frame(c: dict, size: str) -> dict:
     return fr.get(size) or fr.get("close") or next(iter(fr.values()))
 
 
-def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
-    """n performers, every portrait prompt finished with the realism brief (finish_prompt)."""
-    out = _cast_voice(pack, n, seed, sizes, fmt)
+def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None,
+               leads: list[int] | None = None) -> list[dict]:
+    """n performers, every portrait prompt finished with the realism brief (finish_prompt).
+    leads: the performers with a lead shot of their own, cast first (themed runs), so the singers
+    are all different characters before the looks on the drop take theirs."""
+    out = _cast_voice(pack, n, seed, sizes, fmt, leads)
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
@@ -79,7 +82,8 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     return out
 
 
-def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None) -> list[dict]:
+def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None,
+                leads: list[int] | None = None) -> list[dict]:
     """n performers for a voice pack: portrait prompt + singing (video) prompt.
     sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close).
     fmt '16:9': a pack's `framing_landscape` overrides its framing (an extreme close-up on a
@@ -89,7 +93,7 @@ def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, f
         c = dict(c, framing={**(c.get("framing") or DEFAULT_FRAMING), **c["framing_landscape"]})
     sizes = sizes or ["close"] * n
     if c.get("theme"):
-        return _cast_theme(c, n, seed, sizes)
+        return _cast_theme(c, n, seed, sizes, leads)
     if c.get("artist"):
         return _cast_artist(c, n, seed, sizes)
     if "people" in c:  # packs of coherent archetypes (who, setting, light)
@@ -350,7 +354,20 @@ def _no_feet(wear: str) -> str:
     return out if len(out) >= 8 and not FEET.search(out) else wear
 
 
-def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
+_OUTDOOR = re.compile(r"(?i)\b(pool|backyard|yard|garden|patio|rooftop|roof|street|beach|park|parking lot|"
+                      r"field|lawn|porch|driveway|boardwalk|pier|outside|outdoors?|exterior)\b")
+_SKY = re.compile(r"(?i)\b(sun|sunlight|daylight|golden hour|moon|moonlight|street ?lights?|sky)\b")
+
+
+def _lights_for(lights: list[str], place: str) -> list[str]:
+    """The world's lights that can be where the place is: sun and streetlights outdoors, the rest
+    indoors (v4b put a desk lamp at a swimming pool and studio softboxes in a basement)."""
+    out = [l for l in lights if bool(_SKY.search(l)) == bool(_OUTDOOR.search(place or ""))]
+    out = [l for l in out if not re.search(r"(?i)\bstudio\b", l) or re.search(r"(?i)\bstudio\b", place or "")]
+    return out or lights
+
+
+def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] | None = None) -> list[dict]:
     """Voice casting from a theme's world bible (fv/theme.py): every performer a new character,
     outfit, place and light from the theme; wide shots (and half the medium ones) are in-scene
     shots of the character doing something there. Bibles with whole characters (who + outfit +
@@ -362,7 +379,10 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
     order = []
-    for i in range(n):
+    # the leads first: v4b's 16 singers drew from the same cycle as the 24 looks on the drop and
+    # came out as 9 characters (one in three shots); now 13 characters give 13 different singers
+    lead_set = [i for i in dict.fromkeys(leads or []) if 0 <= i < n]
+    for i in lead_set + [i for i in range(n) if i not in set(lead_set)]:
         size = sizes[i] if i < len(sizes) else "close"
         if chars:
             if not order:
@@ -383,7 +403,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
             wear = _no_feet(wear)
         # the character's own light where the bible has one (the light of its place: v4's first
         # preview put studio softboxes in a shopping mall), else one from the world's list
-        light = (ch.get("light") if chars else None) or _pick(rng, th["light"], used, "light")
+        light = (ch.get("light") if chars else None) or _pick(rng, _lights_for(th["light"], place), used, "light")
         short = _short_who(who)
         # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief)
         attitude = _pick(rng, th["poses"], used, "pose") if th.get("poses") else ATTITUDE
@@ -402,7 +422,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
                 "background": _place_noun(place)}
         out.append({"id": i, "portrait": " ".join(portrait.split()), "sing": " ".join(sing.split()),
                     "who": short, "twin": twin, "size": size, "seed": seed * 1000 + i * 7 + 1})
-    return out
+    return sorted(out, key=lambda x: x["id"])
 
 
 def apply_theme(pack: dict, bible: dict) -> dict:
