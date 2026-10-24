@@ -430,7 +430,10 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             wear = _top_only(wear)
         # the character's own light where the bible has one (the light of its place: v4's first
         # preview put studio softboxes in a shopping mall), else one from the world's list
-        light = (ch.get("light") if chars else None) or _pick(rng, _lights_for(th["light"], place), used, "light")
+        own = ch.get("light") if chars else None
+        if own and re.search(r"(?i)\b(studio|softbox(?:es)?)\b", own) and not re.search(r"(?i)\bstudio\b", place or ""):
+            own = None  # Florida v2's piano player in a condo lounge came out in a photo studio
+        light = own or _pick(rng, _lights_for(th["light"], place), used, "light")
         short = _short_who(who)
         scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
         # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief);
