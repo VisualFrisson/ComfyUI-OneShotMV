@@ -353,8 +353,13 @@ def _article(lead: str) -> str:
 
 
 def _role(role: str) -> str:
-    role = role.strip()
-    return role if len(role) > 1 and not role[1].islower() else role[:1].lower() + role[1:]
+    """'Firefighter' -> 'firefighter', 'court Jester' -> 'court jester'; 'R&B diva' and 'DJ' stay."""
+    words = []
+    for w in role.strip().split(" "):
+        parts = w.split("-")
+        parts = [x if len(x) > 1 and not x[1:].islower() else x[:1].lower() + x[1:] for x in parts]
+        words.append("-".join(parts))
+    return " ".join(words)
 
 
 def _role_first(s: str) -> str:
@@ -364,6 +369,7 @@ def _role_first(s: str) -> str:
     an adult noun (man, woman) is always there: role words like "princess" or "boy-band" alone let
     the image model draw someone too young (the user's note of Oct 24: none of them may look like
     kids). Ages under 21 become 21, a margin above the adults rule."""
+    s = re.sub(r",\s*(\d)\d\s*s\s*,", lambda mm: f", {mm.group(1)}0s,", s)  # "45s" (st1's blacksmith) -> "40s"
     m = re.match(r"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{1,40}?),\s*(\d{2})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
     if m:
