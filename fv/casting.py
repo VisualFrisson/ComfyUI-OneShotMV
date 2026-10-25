@@ -163,7 +163,8 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
 # a doorway, working) instead of standing and singing at the lens. The n31 notes: "the walking
 # shots were a great step up from the standard portrait-looking shots".
 SCENE_ACTIONS = {
-    "medium": ["leaning in a doorway", "sitting and leaning toward the camera", "leaning back against a wall",
+    # nothing that bends toward the lens (the user's "unnaturally leaned forward" note, Oct 24)
+    "medium": ["leaning in a doorway", "sitting upright on a stool", "leaning back against a wall",
                "walking slowly beside the camera", "turning toward the camera", "swaying to the beat",
                "looking up between lines, then back to the camera", "resting their arms on a railing"],
     "wide": ["walking slowly toward the camera", "striding past the camera", "sitting on a low wall",
