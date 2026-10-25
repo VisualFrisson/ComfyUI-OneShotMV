@@ -86,6 +86,10 @@ def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: floa
     return sorted(picks, key=lambda x: x[0]["index"])
 
 
+_NIGHT = re.compile(r"(?i)\b(night|midnight|3 ?a\.?m\.?|after dark|moon(?:light|lit)?|street ?lights?|nocturnal|"
+                    r"evening|dusk)\b")
+
+
 def _world(p: dict, pack: dict) -> str:
     th = (p.get("theme") or {}).get("theme")
     if th:
@@ -118,10 +122,21 @@ def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: s
     if th.get("theme") and th.get("places"):
         # the characters' own workplaces first: the extra places drift off-world (Night Shift
         # retest: a record store, a bowling alley, a theatre lobby)
-        places = [c["place"] for c in th.get("characters") or [] if c.get("place")] or th["places"]
+        chars = [c for c in th.get("characters") or [] if c.get("place")]
+        places = [c["place"] for c in chars] or th["places"]
         lights = th.get("light") or ["natural light"]
-        place = places[(seed + k * 5) % len(places)]
-        light = lights[(seed + k * 3) % len(lights)]
+        # night only when the world is set at night (Florida v2's "harsh Florida sun" got two
+        # cutaways under streetlights and moonlight)
+        if not _NIGHT.search(th.get("theme", "")):
+            lights = [x for x in lights if not _NIGHT.search(x)] or lights
+        j = (seed + k * 5) % len(places)
+        place = places[j]
+        own = chars[j].get("light") if chars and j < len(chars) else None
+        if own and not _NIGHT.search(th.get("theme", "")) and _NIGHT.search(own):
+            own = None
+        from .casting import _lights_for
+        fit = _lights_for(lights, place)
+        light = own or fit[(seed + k * 3) % len(fit)]
         q = PROMPT_WORLD.format(world=th["theme"].replace('"', "'"), place=place, light=light)
         text = themes.llm(q, seed=seed, max_length=160, log=log)
         if text:
