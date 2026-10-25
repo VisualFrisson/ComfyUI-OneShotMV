@@ -1,6 +1,6 @@
-"""B-roll (Second Unit): a few cutaways where nobody sings: shots of the World itself (a telling
-detail of one of its places), and performers dancing to the track (medium shots, not full body) as
-filler. Cutaways that illustrate the lyrics (broll_style 'lyrics') are still there, but no longer
+"""B-roll (Second Unit): a few cutaways where nobody sings: one of the World's characters caught in
+a candid moment of their own life (the user, Oct 25: empty environment shots fell flat, every
+cutaway has a person), and performers dancing to the track (medium shots, not full body) as filler. Cutaways that illustrate the lyrics (broll_style 'lyrics') are still there, but no longer
 the default: in the Oct 24 samples they came out as a rock on concrete and a fruit bowl.
 
 About one shot in eight (`broll_share`), never on the drop and never the opening shot, never
@@ -39,6 +39,17 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
                 "lens. They are dancing to the music with loose shoulders and one arm raised, eyes half closed, "
                 "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
                 "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
+# A person in every cutaway (the user, Oct 25: "the empty environment shots don't seem to fit"):
+# one of the world's characters caught in a candid moment of their own life, not singing.
+PROMPT_ACTION = """You are editing a music video set in this world: "{world}". One person from it: {who}, {place}. Write what they are doing in a candid moment between the sung lines: one specific, everyday action that belongs to their role and place, with their hands on the real things of their work or life. No musical instruments, microphones, phones, screens, books, papers or anything with writing, and nothing to eat, drink or smoke. At most 10 words, starting with a verb ending in -ing. Answer with the action only."""
+MOMENT_STILL = ("Candid medium shot on a 35mm lens of {who}, wearing {wear}, {action}, absorbed in what they are "
+                "doing, mouth closed, not singing, not looking at the camera. {light}. Setting: {place}. An invented "
+                "person, the only person in frame. No text, no lettering.")
+MOMENT_MOTION = ("Candid medium shot of {who} {action}: natural, unhurried movement, the mouth stays closed, not "
+                 "singing, not looking at the camera. The handheld camera drifts slightly. No one else in frame. "
+                 "No text appears.")
+MOMENT_FALLBACK = ["adjusting something with careful hands", "tidying up after a long day", "stretching and looking around",
+                   "checking their work closely", "fixing their hair in a mirror", "walking slowly through the room"]
 # no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
 # the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
 # still (the realism model the portraits use) written as a real photograph, and LTX moves it
@@ -157,8 +168,9 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
         from .casting import _no_feet
         ch = rng.choice(th["characters"])
         place = ch.get("place") or rng.choice(th["places"])
-        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1],
-                "light": rng.choice(th["light"])}
+        from .casting import _lights_for
+        light = ch.get("light") or rng.choice(_lights_for(th["light"], place))  # the light of the place
+        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1], "light": light}
     if th.get("who"):
         return {"who": rng.choice(th["who"]), "wear": rng.choice(th["wear"]),
                 "place": rng.choice(th["places"]).split(" ", 1)[-1], "light": rng.choice(th["light"])}
@@ -172,13 +184,34 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
             "place": place.replace(" behind", "")}
 
 
+def _action_for(p: dict, pack: dict, d: dict, seed: int, log=print) -> str:
+    """A candid, role-specific action for a moment cutaway (the language model, else a plain one)."""
+    from . import theme as themes
+    th = p.get("theme") or {}
+    world = th.get("theme") or pack.get("about") or "a music video"
+    text = themes.llm(PROMPT_ACTION.format(world=world.replace('"', "'"), who=d["who"], place=d["place"]),
+                      seed=seed, max_length=60, log=log)
+    act = " ".join((text or "").strip().strip('"').split()).split("\n")[0].rstrip(".").strip()
+    act = themes._no_props(themes._debrand(act))
+    if act and act[:1].isupper():
+        act = act[0].lower() + act[1:]
+    if not re.match(r"^[a-z]+ing\b", act or "") or len(act.split()) > 14:
+        import random
+        act = random.Random(seed).choice(MOMENT_FALLBACK)
+    return act
+
+
 def kind_for(why: str, style: str) -> str:
-    """'words' (a cutaway that shows the lyric) or 'dance' (a performer dancing, not singing)."""
+    """'moment' (one of the world's characters in a candid moment, not singing), 'dance' (a
+    performer dancing, not singing) or 'words' (an empty shot of the lyric; broll_style 'lyrics'
+    only: empty cutaways fell flat, the user's note of Oct 25)."""
     if style == "dance":
         return "dance"
-    if style in ("lyrics", "world"):
+    if style == "lyrics":
         return "words"
-    return "dance" if why == "instrumental gap" else "words"  # mix
+    if style == "world":
+        return "moment"
+    return "dance" if why == "instrumental gap" else "moment"  # mix
 
 
 def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False):
@@ -212,9 +245,27 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         # a Krea 2 still first, then LTX image to video: text to video alone looked AI-made (the n39
         # note); the model swap costs a few minutes per run. broll_stills False goes back to it
         stills = bool(p.get("broll_stills", True))
-        if kind == "dance" and p.get("artist_path"):
+        if kind in ("dance", "moment") and p.get("artist_path"):
             kind = "words"  # the artist's own dance would need an identity edit (another model swap)
-        if kind == "dance":
+        if kind == "moment":
+            d = _dancer(p, pack, k)
+            d["light"] = d["light"][:1].upper() + d["light"][1:]
+            d["action"] = _action_for(p, pack, d, seed=p.get("seed", 1) * 100 + k, log=log)
+            img = " ".join(MOMENT_STILL.format(**d).split())
+            img_still = finish_prompt(img, "medium", camera=camera)
+            motion = " ".join(MOMENT_MOTION.format(who=d["who"], action=d["action"]).split()) + " " + \
+                f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars."
+            if stills:
+                keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
+                                                  size1=s1, size2=s2).nodes)
+            # the drum stem under it (no vocal, so nobody starts singing)
+            seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
+                                           prompt=motion, negative=NEGATIVE, frames=frames, seed=seed,
+                                           prefix=f"{rel}/r{rid:03d}R",
+                                           audio_path=drums if os.path.exists(drums) else None,
+                                           audio_seek=seek).nodes)
+        elif kind == "dance":
             d = _dancer(p, pack, k)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
@@ -243,7 +294,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
                                            prompt=img + STILL + MOTION, negative=NEGATIVE_EMPTY, frames=frames,
                                            seed=seed, prefix=f"{rel}/r{rid:03d}R").nodes)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
-             "frames": frames, "fps": rfps, "size": "medium" if kind == "dance" else "wide", "sync_delay": 0.0,
+             "frames": frames, "fps": rfps, "size": "medium" if kind in ("dance", "moment") else "wide", "sync_delay": 0.0,
              "key": key, "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"),
              "broll": {"kind": kind, "why": why, "line": line, "prompt": img}}
         p["renders"].append(r)
