@@ -301,7 +301,7 @@ def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> 
 
 
 # ------------------------------------------------------------------ themes
-THEME_CLOSE = ("{shot} of {who}, standing upright, {attitude}, singing straight into the lens with the mouth open mid-word, shot "
+THEME_CLOSE = ("{shot} of {who}, {upright}{attitude}, singing straight into the lens with the mouth open mid-word, shot "
                "from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An invented person, the only "
                "one in frame. " + REAL_PHOTO)
 ATTITUDE = "expressive and a little over the top"  # without a theme's own poses
@@ -449,7 +449,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
                                          attitude=attitude)
         else:
             f = THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
-            portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear, attitude=attitude,
+            upright = "" if re.search(r"(?i)\bstand", attitude) else "standing upright, "  # "standing upright, standing rigidly" (st3)
+            portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear, attitude=attitude, upright=upright,
                                           angle=_pick(rng, THEME_ANGLES, used, "angle"),
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
             move = _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")

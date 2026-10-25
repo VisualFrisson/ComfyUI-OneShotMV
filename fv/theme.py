@@ -46,11 +46,11 @@ N_CHARACTERS = 14
 # silver-beehive woman and the same two poses in all three sample casts).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
-"characters": a list of {characters} different characters, each an object with four keys. "who": the role or type first when the theme has them, then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. When the theme names places or a time of day, most characters are in those places at that time. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
+"characters": a list of {characters} different characters, each an object with four keys. "who": the role or type first when the theme has them (every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world: never a generic "customer", "passenger", "resident" or "friend"), then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. When the theme names places or a time of day, most characters are in those places at that time. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
 "camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
-"actions": a list of {actions} things one person does in such a place while singing, seen in a wide shot (walking, sitting, leaning, working, dancing and so on). They are alone and their hands are free. At most 9 words each.
+"actions": a list of {actions} things one person does in this world's places while singing, seen in a wide shot, specific to its roles and places (never generic like "working on a task"). They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
@@ -74,7 +74,10 @@ def _adults(s: str) -> str:
     return re.sub(r"(?i)\b(a|an) young adult (woman|man)\b", r"a young \2", s)
 
 
-_PROPS = re.compile(r"(?i)\b(guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
+# things that show text (a tablet, a magazine, record sleeves: stress test st3, st4, st8) count as props too
+_PROPS = re.compile(r"(?i)\b(tablets?|laptops?|monitors?|screens?|magazines?|newspapers?|books?|notebooks?|sketchbooks?|"
+                    r"vinyl(?: records?)?|records|menus?|clipboards?|maps?|"
+                    r"guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
                     r"saxophones?|trumpets?|instruments?|microphones?|mics?|mic stands?|headsets?|phones?|"
                     r"cell ?phones?|flip ?phones?|smartphones?|turntables?)\b")
 
@@ -98,6 +101,8 @@ _CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing camer
 # the customer into a one-person portrait
 _NO_OTHERS = re.compile(r"(?i),\s*(?:trimming|cutting|styling|shaving|serving|helping|checking on|tending to|"
                         r"talking to|chatting with|waiting on|greeting|handing|pouring for)\b[^,]*")
+_TWO = re.compile(r"(?i)\b(couple|pair|duo|twins|and (?:his|her|their) (?:wife|husband|partner|friend|kid|son|daughter)|"
+                  r"strollers?|prams?|babies|baby|toddlers?|infants?|with (?:a|her|his) (?:dog|child|kid))\b|\band (?:fe)?male\b")
 _LIGHT_SPARE = ["soft daylight from a large window to one side", "warm light from a lamp in the room",
                 "bright, even light from large softboxes, like a magazine studio shoot",
                 "hard light from a single bare bulb overhead", "the camera's own flash, with dark falloff behind"]
@@ -195,7 +200,9 @@ def _characters(v) -> list[dict]:
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
         light = (_real_light([light]) or [""])[0] if light and not _CROWD.search(light) else ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
-        who = _NO_OTHERS.sub("", who).strip(" ,")
+        who = _no_props(_NO_OTHERS.sub("", who).strip(" ,"))
+        if _TWO.search(who):
+            continue  # a couple, or someone with a baby, is two people in a one-person portrait (st6)
         wear = _plain(_debrand(" ".join(wear.split()).strip(" ,.")))
         if re.match(r"^(?:[A-Z][a-z]|A\s)", wear):
             wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"
@@ -362,6 +369,9 @@ def _role(role: str) -> str:
     return " ".join(words)
 
 
+_BARE = re.compile(r"(?i)^(?:an?\s+)?(?:(?:young|older|old|middle-aged|elderly)\s+)?(woman|man|person|lady|gentleman|guy)$")
+
+
 def _role_first(s: str) -> str:
     """'a Firefighter, 20s, female, light skin, ...' (how Gemma writes whole characters) ->
     'a firefighter, a woman in her twenties, light skin, ...'; 'a Boy-band member, 19, male, ...' ->
@@ -377,6 +387,8 @@ def _role_first(s: str) -> str:
         noun = _GENDER.get(m.group(3).lower(), ("person", "their"))[0]
         role, rest = _role(m.group(1)), m.group(4)
         adult = f"a {age}-year-old {'adult' if noun == 'person' else noun}"
+        if _BARE.match(role):
+            return adult + (f", {rest}" if rest else "")
         return f"{_article(role)} {role}, {adult}" + (f", {rest}" if rest else "")
     m = re.match(rf"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{{1,40}}?),\s*(?:(?:early|mid|late)-?\s*)?(?:{_DECADE})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
@@ -388,6 +400,8 @@ def _role_first(s: str) -> str:
     decade = words.get(d1[0], "twenties") if d1 else d2.lower()
     noun, pron = _GENDER.get(g, ("person", "their"))
     adult = f"{'an adult' if noun == 'person' else 'a ' + noun} in {pron} {decade}"
+    if _BARE.match(role):
+        return adult + (f", {rest}" if rest else "")
     return f"{_article(role)} {role}, {adult}" + (f", {rest}" if rest else "")
 
 
