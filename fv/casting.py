@@ -220,7 +220,9 @@ def _camera_part(camera: str | None) -> str:
     cam = " ".join((camera or "").split()).strip(" .")
     if not cam:
         return REALISM_CAMERA
-    return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}. Imperfect off-centre framing."
+    # a film-camera line alone sometimes came out black-and-white (Y2K v4c, stress test st4)
+    colour = "" if re.search(r"(?i)black[- ]and[- ]white|monochrome|b&w", cam) else " Full colour."
+    return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}.{colour} Imperfect off-centre framing."
 
 
 def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera: str | None = None) -> str:

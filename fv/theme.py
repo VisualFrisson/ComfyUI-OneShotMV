@@ -79,7 +79,9 @@ _PROPS = re.compile(r"(?i)\b(tablets?|laptops?|monitors?|screens?|magazines?|new
                     r"vinyl(?: records?)?|records|menus?|clipboards?|maps?|"
                     r"guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
                     r"saxophones?|trumpets?|instruments?|microphones?|mics?|mic stands?|headsets?|phones?|"
-                    r"cell ?phones?|flip ?phones?|smartphones?|turntables?)\b")
+                    r"cell ?phones?|flip ?phones?|smartphones?|turntables?|"
+                    # a singer's mouth must be free (st4's barber sipping a drink, st5's pipe)
+                    r"sipping|drinking|eating|chewing|smoking|pipes?|cigarettes?|cigars?|straws?)\b")
 
 
 def _no_props(s: str) -> str:
