@@ -749,7 +749,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         redo.sort(key=lambda r: (r["role"] == "B", r["id"]))
         new_paths = {}
         rel = p.get("run_rel", "")
-        lead_jobs, key_jobs, twin_jobs = [], [], []
+        lead_jobs, key_jobs, twin_jobs, portrait_jobs = [], [], [], []
 
         def swap(g, old, new):
             return json.loads(json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new)[1:-1]))
@@ -815,7 +815,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         ins["filename_prefix"] = f"{rel}/{ktag}"
                 json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
                                    encoding="utf-8"), indent=1)
-                key_jobs.append(kg)
+                # a new portrait is a Krea job: run between LTX clips it thrashed VRAM for 20+ min
+                # (stress test st4); portraits go first, after a free-memory job
+                (portrait_jobs if kname.startswith("p") else key_jobs).append(kg)
                 new_key = os.path.join(run_dir, f"{ktag}_00001_.png")
                 old_key = key_in(graph, os.path.join(run_dir, f"{kname}_00001_.png"))
                 return swap(graph, old_key, new_key), new_key
@@ -867,8 +869,10 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             # renders that wait on a new keyframe run after the keyframe jobs
             (twin_jobs if (r["role"] == "B" or needs_key) else lead_jobs).append(g)
         # grouped by model: LTX, Klein, LTX (renders after their keys)
-        jobs = lead_jobs + key_jobs + fb_keys + twin_jobs + fb_clips
         from . import graphs
+        jobs = lead_jobs + key_jobs + fb_keys + twin_jobs + fb_clips
+        if portrait_jobs:
+            jobs = [graphs.free_memory("before QC portrait re-rolls").nodes] + portrait_jobs + jobs
         rerolls = list(jobs)
         if queue_rerolls:  # chain the next pass on the server
             jobs.append(graphs.qc(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes,
