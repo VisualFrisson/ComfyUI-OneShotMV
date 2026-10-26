@@ -644,7 +644,16 @@ class FVTheme:
         lines = [f"Theme: {b['theme']}  ({b.get('source')}, grade: {b.get('grade')})"]
         if b.get("camera"):
             lines.append(f"camera: {b['camera']}")
-        for k in ("who", "wear", "places", "light", "actions"):
+        chars = b.get("characters") or []
+        if chars:  # whole characters, as the cast uses them
+            lines.append("\ncharacters:")
+            for c in chars:
+                lines.append(f"  - {c['who']}")
+                lines.append(f"      wearing {c['wear']}")
+                for k, lab in (("place", ""), ("light", "light: "), ("doing", "wide shot: "), ("face", "close-up: ")):
+                    if c.get(k):
+                        lines.append(f"      {lab}{c[k]}")
+        for k in (("places", "light", "actions") if chars else ("who", "wear", "places", "light", "actions")):
             lines.append(f"\n{k}:")
             lines += [f"  - {x}" for x in b.get(k, [])]
         text = "\n".join(lines)

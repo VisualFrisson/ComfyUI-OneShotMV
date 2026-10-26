@@ -46,12 +46,12 @@ N_CHARACTERS = 14
 # silver-beehive woman and the same two poses in all three sample casts).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
-"characters": a list of {characters} different characters, each an object with four keys. "who": the role or type first when the theme has them (every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world: never a generic "customer", "passenger", "resident" or "friend"), then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. When the theme names places or a time of day, most characters are in those places at that time. Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
+"characters": a list of {characters} different characters, each an object with six keys. "who": the role or type first when the theme has them (every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world: never a generic "customer", "passenger", "resident" or "friend"), then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words. When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
 "camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
-"actions": a list of {actions} things a person does in this world's places while singing, seen in a wide shot, each starting with a verb ending in -ing, never naming a role or another person, and never generic like "working on a task". They are alone and their hands are free. At most 9 words each.
-"poses": a list of {poses} different expressions for a portrait in this world, in the theme's tone, describing the face only, never naming a role or another person. At most 12 words each.
+"actions": a list of {actions} things anyone in this world could do in its places while singing, seen in a wide shot, each starting with a verb ending in -ing, never tied to one role, never naming a role or another person, and never generic like "working on a task". They are alone and their hands are free. At most 9 words each.
+"poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
 # phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
@@ -76,7 +76,7 @@ def _adults(s: str) -> str:
 
 # things that show text (a tablet, a magazine, record sleeves: stress test st3, st4, st8) count as props too
 _PROPS = re.compile(r"(?i)\b(tablets?|laptops?|monitors?|screens?|magazines?|newspapers?|books?|notebooks?|sketchbooks?|"
-                    r"vinyl(?: records?)?|records|menus?|clipboards?|maps?|"
+                    r"vinyl(?: records?)?|records|menus?|clipboards?|maps?|hymnals?|hymn ?books?|prayer ?books?|"
                     r"guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
                     r"saxophones?|trumpets?|instruments?|microphones?|mics?|mic stands?|headsets?|phones?|"
                     r"cell ?phones?|flip ?phones?|smartphones?|turntables?|"
@@ -241,8 +241,41 @@ def _characters(v) -> list[dict]:
             continue
         if _WORDS.search(wear) and not _NO_WORDS.search(wear):
             continue  # lettering on clothes comes out as garbled text
-        out.append({"who": who, "wear": wear, "place": place, **({"light": light} if light else {})})
+        doing = _own(low.get("doing") or low.get("action") or low.get("activity") or "", ing=True)
+        face = _own(low.get("face") or low.get("expression") or low.get("pose") or "")
+        face = "" if _HEAD_DOWN.search(face) else face
+        out.append({"who": who, "wear": wear, "place": place, **({"light": light} if light else {}),
+                    **({"doing": doing} if doing else {}), **({"face": face} if face else {})})
+    # a character's own action never names another one ("spinning the DJ's record")
+    roles = _role_words(out)
+    for c in out:
+        others = roles - _role_words([c])
+        pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(others, key=len, reverse=True)) + r")s?\b") \
+            if others else None
+        for k in ("doing", "face"):
+            if pat and k in c and pat.search(c[k]):
+                del c[k]
     return out
+
+
+# a portrait has to see the mouth (the choir singer's 'head bowed in prayer')
+_HEAD_DOWN = re.compile(r"(?i)\b(bow(?:s|ed|ing)?|eyes (?:closed|shut)|looking down|downcast|hidden|covering)\b")
+
+
+def _own(s: str, ing: bool = False) -> str:
+    """A character's own action or expression, scrubbed like the shared lists: no props in the hands
+    or at the mouth, nobody else, no crowd. Gemma 3 wrote one action per character even when asked
+    for a shared list (Pink Pony Club: 'The cowgirl twirls her lasso', 'The radio DJ spins a
+    record'); shuffled into a pool, st2c's gas-station attendant spun the DJ's record."""
+    s = " ".join(str(s or "").split()).strip(" ,.")
+    s = re.sub(r"(?i)^(?:is|are|while|she is|he is)\s+", "", s)
+    s = _no_props(_debrand(s))
+    s = _NO_OTHERS.sub("", ", " + s).strip(" ,")
+    if len(s) < 6 or _CROWD.search(s) or _TWO.search(s) or _copied(s) or re.match(r"(?i)^the\s", s):
+        return ""
+    if ing and not re.match(r"(?i)^[a-z]+ing\b", s):
+        return ""
+    return s[0].lower() + s[1:]
 
 
 def cache_dir(out_root: str) -> str:
@@ -250,7 +283,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v5".encode("utf-8")).hexdigest()[:16]  # v5: camera + character lights
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v6".encode("utf-8")).hexdigest()[:16]  # v6: each character's own action + face
 
 
 # ------------------------------------------------------------------ the language model

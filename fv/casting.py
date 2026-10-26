@@ -244,8 +244,9 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
 
 def edit_realism(close: bool = True) -> str:
     """For image edits that must keep the frame (the looks on the drop): the skin and fabric part of
-    the brief, without the framing and depth of field."""
-    return REALISM_PERSON + (" " + CLOSE_SKIN if close else "")
+    the brief, without the framing and depth of field. Never CLOSE_SKIN: its pores-and-veins close-up
+    made Klein zoom every look into a face shot (st6). close is kept for callers."""
+    return REALISM_PERSON
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
@@ -387,6 +388,62 @@ _OUTDOOR = re.compile(r"(?i)\b(pool|backyard|yard|garden|patio|rooftop|roof|stre
 _SKY = re.compile(r"(?i)\b(sun|sunlight|daylight|golden hour|moon|moonlight|street ?lights?|sky)\b")
 
 
+# the hour and the year the World line sets (stress test, Oct 25: daylight through the windows of
+# a pub at last orders, st5; modern cars outside a 1977 roller rink, st6)
+_NIGHT_THEME = re.compile(r"(?i)\b(night|nights|midnight|after dark|small hours|last orders|closing time|late-night|"
+                          r"nocturnal|graveyard shift|[1-4] ?a\.?m\.?)\b")
+_DAY_THEME = re.compile(r"(?i)\b(day|daytime|morning|afternoon|midday|noon|sunrise|sunny|sun)\b")
+_DAY_LIGHT = re.compile(r"(?i)\b(sun|sunlight|sunshine|sunlit|daylight|golden hour|morning|afternoon|midday|noon|"
+                        r"overcast|skylights?|light from (?:a |the )?(?:large |big |tall |open |nearby )?windows?)\b")
+_NIGHT_LIGHT = re.compile(r"(?i)\b(night|midnight|moon(?:light|lit)?|street ?lights?|evening|dusk)\b")
+_ERA = re.compile(r"(?i)\b(?:(1[5-9]\d\d|20[0-2]\d)(?:\s*(?:to|-|–)\s*(1[5-9]\d\d|20[0-2]\d))?|(1[5-9]\d0s|20[0-2]0s)|"
+                  r"(medieval|victorian|edwardian|regency|renaissance|roaring twenties|wild west|viking))\b")
+_ERA_NAMES = {"medieval": "medieval times", "viking": "Viking times", "renaissance": "the Renaissance",
+              "victorian": "the Victorian era", "edwardian": "the Edwardian era", "regency": "the Regency era",
+              "roaring twenties": "the 1920s", "wild west": "the Wild West"}
+_NIGHT_SPARE = ["warm light from a lamp in the room", "hard light from a single bare bulb overhead"]
+
+
+def time_of_day(theme: str) -> str:
+    """'night', 'day' or '' (the World line doesn't say)."""
+    t = theme or ""
+    return "night" if _NIGHT_THEME.search(t) else "day" if _DAY_THEME.search(t) else ""
+
+
+def light_fits(light: str, tod: str) -> bool:
+    bad = _DAY_LIGHT if tod == "night" else _NIGHT_LIGHT if tod == "day" else None
+    return not (bad and bad.search(light or ""))
+
+
+def lights_at(lights: list[str], tod: str) -> list[str]:
+    """The world's lights that can be there at the World line's hour."""
+    out = [l for l in lights if light_fits(l, tod)]
+    return out or (_NIGHT_SPARE if tod == "night" else lights)
+
+
+def at_hour(light: str, place: str, tod: str) -> str:
+    """The light line with the hour, so a night interior stays dark outside."""
+    if tod != "night" or not light or _NIGHT_LIGHT.search(light) and _OUTDOOR.search(place or ""):
+        return light
+    return light + (", at night" if _OUTDOOR.search(place or "") else ", at night with darkness outside the windows")
+
+
+def era_line(theme: str) -> str:
+    """'Everything in frame is period-accurate for 1977...' when the World line names a year or an
+    era, else ''."""
+    m = _ERA.search(theme or "")
+    if not m:
+        return ""
+    if m.group(1):
+        era = m.group(1) + (" to " + m.group(2) if m.group(2) else "")
+    elif m.group(3):
+        era = "the " + m.group(3)
+    else:
+        era = _ERA_NAMES[m.group(4).lower()]
+    cars = bool(re.search(r"\b(19|20)\d", era))  # a car brief in a medieval court would bring carts
+    return f"Every {'vehicle, ' if cars else ''}building, fixture and object in frame is period-accurate for {era}, nothing modern."
+
+
 def _lights_for(lights: list[str], place: str) -> list[str]:
     """The world's lights that can be where the place is: sun and streetlights outdoors, the rest
     indoors (v4b put a desk lamp at a swimming pool and studio softboxes in a basement)."""
@@ -404,6 +461,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     fr = c.get("framing") or DEFAULT_FRAMING
     rng, used, out = random.Random(seed), {}, []
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
+    tod, era = time_of_day(th.get("theme", "")), era_line(th.get("theme", ""))
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
     order = []
@@ -436,18 +494,30 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         own = ch.get("light") if chars else None
         if own and re.search(r"(?i)\b(studio|softbox(?:es)?)\b", own) and not re.search(r"(?i)\bstudio\b", place or ""):
             own = None  # Florida v2's piano player in a condo lounge came out in a photo studio
-        light = own or _pick(rng, _lights_for(th["light"], place), used, "light")
+        if own and not light_fits(own, tod):
+            own = None  # window daylight in a pub at last orders (st5)
+        light = own or _pick(rng, _lights_for(lights_at(th["light"], tod), place), used, "light")
+        light = at_hour(light, place, tod)
         short = _short_who(who)
         scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
         # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief);
         # portraits take the face-only ones (_BODY_POSE)
-        poses = th.get("poses") or [ATTITUDE]
-        if not scene:
-            poses = [x for x in poses if not _BODY_POSE.search(x)] or CLOSE_ATTITUDES
-        attitude = _pick(rng, poses, used, "pose" if scene else "pose_close")
+        # the character's own expression and wide-shot action when the bible has them (v6): from a
+        # shared pool, st2c's gas-station attendant spun the DJ's record and bowed like the choir singer
+        face = (ch.get("face") or "") if chars else ""
+        if face and (scene or not _BODY_POSE.search(face)):
+            attitude = face
+        else:
+            poses = th.get("poses") or [ATTITUDE]
+            if not scene:
+                poses = [x for x in poses if not _BODY_POSE.search(x)] or CLOSE_ATTITUDES
+            attitude = _pick(rng, poses, used, "pose" if scene else "pose_close")
         attitude = attitude[:1].lower() + attitude[1:]
+        own_acts = acts
+        if chars and ch.get("doing"):
+            own_acts = {"medium": acts["medium"], "wide": [ch["doing"]]}
         if scene:
-            portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, acts,
+            portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, own_acts,
                                          attitude=attitude)
         else:
             f = THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
@@ -459,6 +529,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             sing = THEME_CLOSE_SING.format(who=short, move=move)
         twin = {"who": who, "detail": "", "wear": "Wearing " + wear + ".", "light": light,
                 "background": _place_noun(place)}
+        if era:
+            portrait = portrait.rstrip() + " " + era
         out.append({"id": i, "portrait": " ".join(portrait.split()), "sing": " ".join(sing.split()),
                     "who": short, "twin": twin, "size": size, "seed": seed * 1000 + i * 7 + 1})
     return sorted(out, key=lambda x: x["id"])

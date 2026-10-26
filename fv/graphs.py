@@ -315,10 +315,13 @@ TWIN_IDENTITY = ("This is the same person as in image 2: keep their exact face, 
                  "tone, hair colour and age. Only the hairstyle, outfit and place change.")
 
 
-TWIN_TEXT = ("Change the person into {who}. {detail} {wear} Light: {light}. Background: {background}. "
-             "Keep the exact same camera angle, framing, head position, head tilt, mouth shape and facial "
-             "expression, and the same tight crop: the face stays exactly the same size and in the same place in "
-             "the frame. A completely different person.")  # + casting.edit_realism() (the realism brief)
+TWIN_TEXT = ("Change only the person into {who}. {detail} {wear} Light: {light}. Background: {background}. "
+             "Keep the camera exactly as in the image: the same distance, lens, angle and framing, the same space "
+             "above the head, the same amount of shoulders and body in frame, the face the same size and in the "
+             "same place. Keep the head position, head tilt and the open, mid-word mouth exactly as in the image. "
+             "A completely different person.")  # + casting.edit_realism() (the realism brief)
+# "the same tight crop" and the close-up skin brief made Klein redraw every look as a tight,
+# mouth-shut face shot (stress test st6: 24 of 24 looks tighter than their lead's frame)
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,

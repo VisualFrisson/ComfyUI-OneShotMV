@@ -168,9 +168,12 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
         from .casting import _no_feet
         ch = rng.choice(th["characters"])
         place = ch.get("place") or rng.choice(th["places"])
-        from .casting import _lights_for
-        light = ch.get("light") or rng.choice(_lights_for(th["light"], place))  # the light of the place
-        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1], "light": light}
+        from .casting import _lights_for, at_hour, light_fits, lights_at, time_of_day
+        tod = time_of_day(th.get("theme", ""))
+        own = ch.get("light") if light_fits(ch.get("light") or "", tod) else None
+        light = own or rng.choice(_lights_for(lights_at(th["light"], tod), place))  # the light of the place
+        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1],
+                "light": at_hour(light, place, tod)}
     if th.get("who"):
         return {"who": rng.choice(th["who"]), "wear": rng.choice(th["wear"]),
                 "place": rng.choice(th["places"]).split(" ", 1)[-1], "light": rng.choice(th["light"])}
@@ -230,6 +233,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
+    from .casting import era_line
+    era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink (st6)
     drums = os.path.join(run_dir, "drums.wav")
     rel = p.get("run_rel", "")
     preset, fmt = p["preset"], p["format"]
@@ -253,7 +258,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d = _dancer(p, pack, k)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             d["action"] = _action_for(p, pack, d, seed=p.get("seed", 1) * 100 + k, log=log)
-            img = " ".join(MOMENT_STILL.format(**d).split())
+            img = " ".join((MOMENT_STILL.format(**d) + " " + era).split())
             img_still = finish_prompt(img, "medium", camera=camera)
             motion = " ".join(MOMENT_MOTION.format(who=d["who"], action=d["action"]).split()) + " " + \
                 f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars."
@@ -271,7 +276,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d = _dancer(p, pack, k)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
-            img = " ".join(DANCE_STILL.format(**d).split())
+            img = " ".join((DANCE_STILL.format(**d) + " " + era).split())
             img_still = finish_prompt(img, "medium", camera=camera)
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
                 f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars, natural colour, " \
