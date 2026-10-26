@@ -915,7 +915,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         pass
             if takes:
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
-                best = max(enumerate(takes), key=lambda it: (round(it[1].get("score", 0.0), 2), it[0]))[1]
+                # a take with a visual fault (frozen, headless, barred...) loses to one that only
+                # sings off the beat: sx09w kept a frozen take over two with weak lip sync
+                fatal = {"missing", "frozen", "exposure", "bars", "headcut", "noface", "sideways", "people", "cut"}
+                best = max(enumerate(takes), key=lambda it: (not (set(it[1].get("fail") or []) & fatal),
+                                                             round(it[1].get("score", 0.0), 2), it[0]))[1]
                 r["path"] = best["path"]
                 if r["role"] == "B" and r.get("group") is None:  # the keyframe of the take that is kept
                     r["key"] = _take_inputs(run_dir, best["path"])[1] or r.get("key")
