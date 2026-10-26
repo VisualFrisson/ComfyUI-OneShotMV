@@ -222,7 +222,8 @@ def _characters(v) -> list[dict]:
         wear = low.get("wear") or low.get("outfit") or low.get("clothes") or ""
         place = low.get("place") or low.get("where") or low.get("location") or ""
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
-        light = (_real_light([light]) or [""])[0] if light and not _CROWD.search(light) else ""
+        # "neon sign, red" (sx01) draws garbled lettering: the sign scrub, as on the world's lists
+        light = (_real_light([_debrand(light)]) or [""])[0] if light and not _CROWD.search(light) else ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
         who = _no_props(_NO_OTHERS.sub("", who).strip(" ,"))
         if _TWO.search(who):
