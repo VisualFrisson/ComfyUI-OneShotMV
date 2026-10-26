@@ -258,6 +258,33 @@ def _characters(v) -> list[dict]:
     return out
 
 
+def _ing(s: str) -> str:
+    """'twirls her lasso' -> 'twirling her lasso' (Gemma 3 wrote the Pink Pony actions this way)."""
+    m = re.match(r"([A-Za-z]+)(\b.*)$", s)
+    if not m or m.group(1).lower().endswith("ing") or not m.group(1).lower().endswith("s"):
+        return s
+    w, rest = m.group(1).lower(), m.group(2)
+    if w in ("ties", "lies", "dies"):
+        return w[0] + "ying" + rest
+    if w.endswith("ies"):
+        base = w[:-3] + "y"
+    elif re.search(r"(sh|ch|x|ss|z)es$", w):
+        base = w[:-2]
+    elif w.endswith("ss"):
+        return s  # not a verb in the third person
+    else:
+        base = w[:-1]
+    if base.endswith("ie"):
+        word = base[:-2] + "ying"
+    elif base.endswith("e") and not re.search(r"(ee|ye|oe)$", base):
+        word = base[:-1] + "ing"
+    elif re.search(r"[^aeiou][aeiou][bcdfghjklmnpqrstvz]$", base) and len(re.findall(r"[aeiou]+", base)) == 1:
+        word = base + base[-1] + "ing"  # spin -> spinning
+    else:
+        word = base + "ing"
+    return word + rest
+
+
 # a portrait has to see the mouth (the choir singer's 'head bowed in prayer')
 _HEAD_DOWN = re.compile(r"(?i)\b(bow(?:s|ed|ing)?|eyes (?:closed|shut)|looking down|downcast|hidden|covering)\b")
 
@@ -268,7 +295,9 @@ def _own(s: str, ing: bool = False) -> str:
     for a shared list (Pink Pony Club: 'The cowgirl twirls her lasso', 'The radio DJ spins a
     record'); shuffled into a pool, st2c's gas-station attendant spun the DJ's record."""
     s = " ".join(str(s or "").split()).strip(" ,.")
-    s = re.sub(r"(?i)^(?:is|are|while|she is|he is)\s+", "", s)
+    s = re.sub(r"(?i)^(?:is|are|while|she is|he is|they are|she|he|they)\s+", "", s)
+    if ing:
+        s = _ing(s)
     s = _no_props(_debrand(s))
     s = _NO_OTHERS.sub("", ", " + s).strip(" ,")
     if len(s) < 6 or _CROWD.search(s) or _TWO.search(s) or _copied(s) or re.match(r"(?i)^the\s", s):
