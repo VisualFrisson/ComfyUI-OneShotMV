@@ -18,6 +18,10 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
              dancer into two); faces of at least 40% the main face's size in half the sampled frames
   noface   - voice renders: no face in most sampled frames (the head walked out of the top of a
              wide shot: n39's r040A; SCRFD via fv/identity.py)
+  sideways - the head lies on its side (eye line over 50 degrees off level: st9's skipping-rope
+             regular, drawn sideways in the portrait itself)
+  people   - also on voice leads: a second face at least 0.6 the main one's size in half the
+             sampled frames (st9's woman boxer drawn twice)
   headcut  - medium and wide shots: the face box starts above the frame (the top of the head cut
              off, n41's walking shot)
   tooclose - a shot whose face fills too much of the frame (the n30c note, "all mouth"): close
@@ -52,7 +56,7 @@ THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mout
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
           "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.45,
-          "id_face_h": 0.25}
+          "id_face_h": 0.25, "tilt": 50.0}
 VERSION = 4  # takes checked by an older QC are checked again
 
 
@@ -291,6 +295,10 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
                     r["fail"].append("noface")
                 elif framing in ("medium", "wide") and rep.get("head_top", 1.0) < 0.0:
                     r["fail"].append("headcut")  # the top of the head out of frame (n41's walking shot)
+                if rep.get("tilt", 0.0) > THRESH["tilt"]:
+                    r["fail"].append("sideways")
+                if voice and framing in ("close", "medium", "wide") and rep.get("second_face", 0.0) >= 0.5:
+                    r["fail"].append("people")  # a lead with a second, same-sized face (st9's twin boxers)
                 lim = THRESH["tooclose"].get(framing or "")
                 if lim and rep.get("face_h", 0.0) > lim:
                     r["fail"].append("tooclose")

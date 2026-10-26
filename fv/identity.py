@@ -196,11 +196,12 @@ def clip_report(frames_bgr: list, ref=None, n: int = 5) -> dict:
     """Face framing and identity over n evenly spaced frames of a clip (full-size BGR frames):
     face_frac (frames with a face), face_h (median face-box height / frame height), head_top
     (median face-box top / frame height; under 0 = the head runs off the top), id_sim (median
-    similarity to `ref`)."""
+    similarity to `ref`), tilt (median degrees the eye line is off level: a sideways head is ~90),
+    second_face (share of frames with a second face at least 0.6 the main one's height)."""
     if not frames_bgr:
         return {}
     idx = np.linspace(0, len(frames_bgr) - 1, n).round().astype(int)
-    hs, tops, sims, found = [], [], [], 0
+    hs, tops, sims, found, tilts, twos = [], [], [], 0, [], 0
     for i in idx:
         f = frames_bgr[i]
         H = f.shape[0]
@@ -211,11 +212,25 @@ def clip_report(frames_bgr: list, ref=None, n: int = 5) -> dict:
         x1, y1, x2, y2 = fs[0]["box"]
         hs.append((y2 - y1) / H)
         tops.append(y1 / H)
+        # stress test st9: a portrait drawn lying sideways, and one with the same woman twice
+        k = fs[0].get("kps")
+        if k is not None:
+            dx, dy = float(k[1][0] - k[0][0]), float(k[1][1] - k[0][1])
+            tilts.append(abs(np.degrees(np.arctan2(dy, dx))))
+        if len(fs) > 1:
+            h2 = fs[1]["box"][3] - fs[1]["box"][1]
+            if h2 >= 0.6 * (y2 - y1):
+                twos += 1
         if ref is not None:
             e = embed_face(f, fs[0])
             if e is not None:
                 sims.append(float(np.dot(e, ref)))
     out = {"face_frac": round(found / len(idx), 2)}
+    if found:
+        out["second_face"] = round(twos / found, 2)
+    if tilts:
+        t = float(np.median(tilts))
+        out["tilt"] = round(min(t, 180.0 - t), 1)  # eye line off level, either way round
     if hs:
         out["face_h"] = round(float(np.median(hs)), 3)
         out["head_top"] = round(float(np.median(tops)), 3)

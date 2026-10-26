@@ -842,7 +842,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 g2, nk = remake(f"k{r['id']:03d}", g)
                 if g2 is not None:
                     g, needs_key, r["key"] = g2, True, nk
-            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity", "headcut"}:
+            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity", "headcut", "sideways", "people"}:
                 # a framing / identity fault that is already in the portrait (the head out of
                 # frame in the still itself) needs a new portrait, not just a new seed for LTX
                 pname = f"p{r['performer']:03d}"
@@ -853,6 +853,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     rep = identity.image_report(old_p, ref) if identity.available() else {}
                     lim = qc.THRESH["tooclose"].get(r.get("size", ""))
                     bad = (rep.get("face_frac", 1.0) < 1.0 or (lim is not None and rep.get("face_h", 0.0) > lim)
+                           or rep.get("tilt", 0.0) > qc.THRESH["tilt"] or rep.get("second_face", 0.0) >= 0.5
                            or (r.get("size") in ("medium", "wide") and rep.get("head_top", 1.0) < 0.0)
                            or (ref is not None and rep.get("face_h", 0.0) >= qc.THRESH["id_face_h"]
                                and rep.get("id_sim", 1.0) < qc.THRESH["id_min_key"]))
