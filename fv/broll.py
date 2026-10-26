@@ -172,7 +172,9 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
         from .casting import _lights_for, at_hour, light_fits, lights_at, time_of_day
         tod = time_of_day(th.get("theme", ""))
         own = ch.get("light") if light_fits(ch.get("light") or "", tod) else None
-        light = own or rng.choice(_lights_for(lights_at(th["light"], tod), place))  # the light of the place
+        if own and not _lights_for([own], place, tod) == [own]:
+            own = None  # an indoor lamp at an outdoor place (sx01w)
+        light = own or rng.choice(_lights_for(lights_at(th["light"], tod), place, tod))  # the light of the place
         return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1],
                 "light": at_hour(light, place, tod)}
     if th.get("who"):

@@ -198,7 +198,14 @@ def _no_others(v: list, roles: set) -> list:
 
 def _plain(wear: str) -> str:
     """A 'graphic tee' or 'band tee' comes out with garbled print on it."""
+    # quoted words on clothes are drawn as garbled lettering (sx01w: "satin sash with 'Miss County
+    # Fair' embroidered")
+    wear = re.sub(r"\s*(?:with|reading|saying|that says|bearing)?\s*(?<![\w])[\"'\u2018\u201c][A-Z][^\"'\u2019\u201d]{1,40}"
+                  r"[\"'\u2019\u201d](?:\s*(?:embroidered|printed|written|stitched|on it|on the front|across it))?", "", wear)
     wear = re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
+    if "lettering" not in wear.lower():
+        wear = re.sub(r"(?i)\b((?:satin |pageant |silk )?sash|bowling shirt|jersey|varsity jacket|letterman jacket)\b",
+                      r"plain \1 with no lettering", wear, count=1)
     # caps come out with a real team or brand logo on the front (v4c: a league logo on a cap)
     if "no logo" not in wear.lower():
         wear = re.sub(r"(?i)\b(baseball caps?|trucker hats?|snapbacks?|ball caps?)\b", r"\1 with no logo", wear, count=1)

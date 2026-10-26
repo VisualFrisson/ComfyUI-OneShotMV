@@ -387,7 +387,14 @@ def _no_feet(wear: str) -> str:
 
 
 _OUTDOOR = re.compile(r"(?i)\b(pool|backyard|yard|garden|patio|rooftop|roof|street|beach|park|parking lot|"
-                      r"field|lawn|porch|driveway|boardwalk|pier|outside|outdoors?|exterior)\b")
+                      r"field|lawn|porch|driveway|boardwalk|pier|outside|outdoors?|exterior|"
+                      # sx01w's county fair: the midway, the grandstand and the rodeo arena counted as rooms
+                      r"midway|fairground|grandstand|arena|rodeo|racetrack|track|stadium|bleachers|wharf|dock|"
+                      r"harbou?r|deck|terrace|courtyard|alley|tarmac|runway|square|plaza|campsite|shore|meadow|"
+                      r"paddock|barnyard|riverbank|bridge|balcony|fire escape|sidewalk|road|lot|pit|sand)\b")
+# lights that only exist indoors: sx01w put a table lamp beside the rodeo arena and on the midway
+_INDOOR_LIGHT = re.compile(r"(?i)\b(table lamps?|desk lamps?|floor lamps?|lamps? in the room|lampshades?|chandeliers?|"
+                           r"windows?|ceiling|overhead|fluorescent tubes?|pendant lamps?|sconces?|fireplace)\b")
 _SKY = re.compile(r"(?i)\b(sun|sunlight|daylight|golden hour|moon|moonlight|street ?lights?|sky)\b")
 
 
@@ -449,10 +456,15 @@ def era_line(theme: str) -> str:
             f"period-accurate for {era}, nothing modern.")
 
 
-def _lights_for(lights: list[str], place: str) -> list[str]:
-    """The world's lights that can be where the place is: sun and streetlights outdoors, the rest
-    indoors (v4b put a desk lamp at a swimming pool and studio softboxes in a basement)."""
-    out = [l for l in lights if bool(_SKY.search(l)) == bool(_OUTDOOR.search(place or ""))]
+def _lights_for(lights: list[str], place: str, tod: str = "") -> list[str]:
+    """The world's lights that can be where the place is: no sun or streetlights indoors, no
+    lamps, chandeliers or window light outdoors (v4b put a desk lamp at a swimming pool and studio
+    softboxes in a basement; sx01w a table lamp at the rodeo arena); string bulbs, spotlights,
+    neon and torches fit both."""
+    outdoor = bool(_OUTDOOR.search(place or ""))
+    out = [l for l in lights if not (_INDOOR_LIGHT.search(l) if outdoor else _SKY.search(l))]
+    if outdoor and not out:
+        out = ["warm floodlights and string lights"] if tod == "night" else ["bright natural daylight"]
     out = [l for l in out if not re.search(r"(?i)\bstudio\b", l) or re.search(r"(?i)\bstudio\b", place or "")]
     return out or lights
 
@@ -501,7 +513,9 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             own = None  # Florida v2's piano player in a condo lounge came out in a photo studio
         if own and not light_fits(own, tod):
             own = None  # window daylight in a pub at last orders (st5)
-        light = own or _pick(rng, _lights_for(lights_at(th["light"], tod), place), used, "light")
+        if own and _OUTDOOR.search(place or "") and _INDOOR_LIGHT.search(own):
+            own = None  # a table lamp on the midway (sx01w)
+        light = own or _pick(rng, _lights_for(lights_at(th["light"], tod), place, tod), used, "light")
         light = at_hour(light, place, tod)
         short = _short_who(who)
         scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
