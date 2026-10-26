@@ -275,7 +275,9 @@ def frame_bars(a) -> tuple[float, float]:
             k += 1
         return k / max(1, len(m))
     l, r, t, b = run(cm, cs), run(cm[::-1], cs[::-1]), run(rm, rs), run(rm[::-1], rs[::-1])
-    return max(min(l, r), min(t, b)), max(l, r, t, b)
+    # a strip on one side only counts left or right (a barred still panning across); a black
+    # night sky at the top or a dark floor is no bar (st6's parking lot)
+    return max(min(l, r), min(t, b)), max(l, r)
 
 
 def clip_bars(g) -> tuple[float, float]:
