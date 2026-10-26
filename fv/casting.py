@@ -188,8 +188,10 @@ SCENE_MOVES = {
     "wide": ["The camera follows from a few meters away.", "The camera pushes in slowly from far away.",
              "The camera arcs slowly around them.", "The camera holds still on a tripod."],
 }
-SCENE_SHOT = {"medium": ("Cinematic medium shot", "on a 35mm lens at chest height"),
-              "wide": ("Cinematic wide full-body shot", "on a 24mm lens a few meters away")}
+# no "Cinematic": it brings letterbox and pillarbox bars (n39's cutaways; sx03's wide debutante came
+# out as a vertical picture inside black bars)
+SCENE_SHOT = {"medium": ("Medium shot", "on a 35mm lens at chest height, filling the whole frame edge to edge"),
+              "wide": ("Wide full-body shot", "on a 24mm lens a few meters away, filling the whole frame edge to edge")}
 # The user's realism brief (Oct 24, 12:40: "the look feels really AI"): every image prompt ends with
 # REALISM, close-up portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only
 # say no text; finish_prompt adds the photograph wording last.

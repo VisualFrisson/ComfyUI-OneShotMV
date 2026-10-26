@@ -22,6 +22,8 @@ Checks per clip (numpy + OpenCV only, a few seconds per clip):
              regular, drawn sideways in the portrait itself)
   people   - also on voice leads: a second face at least 0.6 the main one's size in half the
              sampled frames (st9's woman boxer drawn twice)
+  bars     - near-black pillar or letter box bars on both sides (sx03's wide debutante: Krea drew a
+             vertical picture inside the 16:9 frame); the portrait is re-made
   headcut  - medium and wide shots: the face box starts above the frame (the top of the head cut
              off, n41's walking shot)
   tooclose - a shot whose face fills too much of the frame (the n30c note, "all mouth"): close
@@ -56,8 +58,8 @@ THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mout
           "mouth_dark_std": 0.01, "cut_abs": 0.18, "cut_rel": 5.0, "drift": 0.55,
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
           "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.45,
-          "id_face_h": 0.25, "tilt": 50.0}
-VERSION = 4  # takes checked by an older QC are checked again
+          "id_face_h": 0.25, "tilt": 50.0, "bars": 0.06}
+VERSION = 5  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -240,6 +242,32 @@ def extra_people(frames, n: int = 6) -> float:
     return hits / max(1, k)
 
 
+def black_bars(gray) -> float:
+    """How much of the frame near-black bars take on BOTH sides (pillar box: columns; letter box:
+    rows), as a share of the width or height. gray: (H, W) or (N, H, W), 0..1. Real bars are flat
+    black (sx03's p000: 0.001); a dark night scene's edges stay above the 0.012 line."""
+    a = np.asarray(gray, dtype=np.float32)
+    a = a.mean(0) if a.ndim == 3 else a
+
+    def side(v):
+        n, k, m = len(v), 0, 0
+        while k < n // 2 and v[k] < 0.012:
+            k += 1
+        while m < n // 2 and v[n - 1 - m] < 0.012:
+            m += 1
+        return min(k, m) / max(1, n)
+    return float(max(side(a.mean(0)), side(a.mean(1))))
+
+
+def image_bars(path: str) -> float:
+    """black_bars of an image file (a portrait or keyframe); 0.0 if it can't be read."""
+    try:
+        from PIL import Image
+        return black_bars(np.asarray(Image.open(path).convert("L"), dtype=np.float32) / 255)
+    except Exception:
+        return 0.0
+
+
 def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, vocal=None, sr: int = 44100,
                seek: float = 0.0, sync: bool = False, people: bool = False, framing: str | None = None,
                ref=None, key_path: str | None = None) -> dict:
@@ -268,6 +296,10 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["exposure_bad"] = round(bad, 3)
     if bad > THRESH["exposure_frac"]:
         r["fail"].append("exposure")
+    bb = black_bars(g)
+    r["bars"] = round(bb, 3)
+    if bb >= THRESH["bars"]:
+        r["fail"].append("bars")
     jmax, jmed, jat = cut_jump(frames)
     r["jump"], r["jump_at"] = round(jmax, 3), jat
     if jmax > THRESH["cut_abs"] and jmax > THRESH["cut_rel"] * max(jmed, 1e-3):
