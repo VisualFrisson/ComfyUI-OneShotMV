@@ -397,10 +397,11 @@ _DAY_LIGHT = re.compile(r"(?i)\b(sun|sunlight|sunshine|sunlit|daylight|golden ho
                         r"overcast|skylights?|light from (?:a |the )?(?:large |big |tall |open |nearby )?windows?)\b")
 _NIGHT_LIGHT = re.compile(r"(?i)\b(night|midnight|moon(?:light|lit)?|street ?lights?|evening|dusk)\b")
 _ERA = re.compile(r"(?i)\b(?:(1[5-9]\d\d|20[0-2]\d)(?:\s*(?:to|-|–)\s*(1[5-9]\d\d|20[0-2]\d))?|(1[5-9]\d0s|20[0-2]0s)|"
-                  r"(medieval|victorian|edwardian|regency|renaissance|roaring twenties|wild west|viking))\b")
+                  r"(medieval|victorian|edwardian|regency|renaissance|roaring twenties|wild west|viking|ancient rome|ancient greece|ancient egypt))\b")
 _ERA_NAMES = {"medieval": "medieval times", "viking": "Viking times", "renaissance": "the Renaissance",
               "victorian": "the Victorian era", "edwardian": "the Edwardian era", "regency": "the Regency era",
-              "roaring twenties": "the 1920s", "wild west": "the Wild West"}
+              "roaring twenties": "the 1920s", "wild west": "the Wild West", "ancient rome": "ancient Rome",
+              "ancient greece": "ancient Greece", "ancient egypt": "ancient Egypt"}
 _NIGHT_SPARE = ["warm light from a lamp in the room", "hard light from a single bare bulb overhead"]
 
 
