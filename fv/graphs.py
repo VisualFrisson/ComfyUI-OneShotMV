@@ -399,3 +399,10 @@ def qc(*, run_dir, pass_index=0, max_passes=1, then_assemble=True, stage="all", 
     if keep:
         keep_ltx(g, keep)
     return g
+
+
+def critic(*, run_dir, pass_index=0, max_passes=2):
+    """The vision check of a run's stills (director.critic_pass)."""
+    g = Graph()
+    g.add("FVCritic", run_dir=run_dir, pass_index=pass_index, max_passes=max_passes)
+    return g

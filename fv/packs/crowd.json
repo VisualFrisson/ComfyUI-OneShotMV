@@ -122,13 +122,13 @@
   }
  },
  "edit": {
-  "_note": "grammar 'hold': holds of shot_bars_quiet bars in quiet stretches (1: the n37 note, 'the longest shots should be half the length'), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
+  "_note": "grammar 'hold' with cuts 'energy' (the user's rule, Oct 26): the song in three energies by its sections: low (intro, breaks, a quiet outro) a cut every shot_bars_quiet bars, medium (verses, the build_bars bars before a drop) every shot_bars_build bar, high (choruses, drops) a cut every drop_cut_seconds rounded to whole beats; every shot a new character (cast 'unique': its own portrait and its own singing clip, no looks edited from another shot), drop faces matched to one spot. Without 'cuts': the older hold grammar (drop groups of drop_looks pose-matched looks).",
   "grammar": "hold",
-  "shot_bars_quiet": 1,
+  "shot_bars_quiet": 2,
   "shot_bars_build": 1,
   "build_bars": 4,
   "drop_group_bars": 1,
-  "drop_looks": 4,
+  "drop_looks": 1,
   "drop_cut_beats": 1,
   "twin_preroll": 0.4,
   "twin_tolerance": 1.0,
@@ -146,7 +146,16 @@
   "pingpong": 0.35,
   "insert_on_beat": 0.75,
   "insert_off_beat": 0.35,
-  "insert_twin_share": 0.7
+  "insert_twin_share": 0.7,
+  "cuts": "energy",
+  "cast": "unique",
+  "drop_cut_seconds": 0.75,
+  "medium_labels": [
+   "verse",
+   "build"
+  ],
+  "match_max_scale": 1.25,
+  "match_max_shift": 0.12
  },
  "fx": {
   "intensity": 1.0,

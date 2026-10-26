@@ -35,9 +35,21 @@ GRADES = {
                    "lift": 0.06},
 }
 
-COUNTS = {"who": 14, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses": 10}
+COUNTS = {"who": 12, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses": 10}
 OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
-N_CHARACTERS = 14
+# v7 (the user, Oct 26: "girls with beards, guys wearing girls clothes", modern glasses in ancient
+# Rome): a bigger cast, every shot its own character. The first call writes the world and 12
+# characters; extend() asks for more in batches until every shot has someone new.
+N_CHARACTERS = 12
+EXTRA_BATCH = 12
+
+# One character, the keys the model fills (shared by the world call and the extra-cast calls). The
+# v6 bibles had one "who" field and Gemma wrote just the role ("a Hotel Valet"): no gender, age or
+# face, so the image model drew its default man again and again (sx02w: the radio announcer, the
+# businessman and the bellhop were one face) and a "musician" could come out either way.
+CHARACTER_KEYS = """each an object with ten keys. "role": the job, role or type, at most 5 words, no names: every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world (never a generic "customer", "passenger", "resident" or "friend"). "gender": "woman" or "man"; about half the characters are women and half men, mixed through the list, except that a role only one gender held in this world's place and time keeps that gender. "age": a number from 18 to 80 that fits the role and the theme. "look": this person's own face and body, unlike anyone else's in the list: skin tone, hair colour and a hairdo of the period, a beard or moustache for some of the men only, build and one distinctive feature; at most 20 words. "wear": exactly what this person wears for their role in this world, every piece right for its place and period, specific in fabric, colour and cut, cut for their gender; plain, with no writing, badges with words or logos; no glasses, sunglasses or goggles unless the role truly needs them and they existed then; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words."""
+STRICT = ("Strict accuracy: every outfit, hairdo, prop and place is exactly right for this world and its "
+          "period, as a costume historian would check it, and nothing comes from a later time.")
 
 # Characters come whole (who + outfit + place), so a role reads at a glance and an outfit always
 # fits the person wearing it. The sample runs of Oct 24 picked who and wear separately: men in lace
@@ -46,13 +58,17 @@ N_CHARACTERS = 14
 # silver-beehive woman and the same two poses in all three sample casts).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
-"characters": a list of {characters} different characters, each an object with six keys. "who": the role or type first when the theme has them (every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world: never a generic "customer", "passenger", "resident" or "friend"), then age, gender, skin tone, hairdo and one distinctive detail; at most 24 words; all adults, 18 or older; no names. "wear": the outfit that makes this character's role or style obvious, specific in fabric, colour and cut, cut for this character's gender, plain with no text, badges with words or logos; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words. When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, genders, skin tones, builds, hairdos and accessories; not everyone wears glasses, hats or the same jewellery, and no two outfits are alike.
+"characters": a list of {characters} different characters, all adults, {character_keys} When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, skin tones, builds, faces and hairdos; no two people look alike and no two outfits are alike. {strict}
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
 "camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
 "actions": a list of {actions} things anyone in this world could do in its places while singing, seen in a wide shot, each starting with a verb ending in -ing, never tied to one role, never naming a role or another person, and never generic like "working on a task". They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
+
+EXTRA_PROMPT = """You design the look of a music video. Theme: "{theme}"
+These characters are already cast: {cast}.
+Invent {n} more characters for this world, every one a different person from everyone already cast: other roles that belong in this world (a role already cast only comes back as a clearly different person, another gender or age), about half women and half men. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing. {strict} Answer with one JSON object only, no other text: {{"characters": [...]}}, a list of {n} characters, all adults, {character_keys}"""
 
 # phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
 COPIED = {"a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain",
@@ -216,8 +232,52 @@ def _copied(x: str) -> bool:
     return any(c in x.lower() for c in COPIED)
 
 
-def _characters(v) -> list[dict]:
-    """[{who, wear, place}] from the model's 'characters', tolerating strings and odd keys."""
+# glasses in the bible drew glasses on every other face (sx02w, sx05w's gladiators): eyewear only
+# when the World line itself asks for it
+EYEWEAR = re.compile(r"(?i)\b(glasses|eyeglasses|spectacles|sunglasses|shades|sunnies|goggles|monocles?|pince-nez|"
+                     r"lorgnettes?|eyewear|cat-eye|horn-rimmed|wire-rimmed|aviators|bifocals|frames)\b")
+FACIAL_HAIR = re.compile(r"(?i)\b(beards?|bearded|moustaches?|mustaches?|stubble|goatees?|sideburns|whiskers|"
+                         r"facial hair|five o'clock shadow|mutton ?chops)\b")
+_WOMAN_ROLE = re.compile(r"(?i)\b(woman|women|lady|ladies|girl|waitress|actress|hostess|stewardess|seamstress|"
+                         r"priestess|empress|queen|princess|duchess|countess|baroness|nun|maid|matron|mother|wife|"
+                         r"widow|bride|cowgirl|showgirl|ballerina|songstress|heiress|governess|she|her)\b")
+_MAN_ROLE = re.compile(r"(?i)\b(man|men|gentleman|guy|waiter|actor|host|steward|priest|emperor|king|prince|duke|"
+                       r"count|baron|monk|father|husband|widower|groom|cowboy|showman|he|his|him)\b")
+
+
+def _drop_clauses(s: str, pat: re.Pattern) -> str:
+    """s without the comma / 'and' / 'with' clauses that match pat."""
+    if not pat.search(s or ""):
+        return s
+    parts = [p for p in re.split(r",\s*|;\s*|\s+and\s+(?=[a-z])|\s+with\s+(?=[a-z])", s) if p.strip() and not pat.search(p)]
+    return ", ".join(parts).strip(" ,")
+
+
+def _gender_of(val: str, role: str, look: str, wear: str) -> str:
+    g = (val or "").strip().lower()
+    if g in ("woman", "female", "f", "women", "girl", "lady"):
+        return "woman"
+    if g in ("man", "male", "m", "men", "boy", "gentleman"):
+        return "man"
+    for s in (role, look, wear):
+        w, m = bool(_WOMAN_ROLE.search(s or "")), bool(_MAN_ROLE.search(s or ""))
+        if w != m:
+            return "woman" if w else "man"
+    return ""
+
+
+def _who_line(role: str, gender: str, age: str, look: str) -> str:
+    """'a gladiator, a man aged 34, deep olive skin, short black curls and a broken nose': the role
+    first so it reads at a glance, then who this person is."""
+    role = _role(role.strip(" ,.-"))
+    role = re.sub(r"(?i)^(?:an?|the)\s+", "", role)
+    person = f"a {gender or 'person'}" + (f" aged {age}" if age else "")
+    return f"{_article(role)} {role}, {person}" + (f", {look}" if look else "")
+
+
+def _characters(v, allow_eyewear: bool = False) -> list[dict]:
+    """[{who, wear, place, ...}] from the model's 'characters', tolerating strings and odd keys.
+    v7 characters also carry role, gender, age and look (who is built from them)."""
     if not isinstance(v, list):
         return []
     out = []
@@ -227,6 +287,24 @@ def _characters(v) -> list[dict]:
         low = {str(k).strip().lower(): str(val) for k, val in x.items()}
         who = low.get("who") or low.get("character") or low.get("person") or ""
         wear = low.get("wear") or low.get("outfit") or low.get("clothes") or ""
+        extra = {}
+        role = " ".join((low.get("role") or "").split())
+        if role:
+            role = _adults(_debrand(_NAME.sub("", role)))
+            look = _adults(_debrand(" ".join((low.get("look") or low.get("appearance") or "").split()).strip(" ,.")))
+            look = _no_props(_drop_clauses(look, EYEWEAR))  # a face never comes with glasses unasked
+            gender = _gender_of(low.get("gender", ""), role, look, wear)
+            if gender == "woman":
+                look = _drop_clauses(look, FACIAL_HAIR)
+            m = re.search(r"\d{2}", low.get("age", ""))
+            age = str(min(80, max(21, int(m.group(0))))) if m else ""  # 21: a margin above the adults rule
+            who = _who_line(role, gender, age, look)
+            extra = {"role": _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role)), "gender": gender, "age": age,
+                     "look": look}
+        if wear and not allow_eyewear:
+            wear = _drop_clauses(wear, EYEWEAR)
+        if extra:
+            extra["eyewear"] = bool(EYEWEAR.search(wear or ""))
         place = low.get("place") or low.get("where") or low.get("location") or ""
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
         # "neon sign, red" (sx01) draws garbled lettering: the sign scrub, as on the world's lists
@@ -253,7 +331,7 @@ def _characters(v) -> list[dict]:
         face = _own(low.get("face") or low.get("expression") or low.get("pose") or "")
         face = "" if _HEAD_DOWN.search(face) else face
         out.append({"who": who, "wear": wear, "place": place, **({"light": light} if light else {}),
-                    **({"doing": doing} if doing else {}), **({"face": face} if face else {})})
+                    **({"doing": doing} if doing else {}), **({"face": face} if face else {}), **extra})
     # a character's own action never names another one ("spinning the DJ's record")
     roles = _role_words(out)
     for c in out:
@@ -320,7 +398,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v6".encode("utf-8")).hexdigest()[:16]  # v6: each character's own action + face
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v7".encode("utf-8")).hexdigest()[:16]  # v7: role, gender, age, look; bigger cast
 
 
 # ------------------------------------------------------------------ the language model
@@ -584,7 +662,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                 if isinstance(cached.get("places"), list):
                     cached["places"] = _alone(cached["places"])
                 if isinstance(cached.get("characters"), list):
-                    cached["characters"] = _characters(cached["characters"])
+                    cached["characters"] = _characters(cached["characters"], allow_eyewear=eyewear_ok(theme))
                     for c in cached["characters"]:
                         c["who"] = _people([c["who"]])[0]
                         c["place"] = _places([c["place"]])[0] if c["place"] else ""
@@ -592,7 +670,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             except Exception:
                 pass
     prompt = PROMPT.format(theme=theme.replace('"', "'"), grades=", ".join(GRADES), characters=N_CHARACTERS,
-                           **COUNTS)
+                           character_keys=CHARACTER_KEYS, strict=STRICT, **COUNTS)
     bible = None
     for attempt in range(2):
         text = llm(prompt, seed=seed + attempt, max_length=3200, log=log)  # whole characters run long
@@ -606,12 +684,12 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         for k in ("actions", "places", "poses"):
             lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
         lists["wear"] = [_plain(x) for x in lists["wear"]]
-        roles = _role_words(_characters(d.get("characters")))
+        roles = _role_words(_characters(d.get("characters"), allow_eyewear=eyewear_ok(theme)))
         for k in ("actions", "poses"):
             lists[k] = _no_others(lists[k], roles)
         lists["light"] = _alone(lists["light"], _LIGHT_SPARE, n_min=4)
         lists["places"] = _alone(lists["places"])
-        chars = _characters(d.get("characters"))
+        chars = _characters(d.get("characters"), allow_eyewear=eyewear_ok(theme))
         if len(chars) >= 6:  # who and wear come from the whole characters
             lists["who"] = [c["who"] for c in chars]
             lists["wear"] = [c["wear"] for c in chars]
@@ -635,6 +713,86 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(bible, f, indent=1, ensure_ascii=False)
+    return bible
+
+
+def eyewear_ok(theme: str) -> bool:
+    """Glasses only when the World line itself puts them in the world."""
+    return bool(EYEWEAR.search(theme or ""))
+
+
+def _cast_line(chars: list[dict]) -> str:
+    out = []
+    for c in chars:
+        if c.get("role"):
+            out.append(f"{c['role']} ({c.get('gender') or '?'}, {c.get('age') or '?'})")
+        else:
+            out.append(c.get("who", "").split(",")[0])
+    return "; ".join(out)
+
+
+def _same(a: dict, b: dict) -> bool:
+    """Two characters that would read as the same person: same role, gender and age band."""
+    if not a.get("role") or not b.get("role"):
+        return a.get("who") == b.get("who")
+    try:
+        close = abs(int(a.get("age") or 0) - int(b.get("age") or 0)) < 10
+    except ValueError:
+        close = True
+    return a["role"].lower() == b["role"].lower() and a.get("gender") == b.get("gender") and close
+
+
+def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, log=print) -> dict:
+    """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): more are
+    asked for in batches of EXTRA_BATCH, each batch shown the cast so far. Cached with the bible."""
+    chars = bible.get("characters") or []
+    theme = bible.get("theme", "")
+    if not theme or bible.get("source") != "gemma-3-12b" or len(chars) >= n:
+        return bible
+    start = len(chars)
+    for attempt in range(6):
+        if len(chars) >= n:
+            break
+        k = min(EXTRA_BATCH, n - len(chars) + 2)
+        q = EXTRA_PROMPT.format(theme=theme.replace('"', "'"), cast=_cast_line(chars), n=k,
+                                character_keys=CHARACTER_KEYS, strict=STRICT)
+        text = llm(q, seed=seed + 101 + attempt, max_length=200 * k + 400, log=log)
+        if text is None:
+            break
+        d = _parse(text)
+        new = _characters((d or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d else []
+        added = 0
+        for c in new:
+            c["who"] = _people([c["who"]])[0]
+            c["place"] = _places([c["place"]])[0] if c["place"] else ""
+            if any(_same(c, o) for o in chars):
+                continue
+            chars.append(c)
+            added += 1
+        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added})")
+        if not added:
+            continue
+    if len(chars) > start:
+        # a role's own action never names another character (as in _characters, over the whole cast)
+        roles = _role_words(chars)
+        for c in chars:
+            others = roles - _role_words([c])
+            pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(others, key=len, reverse=True)) +
+                             r")s?\b") if others else None
+            for key in ("doing", "face"):
+                if pat and key in c and pat.search(c[key]):
+                    del c[key]
+        bible["characters"] = chars
+        bible["who"] = [c["who"] for c in chars]
+        bible["wear"] = [c["wear"] for c in chars]
+        if out_root:
+            path = os.path.join(cache_dir(out_root), _key(theme, seed) + ".json")
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(bible, f, indent=1, ensure_ascii=False)
+            except Exception:
+                pass
     return bible
 
 

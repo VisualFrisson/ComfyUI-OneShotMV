@@ -18,9 +18,10 @@ from .fv import lyrics as fv_lyrics
 from .fv import broll as fv_broll
 from .fv import lipfix as fv_lipfix
 from .fv import identity as fv_identity
+from .fv import critic as fv_critic
 
 CATEGORY = "Frisson Vision"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, fv_identity, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():
@@ -384,6 +385,34 @@ class FVQC:
         return {"ui": {"text": [res["message"], _file_ref(res["bundle"])]}, "result": (res["message"],)}
 
 
+class FVCritic:
+    """The vision check (fv/critic.py): Gemma 3 looks at every portrait and b-roll still of a run
+    against what its character should be (gender, facial hair, glasses, other people, the head in
+    frame, writing, anything from after the World's period, the outfit). Bad ones are re-made with
+    new seeds and a line that says what to fix, and checked again; then the clips are queued."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"run_dir": ("STRING", {"default": ""}),
+                             "pass_index": ("INT", {"default": 0, "min": 0, "max": 9}),
+                             "max_passes": ("INT", {"default": 2, "min": 0, "max": 9})}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("report",)
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    @classmethod
+    def IS_CHANGED(cls, **kw):
+        return random.random()
+
+    def run(self, run_dir, pass_index, max_passes):
+        _reload()
+        res = director.critic_pass(_resolve(run_dir), pass_idx=pass_index, max_passes=max_passes)
+        return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
+
+
 class FVLipSyncScore:
     """Scores a run's lip sync with SyncNet: per take, the confidence (higher = the mouth follows
     the words) and the offset (25 fps frames; negative = the mouth leads the voice). Writes
@@ -711,6 +740,7 @@ NODE_CLASS_MAPPINGS = {
     "FVAssemble": FVAssemble,
     "FVFinish": FVFinish,
     "FVQC": FVQC,
+    "FVCritic": FVCritic,
     "FVLipSyncScore": FVLipSyncScore,
     "FVFaceMatch": FVFaceMatch,
     "FVTheme": FVTheme,
@@ -729,6 +759,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVAssemble": "Frisson Vision: Assemble",
     "FVFinish": "Frisson Vision: Finish",
     "FVQC": "Frisson Vision: Take QC",
+    "FVCritic": "Frisson Vision: Vision Check",
     "FVLoadImagePath": "Frisson Vision: Load Image (path)",
     "FVLoadVideoPath": "Frisson Vision: Load Video (path)",
     "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",

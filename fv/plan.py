@@ -92,10 +92,13 @@ def _intense(s: dict) -> bool:
     return s["loud"]
 
 
-def _phases(secs: list[dict], bar_len: float, build_bars: float):
+def _phases(secs: list[dict], bar_len: float, build_bars: float, medium: tuple = ()):
     """quiet / build / drop at a time: the intense sections (_intense) are drops; the last
-    `build_bars` bars before one are the build; the rest holds."""
+    `build_bars` bars before one are the build; the rest holds. medium: section labels that count
+    as build too (the energy grammar: verses and builds are the song's medium energy, intros,
+    breaks and quiet outros its low energy; beat.label_sections labels by energy tertile)."""
     hot = [s for s in secs if _intense(s)]
+    mid = [s for s in secs if medium and not _intense(s) and s.get("label") in medium]
     # a window that opens inside a chorus (a song loud from end to end: sx01, Electric Love, was
     # one 32 s chorus, so every shot was a close-up on the beat and no cutaway could go in) still
     # gets its build: the first `build_bars` bars, at most a third of the window
@@ -110,14 +113,53 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float):
         nxt = [s["start"] for s in hot if s["start"] > t + 0.01]
         if nxt and nxt[0] - t <= build_bars * bar_len + 0.05:
             return "build"
+        if any(s["start"] - 1e-3 <= t + 0.01 < s["end"] for s in mid):
+            return "build"
         return "quiet"
     return phase
 
 
-def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_len: float) -> list[dict]:
+def drop_beats(tempo: float, ed: dict) -> int:
+    """Beats per shot on the drop (the energy grammar's fast cuts on the rhythm): the whole number
+    of beats closest to `drop_cut_seconds` (0.75 s: one beat at 100 BPM, two at 128)."""
+    target = float(ed.get("drop_cut_seconds", 0.75))
+    beat_len = 60.0 / max(40.0, float(tempo or 120.0))
+    return max(1, int(round(target / beat_len)))
+
+
+def _split_drop(shots: list[dict], beats: list[float], k: int, min_len: float) -> list[dict]:
+    """Each drop shot cut every k beats: one new person per cut. A last piece shorter than
+    min_len joins the one before it."""
+    out = []
+    for s in shots:
+        if s.get("phase") != "drop":
+            out.append(s)
+            continue
+        inner = [b for b in beats if s["t0"] + 0.1 < b < s["t1"] - 0.1]
+        cuts = [s["t0"]] + inner[k - 1::k] + [s["t1"]]
+        pieces = []
+        for a, b in zip(cuts[:-1], cuts[1:]):
+            if pieces and b - a < min_len:
+                pieces[-1]["t1"] = round(float(b), 4)
+                continue
+            pieces.append(dict(s, t0=round(float(a), 4), t1=round(float(b), 4)))
+        if len(pieces) > 1 and pieces[-1]["t1"] - pieces[-1]["t0"] < min_len:
+            last = pieces.pop()
+            pieces[-1]["t1"] = last["t1"]
+        out.extend(pieces)
+    return out
+
+
+def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_len: float,
+                beats: list[float] | None = None, tempo: float = 120.0) -> list[dict]:
     """The hold grammar's shots: long holds in quiet stretches, one bar each in the build,
-    one-bar groups in the drop (cut on the beat inside each group, see _hold_renders)."""
-    phase = _phases(secs, bar_len, ed.get("build_bars", 4))
+    one-bar groups in the drop (cut on the beat inside each group, see _hold_renders).
+    The energy grammar (pack edit "cuts": "energy", the user's rule of Oct 26): low energy
+    (intro, breaks, quiet outro) a cut every `shot_bars_quiet` (2) bars, medium (verses, build)
+    every bar, high (choruses, drops) a cut every drop_beats() beats, each a new person."""
+    energy = ed.get("cuts") == "energy"
+    medium = tuple(ed.get("medium_labels", ("verse", "build"))) if energy else ()
+    phase = _phases(secs, bar_len, ed.get("build_bars", 4), medium)
     nbars = {"quiet": int(ed.get("shot_bars_quiet", 2)), "build": int(ed.get("shot_bars_build", 1)),
              "drop": int(ed.get("drop_group_bars", 1))}
     sec_starts = sorted(s["start"] for s in secs)
@@ -134,6 +176,13 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
         i = j
     if shots and dur - shots[-1]["t1"] > 0.05:
         shots[-1]["t1"] = round(dur, 4)
+    if energy and beats:
+        k = drop_beats(tempo, ed)
+        shots = _split_drop(shots, beats, k, min_len=0.6 * k * 60.0 / max(40.0, tempo))
+        for s in shots:
+            s["energy"] = {"quiet": "low", "build": "medium", "drop": "high"}[s["phase"]]
+            s["burst"] = s["phase"] == "drop"
+        return shots
     # long drops: beat cuts for the first `drop_burst_bars` bars, then every other bar, so a
     # 30-bar chorus doesn't strobe from end to end
     burst = int(ed.get("drop_burst_bars", 8))
@@ -176,7 +225,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
     out_fps = float(out_fps or (rfps / 2.0 if rfps >= 48 else rfps))
     rng = random.Random(seed)
     if ed.get("grammar") == "hold":
-        shots = _hold_shots(bars, dur, secs, ed, bar_len)
+        shots = _hold_shots(bars, dur, secs, ed, bar_len, beats=beats, tempo=w["tempo"])
         if len(shots) > 1 and shots[-1]["t1"] - shots[-1]["t0"] < 60.0 / max(1.0, w["tempo"]):
             shots[-1]["t1"] = shots.pop()["t1"]
         assign_framing(shots, framing, seed, drop_size=ed.get("drop_size", "close"),
@@ -405,7 +454,8 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
         if faces is not None and s.get("phase") == "drop" and prev_face is not None and prev_face[1] == "drop":
             lf0 = face(s["A"], s["t0"] + 0.02)
             if lf0 is not None and fz.match_cost(prev_face[0], lf0) < 3 * thr:
-                a_al = fz.align(prev_face[0], lf0, max_scale=1.12, min_scale=0.92, max_shift=0.08)
+                a_al = fz.align(prev_face[0], lf0, max_scale=ed.get("match_max_scale", 1.12), min_scale=0.92,
+                                max_shift=ed.get("match_max_shift", 0.08))
         segs = [(s["A"], f0, a_al)]
         cands = []
         for rid in s.get("chain", []):

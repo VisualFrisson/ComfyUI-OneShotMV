@@ -118,6 +118,16 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                                twins=None if twins == "auto" else twins, framing=framing)
         p["artist_path"] = artist_path
+        if bible and (pk.get("casting") or {}).get("unique"):
+            # every shot its own character (the user, Oct 26: a bigger cast, no repeats): enough
+            # characters for every singer and every b-roll candidate
+            from . import broll as _broll
+            need = p["performers"] + 2 * _broll.slots(p, broll_share) + 2
+            if len(bible.get("characters") or []) < need:
+                bible = themes.extend(bible, need, seed=seed, out_root=out_root, log=log)
+                pk = casting.apply_theme(casting.load_pack(pack), bible)
+                pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
+            p["unique_cast"] = True
     else:
         if not dance_path or not os.path.exists(dance_path):
             raise ValueError("motion mode needs a dance clip (dance_video_path)")
@@ -173,7 +183,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         for r in p["renders"]:
             sizes[r["performer"]] = r.get("size", "close")
         leads = sorted({r["performer"] for r in p["renders"] if r["role"] == "A"})
-        cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads)
+        shot_of = {s_["index"]: s_ for s_ in p.get("shots", []) if "index" in s_}
+        phases = ["quiet"] * p["performers"]
+        for r in p["renders"]:
+            phases[r["performer"]] = shot_of.get(r["shot"], {}).get("phase", "quiet")
+        cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
         s1, s2 = formats.portrait_size(fmt)
         port = {}
         need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A" or editor == "qwen"}
@@ -299,6 +313,26 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             jobs[last_a + 1:last_a + 1] = [(f"brollr{i:02d}", g) for i, g in enumerate(clips)]
             p["broll_planned"] = True  # broll.finalize() picks the slots after singer QC
         p["staged"] = True
+        if p.get("unique_cast") and _node_available("FVCritic"):
+            # the vision check (fv/critic.py) between the stills and the videos: every portrait and
+            # b-roll still is checked, the bad ones re-made, and only then are the clips queued
+            items = []
+            for c in cast:
+                if c["id"] in port and c.get("check"):
+                    items.append({"name": f"p{c['id']:03d}", "job": f"p{c['id']:03d}", "kind": "portrait",
+                                  "performer": c["id"], "orig": port[c["id"]], "image": port[c["id"]],
+                                  "check": c["check"], "drop": bool(c.get("drop")), "takes": []})
+            for r in p["renders"]:
+                b = r.get("broll") or {}
+                if r.get("broll_candidate") and b.get("check") and b.get("still_job") is not None:
+                    items.append({"name": f"k{r['id']:03d}R", "job": f"brollk{b['still_job']:02d}", "kind": "broll",
+                                  "render": r["id"], "orig": r["key"], "image": r["key"], "check": b["check"],
+                                  "takes": []})
+            later = {n for n, _ in jobs if re.match(r"^(r\d{3}A|brollr\d{2})$", n)} | {"zz_qc"}  # QC is added below
+            fi = next(i for i, (n, _) in enumerate(jobs) if n == "free_after_portraits")
+            jobs.insert(fi + 1, ("zz_critic", graphs.critic(run_dir=run_dir, pass_index=0, max_passes=2).nodes))
+            p["critic"] = {"items": items, "later": sorted(later), "max_passes": 2}
+            deferred |= later
     use_qc = qc_retries > 0 and queue_assemble and _node_available("FVQC")
     if use_qc:  # QC re-rolls bad takes, then queues free + assemble itself
         jobs.append(("zz_qc", graphs.qc(run_dir=run_dir, pass_index=0, max_passes=qc_retries,
@@ -307,7 +341,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
     jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
     if staged:
-        p["deferred_jobs"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs) if n in deferred]
+        p["deferred_jobs"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs) if n in deferred
+                              and n not in (p.get("critic") or {}).get("later", [])]
+        if p.get("critic"):
+            p["critic"]["deferred"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs)
+                                       if n in p["critic"]["later"]]
         p["timing"] = {"queued": _dt.datetime.now().isoformat(timespec="seconds")}
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
@@ -322,6 +360,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         url = server_url()
         for name, g in jobs:
             if name == "zz_assemble" and (not queue_assemble or use_qc):
+                continue
+            if name == "zz_qc" and name in deferred:
                 continue
             if name in deferred:
                 continue
@@ -623,6 +663,12 @@ def _refresh_prompt(g: dict) -> None:
                 enc["inputs"]["text"] = f"{t.rstrip()} {graphs.CONTINUITY}"
 
 
+def _long(r: dict) -> bool:
+    """Long enough for SyncNet to judge (the energy grammar's drop shots run about half a second:
+    lip sync can't be read there, and a re-roll for it would be wasted)."""
+    return r.get("frames", 0) / max(1.0, float(r.get("fps", 25) or 25)) >= 1.6
+
+
 def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool = True,
             then_assemble: bool = True, queue_rerolls: bool = True, stage: str = "all", log=print) -> dict:
     """Check every render of a run; re-roll the bad ones (new seeds) and queue the next QC pass,
@@ -690,7 +736,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         try:
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
                                 vocal=vocal, sr=sr or 44100, seek=seek,
-                                sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
+                                sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r),
                                 people=not voice, **checks(r))
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
@@ -907,7 +953,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
                                             vocal=vocal, sr=sr or 44100, seek=seek,
-                                            sync=voice and r["role"] == "A" and r.get("size", "close") != "wide",
+                                            sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r),
                                             people=not voice, **checks(r))
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
@@ -1049,3 +1095,169 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     log(f"[FrissonVision] {msg}")
     return {"message": msg, "report": report, "queued": queued, "bundle": bundle, "final": last,
             "rerolls": len(rerolls)}
+
+
+# ------------------------------------------------------------------ vision check of the stills
+def _insert_fix(prompt: str, fix: str) -> str:
+    """The fix lines right after the prompt's first sentence (the picture's subject), where the
+    image model weighs them most."""
+    if not fix:
+        return prompt
+    m = re.search(r"(?<=[a-z0-9)'\"])\.\s+", prompt)
+    if not m:
+        return prompt.rstrip() + " " + fix
+    return prompt[:m.end()] + fix + " " + prompt[m.end():]
+
+
+def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: bool = True, log=print) -> dict:
+    """Check every still of a unique-cast run (fv/critic.py); re-make the ones with faults (new
+    seeds, a line that says what to fix) and check again, at most max_passes times; then keep the
+    best picture of each, bring the drop faces to one size and place (critic.fit_face), point the
+    clip jobs at the kept pictures and queue them."""
+    import gc
+    from . import critic, graphs
+    pj = os.path.join(run_dir, "plan.json")
+    p = json.load(open(pj, encoding="utf-8"))
+    cr = p.get("critic") or {}
+    items = cr.get("items", [])
+    th = p.get("theme") or {}
+    world = th.get("theme", "")
+    era = critic.era_of(world)
+    tm = p.setdefault("timing", {})
+    tm[f"critic_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
+    t0 = _dt.datetime.now()
+    checked = 0
+    for it in items:
+        if any(t.get("image") == it["image"] for t in it["takes"]):
+            continue
+        take = {"image": it["image"]}
+        if not os.path.exists(it["image"]):
+            take.update(faults=["missing"], score=9)
+        else:
+            try:
+                text = critic.ask(it["image"], critic.rubric(it["check"], world, era))
+                ans = critic.parse(text)
+                fs = critic.faults(ans, it["check"], it["kind"])
+                take.update(answer=ans if ans else (text or "")[:300], faults=fs, score=critic.score(fs),
+                            modern=critic.modern_items(ans))
+            except Exception as e:  # never let the check stop a run
+                take.update(faults=[], score=0, error=str(e)[:200])
+        it["takes"].append(take)
+        checked += 1
+    critic.free()
+    gc.collect()
+    secs = (_dt.datetime.now() - t0).total_seconds()
+    bad = [it for it in items if it["takes"] and it["takes"][-1].get("faults")
+           and it["takes"][-1]["faults"] != ["unread"]]
+    rel = p.get("run_rel", "")
+    queued = []
+    if bad and pass_idx < max_passes:
+        jobs = []
+        for it in bad:
+            jf = _job_file(run_dir, it["job"])
+            if not jf:
+                continue
+            g = _bump(json.load(open(jf, encoding="utf-8")), 31 * (pass_idx + 1))
+            fix = critic.fix_lines(it["takes"][-1]["faults"], it["check"], era)
+            tag = f"{it['name']}_c{pass_idx + 1}"
+            for node in g.values():
+                ins = node.get("inputs", {})
+                if node.get("class_type") == "CLIPTextEncode" and isinstance(ins.get("text"), str):
+                    ins["text"] = _insert_fix(ins["text"], fix)
+                if node.get("class_type") == "SaveImage":
+                    ins["filename_prefix"] = f"{rel}/{tag}"
+            json.dump(g, open(os.path.join(run_dir, "jobs", f"critic{pass_idx + 1}_{tag}.json"), "w",
+                           encoding="utf-8"), indent=1)
+            it["image"] = os.path.join(run_dir, f"{tag}_00001_.png")
+            jobs.append(g)
+        chain = [graphs.free_memory("before vision-check re-makes").nodes] + jobs + \
+            [graphs.free_memory("after vision-check re-makes").nodes,
+             graphs.critic(run_dir=run_dir, pass_index=pass_idx + 1, max_passes=max_passes).nodes]
+        if queue:
+            queued = queue_chain_front(chain, server_url())
+        msg = (f"vision check pass {pass_idx}: {checked} pictures in {secs:.0f} s, {len(bad)} re-made: " +
+               ", ".join(f"{it['name']} ({'+'.join(it['takes'][-1]['faults'])})" for it in bad))
+    else:
+        # the best picture of each (fewest and lightest faults; the newest on a tie: it was made
+        # with the fix lines)
+        by_id = {r["id"]: r for r in p["renders"]}
+        for it in items:
+            takes = [t for t in it["takes"] if os.path.exists(t.get("image", ""))]
+            best = min(enumerate(takes), key=lambda x: (x[1].get("score", 0), -x[0]))[1] if takes else \
+                {"image": it["orig"], "faults": []}
+            it["final"] = best["image"]
+            it["final_faults"] = best.get("faults", [])
+        # the drop's match cuts: every drop face to one size and one place
+        drop = [it for it in items if it["kind"] == "portrait" and it.get("drop")]
+        fitted = 0
+        if drop:
+            try:
+                boxes = {it["name"]: critic.face_box(it["final"]) for it in drop}
+                tw, ty = critic.fit_targets(list(boxes.values()))
+                for it in drop:
+                    b = boxes.get(it["name"])
+                    out = os.path.splitext(it["final"])[0].replace("_00001_", "") + "_fit_00001_.png"
+                    res = critic.fit_face(it["final"], out, b, tw, ty)
+                    it["fit"] = res
+                    if res and res.get("scale", 1.0) > 1.0 and os.path.exists(out):
+                        it["final"] = out
+                        fitted += 1
+                cr["fit_target"] = [round(tw, 4), round(ty, 4)]
+            except Exception as e:  # never let the framing stop a run
+                log(f"[FrissonVision] vision check: face fitting skipped ({e})")
+        # point the clip jobs at the kept pictures; a b-roll still that still shows a wrong person
+        # (another gender, a beard, glasses, someone else in it) gets no clip
+        swaps, dropped = {}, set()
+        for it in items:
+            if it["final"] != it["orig"]:
+                swaps[it["orig"]] = it["final"]
+            if it["kind"] == "portrait":
+                for r in p["renders"]:
+                    if r["role"] == "A" and r["performer"] == it["performer"]:
+                        r["portrait"] = it["final"]
+            elif set(it.get("final_faults") or []) & {"people", "gender", "beard", "glasses"}:
+                r = by_id.get(it["render"])
+                if r is not None:
+                    r["unused"] = True
+                    r["critic_reject"] = it["final_faults"]
+                    dropped.add(f"r{r['id']:03d}R")
+            else:
+                r = by_id.get(it["render"])
+                if r is not None:
+                    r["key"] = it["final"]
+        later = []
+        for fn in cr.get("deferred", []):
+            path = os.path.join(run_dir, "jobs", fn)
+            if not os.path.exists(path):
+                continue
+            txt = open(path, encoding="utf-8").read()
+            for a, b in swaps.items():
+                txt = txt.replace(json.dumps(a)[1:-1], json.dumps(b)[1:-1])
+            g = json.loads(txt)
+            pref = next((str(n["inputs"].get("filename_prefix", "")) for n in g.values()
+                         if n.get("class_type") == "SaveVideo"), "")
+            if any(pref.endswith(d) for d in dropped):
+                continue
+            open(path, "w", encoding="utf-8").write(txt)
+            later.append(g)
+        chain = [graphs.free_memory("after the vision check").nodes] + later
+        if queue:
+            queued = queue_chain_front(chain, server_url())
+        left = [f"{it['name']} ({'+'.join(it['final_faults'])})" for it in items if it.get("final_faults")]
+        msg = (f"vision check pass {pass_idx}: {checked} pictures in {secs:.0f} s; final: "
+               f"{len(items) - len(left)}/{len(items)} clean" + (f", kept best for {', '.join(left)}" if left else "") +
+               (f"; {fitted} drop faces re-framed" if fitted else "") +
+               (f"; {len(dropped)} b-roll still(s) dropped" if dropped else "") +
+               f"; {len(later)} clip jobs queued")
+        cr["done"] = True
+    cr["passes"] = pass_idx + 1
+    p["critic"] = cr
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    hist = os.path.join(run_dir, "critic.json")
+    allc = json.load(open(hist, encoding="utf-8")) if os.path.exists(hist) else []
+    allc.append({"pass": pass_idx, "message": msg,
+                 "items": [{"name": it["name"], "role": it["check"].get("role"), "gender": it["check"].get("gender"),
+                            "takes": it["takes"]} for it in items]})
+    json.dump(allc, open(hist, "w", encoding="utf-8"), indent=1)
+    log(f"[FrissonVision] {msg}")
+    return {"message": msg, "queued": queued}

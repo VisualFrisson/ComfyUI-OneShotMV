@@ -74,11 +74,11 @@ def _frame(c: dict, size: str) -> dict:
 
 
 def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None,
-               leads: list[int] | None = None) -> list[dict]:
+               leads: list[int] | None = None, phases: list[str] | None = None) -> list[dict]:
     """n performers, every portrait prompt finished with the realism brief (finish_prompt).
     leads: the performers with a lead shot of their own, cast first (themed runs), so the singers
     are all different characters before the looks on the drop take theirs."""
-    out = _cast_voice(pack, n, seed, sizes, fmt, leads)
+    out = _cast_voice(pack, n, seed, sizes, fmt, leads, phases)
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
@@ -88,7 +88,7 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
 
 
 def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fmt: str | None = None,
-                leads: list[int] | None = None) -> list[dict]:
+                leads: list[int] | None = None, phases: list[str] | None = None) -> list[dict]:
     """n performers for a voice pack: portrait prompt + singing (video) prompt.
     sizes[i] = 'close' | 'medium' | 'wide' framing for performer i (default close).
     fmt '16:9': a pack's `framing_landscape` overrides its framing (an extreme close-up on a
@@ -98,7 +98,7 @@ def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, f
         c = dict(c, framing={**(c.get("framing") or DEFAULT_FRAMING), **c["framing_landscape"]})
     sizes = sizes or ["close"] * n
     if c.get("theme"):
-        return _cast_theme(c, n, seed, sizes, leads)
+        return _cast_theme(c, n, seed, sizes, leads, phases)
     if c.get("artist"):
         return _cast_artist(c, n, seed, sizes)
     if "people" in c:  # packs of coherent archetypes (who, setting, light)
@@ -195,8 +195,10 @@ SCENE_SHOT = {"medium": ("Medium shot", "on a 35mm lens at chest height, filling
 # The user's realism brief (Oct 24, 12:40: "the look feels really AI"): every image prompt ends with
 # REALISM, close-up portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only
 # say no text; finish_prompt adds the photograph wording last.
-REALISM_PERSON = ("Unretouched photograph with true-to-life detail: natural skin with visible pores, fine facial "
-                  "hair, uneven tone and small blemishes, slightly asymmetrical features, flyaway hairs, creased "
+# no "fine facial hair" any more: on every portrait it helped the drop looks give women stubble
+# (the user, Oct 26: "girls with beards")
+REALISM_PERSON = ("Unretouched photograph with true-to-life detail: natural skin with visible pores, uneven tone "
+                  "and small blemishes, slightly asymmetrical features, flyaway hairs, creased "
                   "and worn fabric, everyday wear and clutter in the surroundings.")
 REALISM_LIGHT = ("Light comes from real sources with mixed colour temperatures and natural falloff, a few clipped "
                  "highlights and deep, dense shadows.")
@@ -486,7 +488,50 @@ def _lights_for(lights: list[str], place: str, tod: str = "") -> list[str]:
     return out or lights
 
 
-def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] | None = None) -> list[dict]:
+# Drop shots cut on the beat from one new person to the next with the face in the same spot (the
+# user's match cuts, Oct 26): every drop portrait has the same framing, straight on, a little looser
+# than a head-and-shoulders close-up so the face can be re-centred and scaled up to one size
+# (director.fit_faces) without running out of picture.
+DROP_FRAME = {"shot": "Head-and-shoulders portrait",
+              "lens": "from about two metres away on a 50mm lens, the face in the middle of the frame with clear "
+                      "space above the head, both shoulders and the top of the chest in frame, the face about a "
+                      "quarter of the frame height"}
+DROP_ANGLE = "eye level, facing the camera straight on"
+DROP_MOVE = "The camera holds steady at head-and-shoulders distance."
+
+
+def _unique_order(chars: list[dict], n: int, rng: random.Random) -> list[int]:
+    """Which character plays each of n shots (the user, Oct 26: a bigger cast, no repeats, a cut
+    can go to anyone of either gender, and neighbours that look alike read as blended): every
+    character once before any repeats, each shot the other gender from the one before when there
+    is one left, and never the same place twice in a row."""
+    out, pool, prev = [], [], None
+    for _ in range(n):
+        if not pool:
+            pool = list(range(len(chars)))
+            rng.shuffle(pool)
+        def ok(i, gender=True, place=True):
+            if prev is None:
+                return True
+            a, b = chars[i], chars[prev]
+            if gender and a.get("gender") and a.get("gender") == b.get("gender"):
+                return False
+            if place and a.get("place") and a.get("place") == b.get("place"):
+                return False
+            return True
+        pick = next((i for i in pool if ok(i)), None)
+        if pick is None:
+            pick = next((i for i in pool if ok(i, place=False)), None)
+        if pick is None:
+            pick = next((i for i in pool if ok(i, gender=False)), pool[0])
+        pool.remove(pick)
+        out.append(pick)
+        prev = pick
+    return out
+
+
+def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] | None = None,
+                phases: list[str] | None = None) -> list[dict]:
     """Voice casting from a theme's world bible (fv/theme.py): every performer a new character,
     outfit, place and light from the theme; wide shots (and half the medium ones) are in-scene
     shots of the character doing something there. Bibles with whole characters (who + outfit +
@@ -497,6 +542,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
     tod, era = time_of_day(th.get("theme", "")), era_line(th.get("theme", ""))
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
+    unique = bool(c.get("unique")) and bool(chars)
+    assign = _unique_order(chars, n, random.Random(seed * 13 + 5)) if unique else []
     # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
     order = []
     # the leads first: v4b's 16 singers drew from the same cycle as the 24 looks on the drop and
@@ -504,11 +551,17 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     lead_set = [i for i in dict.fromkeys(leads or []) if 0 <= i < n]
     for i in lead_set + [i for i in range(n) if i not in set(lead_set)]:
         size = sizes[i] if i < len(sizes) else "close"
+        drop = unique and phases is not None and i < len(phases) and phases[i] == "drop" and size == "close"
+        ci = None
         if chars:
-            if not order:
-                order = chars[:]
-                rng.shuffle(order)
-            ch = order.pop()
+            if unique:
+                ci = assign[i]
+                ch = chars[ci]
+            else:
+                if not order:
+                    order = chars[:]
+                    rng.shuffle(order)
+                ch = order.pop()
             who, wear = ch["who"], ch["wear"]
             place = ch.get("place") or _pick(rng, th["places"], used, "place")
         else:
@@ -556,12 +609,12 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, own_acts,
                                          attitude=attitude)
         else:
-            f = THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
+            f = DROP_FRAME if drop else THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
             upright = "" if re.search(r"(?i)\bstand", attitude) else "standing upright, "  # "standing upright, standing rigidly" (st3)
             portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear, attitude=attitude, upright=upright,
-                                          angle=_pick(rng, THEME_ANGLES, used, "angle"),
+                                          angle=DROP_ANGLE if drop else _pick(rng, THEME_ANGLES, used, "angle"),
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
-            move = _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")
+            move = DROP_MOVE if drop else _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")
             sing = THEME_CLOSE_SING.format(who=short, move=move)
         # the period lock on the look edits too (sx03's 1813 drop looks came back in a modern suit,
         # modern glasses and with a microphone stand)
@@ -569,8 +622,18 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
                 "background": _place_noun(place)}
         if era:
             portrait = portrait.rstrip() + " " + era
-        out.append({"id": i, "portrait": " ".join(portrait.split()), "sing": " ".join(sing.split()),
-                    "who": short, "twin": twin, "size": size, "seed": seed * 1000 + i * 7 + 1})
+        entry = {"id": i, "portrait": " ".join(portrait.split()), "sing": " ".join(sing.split()),
+                 "who": short, "twin": twin, "size": size, "seed": seed * 1000 + i * 7 + 1}
+        if chars:
+            # what the vision check holds the picture to (director.critic_pass)
+            entry["check"] = {"role": ch.get("role") or short, "gender": ch.get("gender", ""), "age": ch.get("age", ""),
+                              "look": ch.get("look", ""), "wear": wear, "eyewear": bool(ch.get("eyewear")),
+                              "place": _place_noun(place)}
+        if ci is not None:
+            entry["char"] = ci
+        if drop:
+            entry["drop"] = True
+        out.append(entry)
     return sorted(out, key=lambda x: x["id"])
 
 
@@ -602,7 +665,8 @@ def apply_theme(pack: dict, bible: dict) -> dict:
     else:
         p["casting"] = {"theme": bible, "framing": c.get("framing"),
                         "framing_landscape": c.get("framing_landscape"), "negative": neg,
-                        "dense_from": c.get("dense_from", 0.6)}
+                        "dense_from": c.get("dense_from", 0.6),
+                        "unique": (p.get("edit") or {}).get("cast") == "unique"}
         return p
     c["negative"] = neg
     return p

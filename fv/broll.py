@@ -49,7 +49,7 @@ MOMENT_MOTION = ("Candid medium shot of {who}, {action}: natural, unhurried move
                  "singing, not looking at the camera. The handheld camera drifts slightly. No one else in frame. "
                  "No text appears.")
 MOMENT_FALLBACK = ["adjusting something with careful hands", "tidying up after a long day", "stretching and looking around",
-                   "checking their work closely", "fixing their hair in a mirror", "walking slowly through the room"]
+                   "checking their work closely", "straightening their clothes", "walking slowly through the room"]  # no mirror: a reflection is a second person
 # no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
 # the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
 # still (the realism model the portraits use) written as a real photograph, and LTX moves it
@@ -63,6 +63,18 @@ NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, micr
 NEGATIVE_EMPTY = NEGATIVE + ", person, people, face, crowd, figure, silhouette"
 
 
+def slots(p: dict, share: float) -> int:
+    """How many cutaways: `share` of the shots, but never more than a third of the shots they can
+    go in (the energy grammar's drop cuts every beat: 36 shots in st2e's 30 s, 31 of them on the
+    drop, where no cutaway goes)."""
+    if share <= 0 or not p.get("shots"):
+        return 0
+    n = max(1, int(round(len(p["shots"]) * share)))
+    ok = [s for s in p["shots"] if s.get("phase", "quiet") in ("quiet", "build") and s.get("index", 0) > 0
+          and s["t1"] - s["t0"] >= 1.0]
+    return max(1, min(n, len(ok) // 3)) if ok else 0
+
+
 def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: float = 0.55,
            gap_below: float = 0.3, n: int | None = None, only: set | None = None) -> list[tuple[dict, str]]:
     """[(shot, reason)] for the b-roll slots of a voice run. n: how many (default: share of the
@@ -71,7 +83,9 @@ def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: floa
         return []
     by_id = {r["id"]: r for r in p["renders"]}
     shots = p["shots"]
-    n = n or max(1, int(round(len(shots) * share)))
+    n = n if n is not None else max(1, int(round(len(shots) * share)))
+    if n <= 0:
+        return []
     cands = [s for s in shots if s.get("phase", "quiet") in ("quiet", "build") and s.get("index", 0) > 0
              and s["t1"] - s["t0"] >= 1.0 and "A" in s and (only is None or s["index"] in only)]
 
@@ -167,7 +181,14 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
     th = p.get("theme") or {}
     if th.get("characters"):  # a whole character, so the outfit fits the dancer
         from .casting import _no_feet
-        ch = rng.choice(th["characters"])
+        chars = th["characters"]
+        # a unique cast (the user, Oct 26: no repeats): someone who has no shot of their own yet
+        taken = {c.get("char") for c in p.get("cast", []) if c.get("char") is not None} | set(p.get("broll_chars", []))
+        free = [i for i in range(len(chars)) if i not in taken] if p.get("unique_cast") else []
+        ci = rng.choice(free) if free else rng.randrange(len(chars))
+        if p.get("unique_cast"):
+            p.setdefault("broll_chars", []).append(ci)
+        ch = chars[ci]
         place = ch.get("place") or rng.choice(th["places"])
         from .casting import _lights_for, at_hour, light_fits, lights_at, time_of_day
         tod = time_of_day(th.get("theme", ""))
@@ -175,8 +196,12 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
         if own and not _lights_for([own], place, tod) == [own]:
             own = None  # an indoor lamp at an outdoor place (sx01w)
         light = own or rng.choice(_lights_for(lights_at(th["light"], tod), place, tod))  # the light of the place
-        return {"who": ch["who"], "wear": _no_feet(ch["wear"]), "place": place.split(" ", 1)[-1],
-                "light": at_hour(light, place, tod)}
+        wear = _no_feet(ch["wear"])
+        return {"who": ch["who"], "wear": wear, "place": place.split(" ", 1)[-1],
+                "light": at_hour(light, place, tod),
+                "check": {"role": ch.get("role") or ch["who"].split(",")[0], "gender": ch.get("gender", ""),
+                          "age": ch.get("age", ""), "look": ch.get("look", ""), "wear": wear,
+                          "eyewear": bool(ch.get("eyewear")), "place": place}}
     if th.get("who"):
         return {"who": rng.choice(th["who"]), "wear": rng.choice(th["wear"]),
                 "place": rng.choice(th["places"]).split(" ", 1)[-1], "light": rng.choice(th["light"])}
@@ -230,8 +255,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     shots, so no model swap is spent on them) and finalize() keeps the best after singer QC.
     Returns (stills, clips) then."""
     share = float(p.get("broll_share", 0.0))
-    n = max(1, int(round(len(p.get("shots", [])) * share))) if share > 0 else 0
-    picks = choose(p, share=share, n=2 * n if candidates else None)
+    n = slots(p, share)
+    picks = choose(p, share=share, n=2 * n if candidates else n)
     if not picks:
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
@@ -257,8 +282,10 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         stills = bool(p.get("broll_stills", True))
         if kind in ("dance", "moment") and p.get("artist_path"):
             kind = "words"  # the artist's own dance would need an identity edit (another model swap)
+        check, still_job = None, None
         if kind == "moment":
             d = _dancer(p, pack, k)
+            check = d.pop("check", None)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             d["action"] = _action_for(p, pack, d, seed=p.get("seed", 1) * 100 + k, log=log)
             img = " ".join((MOMENT_STILL.format(**d) + " " + era).split())
@@ -268,6 +295,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
+                still_job = len(keys) - 1
             # the drum stem under it (no vocal, so nobody starts singing)
             seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
@@ -277,6 +305,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
                                            audio_seek=seek).nodes)
         elif kind == "dance":
             d = _dancer(p, pack, k)
+            check = d.pop("check", None)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
             short = d["who"].split(",")[0].split(" with ")[0]
             img = " ".join((DANCE_STILL.format(**d) + " " + era).split())
@@ -287,6 +316,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
+                still_job = len(keys) - 1
             # the drum stem drives the movement (no vocal, so nobody starts singing)
             seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
@@ -306,7 +336,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
              "frames": frames, "fps": rfps, "size": "medium" if kind in ("dance", "moment") else "wide", "sync_delay": 0.0,
              "key": key, "path": os.path.join(run_dir, f"r{rid:03d}R_00001_.mp4"),
-             "broll": {"kind": kind, "why": why, "line": line, "prompt": img}}
+             "broll": {"kind": kind, "why": why, "line": line, "prompt": img,
+                       **({"check": check, "still_job": still_job} if check and still_job is not None else {})}}
         p["renders"].append(r)
         if candidates:
             r["broll_candidate"] = True
@@ -343,7 +374,7 @@ def finalize(p: dict, log=print) -> list[int]:
     ok = clean
     shots = {s["index"]: s for s in p.get("shots", [])}
     share = float(p.get("broll_share", 0.0))
-    n = max(1, int(round(len(shots) * share))) if share > 0 else 0
+    n = slots(p, share)
     picks = choose(p, share=share, n=n, only={r["shot"] for r in ok})
     chosen = []
     for s, why in picks:
