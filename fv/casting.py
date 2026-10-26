@@ -445,7 +445,8 @@ def era_line(theme: str) -> str:
     else:
         era = _ERA_NAMES[m.group(4).lower()]
     cars = bool(re.search(r"\b(19|20)\d", era))  # a car brief in a medieval court would bring carts
-    return f"Every {'vehicle, ' if cars else ''}building, fixture and object in frame is period-accurate for {era}, nothing modern."
+    return (f"Hair, clothes, glasses{', vehicles' if cars else ''} and every building, fixture and object in frame are "
+            f"period-accurate for {era}, nothing modern.")
 
 
 def _lights_for(lights: list[str], place: str) -> list[str]:
