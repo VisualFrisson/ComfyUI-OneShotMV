@@ -430,8 +430,10 @@ _NIGHT_SPARE = ["warm light from a lamp in the room", "hard light from a single 
 
 
 def time_of_day(theme: str) -> str:
-    """'night', 'day' or '' (the World line doesn't say)."""
-    t = theme or ""
+    """'night', 'day' or '' (the World line doesn't say), from the World line's headline (before the
+    colon): sx06's Paris fashion show listed "a Paris street outside at night" among its places and
+    every backstage shot went dark."""
+    t = (theme or "").split(":")[0]
     return "night" if _NIGHT_THEME.search(t) else "day" if _DAY_THEME.search(t) else ""
 
 
