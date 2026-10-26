@@ -71,7 +71,7 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 # each with the gender the cast needs.
 ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Roles already in the video: {taken}.
-List {n} more roles, jobs or kinds of people who belong in this world, every one different from the roles already in the video and from each other, each as specific to this world as those (never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Answer with one JSON object only, no other text: {{"roles": [...]}}"""
+List {n} more roles, jobs or kinds of people who belong in this world, every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
 
 FILL_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Write these {n} characters for it, in this order, one each: {wanted}.
@@ -302,6 +302,7 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
             role = _adults(_debrand(_NAME.sub("", role)))
             # the role alone: "rodeo clown entertaining the crowd" (st2e) put a crowd in the portrait,
             # "cowgirl in pink fringe" repeats the outfit; what they do and wear has its own key
+            role = re.sub(r"\s*\((?:a\s+)?(?:woman|man|female|male)\)", "", role)  # the gender asked for, echoed (sx05c)
             short = re.sub(r"\s+(?:(?!(?:king|viking|darling|wedding|building|evening|morning|earring|string|swing|"
                            r"wing|ring|spring|ceiling|clothing|pudding|sterling|duckling|lightning)\s)[a-z]+ing\s+"
                            r"(?:the|a|an|his|her|their|its|some|[a-z]+s)\b.*|"
@@ -415,7 +416,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v7".encode("utf-8")).hexdigest()[:16]  # v7: role, gender, age, look; bigger cast
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v8".encode("utf-8")).hexdigest()[:16]  # v8: role, gender, age, look; bigger cast; roles with their real gender
 
 
 # ------------------------------------------------------------------ the language model
@@ -794,7 +795,7 @@ def _same(a: dict, b: dict) -> bool:
     return a["role"].lower() == b["role"].lower() and a.get("gender") == b.get("gender") and close
 
 
-def _role_list(text: str | None) -> list[str]:
+def _role_list(text: str | None) -> list[tuple[str, str]]:
     d = _parse(text or "") or {}
     v = d.get("roles")
     if not isinstance(v, list):  # a bare list, or one role per line
@@ -803,19 +804,25 @@ def _role_list(text: str | None) -> list[str]:
             v = json.loads(m.group(0)) if m else []
         except Exception:
             v = []
-    out = []
+    out, seen = [], set()
     for x in v:
-        x = " ".join(str(x).split()).strip(" ,.-\"'")
+        g = ""
+        if isinstance(x, dict):
+            g = _gender_of(str(x.get("gender", "")), "", "", "") if str(x.get("gender", "")).strip() else ""
+            x = x.get("role") or x.get("name") or ""
+        x = re.sub(r"\s*\((?:a\s+)?(?:woman|man|female|male)\)\s*$", "", " ".join(str(x).split()), flags=re.I)
+        x = x.strip(" ,.-\"'")
         x = re.sub(r"(?i)^(?:an?|the)\s+", "", _debrand(_NAME.sub("", x)))
         # groups are more than one person ("rodeo clown's family", st2e), and a customer is generic
         if re.search(r"(?i)\b(family|families|kids|children|friends|crew|band|gang|group|team|couple|parents|"
                      r"customers?|passengers?|residents?|locals|tourists?|visitors?)\b", x):
             continue
-        if re.search(r"(?i)\w'?s\s+(?:wife|husband|son|daughter|mother|father|boyfriend|girlfriend|roommate|sister|"
-                     r"brother|cousin|friend|neighbou?r|assistant|family|kid|child|partner|date|fan)\b", x):
-            continue  # someone's relative is a role made from another role (st2e: "the diner waitress's boyfriend")
-        if 2 < len(x) <= 40 and not _CROWD.search(x) and not _TWO.search(x) and x.lower() not in [o.lower() for o in out]:
-            out.append(x)
+        if re.search(r"(?i)\w['\u2019]s\s", x):
+            continue  # someone's relative or helper is a role made from another role (st2e: "the diner
+            # waitress's boyfriend"; sx05c: "the lion keeper's guard", "the scribe's papyrus supplier")
+        if 2 < len(x) <= 40 and not _CROWD.search(x) and not _TWO.search(x) and x.lower() not in seen:
+            seen.add(x.lower())
+            out.append((x, g))
     return out
 
 
@@ -845,19 +852,22 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
         need = n - len(chars) - len(roles) + 4
         if need <= 4:
             break
-        text = llm(ROLES_PROMPT.format(theme=theme.replace('"', "'"), taken=", ".join(taken + roles), n=need),
-                   seed=seed + 211 + attempt, max_length=14 * need + 120, log=log)
+        text = llm(ROLES_PROMPT.format(theme=theme.replace('"', "'"), taken=", ".join(taken + [r for r, _ in roles]),
+                                       n=need, strict=STRICT),
+                   seed=seed + 211 + attempt, max_length=24 * need + 160, log=log)
         dump(f"r{attempt}", text)
         if text is None:
             break
-        known = {r.lower() for r in taken + roles}
-        roles += [r for r in _role_list(text) if r.lower() not in known]
-    log(f"[FrissonVision] theme: {len(roles)} new roles: {', '.join(roles)}")
+        known = {r.lower() for r in taken} | {r.lower() for r, _ in roles}
+        roles += [(r, g) for r, g in _role_list(text) if r.lower() not in known]
+    log(f"[FrissonVision] theme: {len(roles)} new roles: {', '.join(f'{r} ({g or chr(63)})' for r, g in roles)}")
     women = sum(1 for c in chars if c.get("gender") == "woman")
     men = sum(1 for c in chars if c.get("gender") == "man")
     queue = []
-    for r in roles:
-        g = _gender_of("", r, "", "")
+    # the gender the role really had (the model's, or the role word's); only an open role is
+    # given the one the cast is short of (sx05c: the balancer made a woman the senator's bodyguard)
+    for r, given in roles:
+        g = _gender_of("", r, "", "") or given
         if not g:
             g = "man" if women > men else "woman"
         women, men = women + (g == "woman"), men + (g == "man")
