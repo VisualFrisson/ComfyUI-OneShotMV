@@ -66,9 +66,16 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
-EXTRA_PROMPT = """You design the look of a music video. Theme: "{theme}"
-These characters are already cast: {cast}.
-Invent {n} more characters for this world, every one a different person from everyone already cast: other roles that belong in this world (a role already cast only comes back as a clearly different person, another gender or age), about half women and half men. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing. {strict} Answer with one JSON object only, no other text: {{"characters": [...]}}, a list of {n} characters, all adults, {character_keys}"""
+# st2e: shown the cast so far and asked for more, Gemma wrote the cast so far out again and added
+# one or two (+1 of 8). Two steps instead: new role names first, then those roles written out,
+# each with the gender the cast needs.
+ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
+Roles already in the video: {taken}.
+List {n} more roles, jobs or kinds of people who belong in this world, every one different from the roles already in the video and from each other, each as specific to this world as those (never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Answer with one JSON object only, no other text: {{"roles": [...]}}"""
+
+FILL_PROMPT = """You design the look of a music video. Theme: "{theme}"
+Write these {n} characters for it, in this order, one each: {wanted}.
+Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing. {strict} Answer with one JSON object only, no other text: {{"characters": [...]}}, a list of these {n} characters, all adults, {character_keys}"""
 
 # phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
 COPIED = {"a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain",
@@ -785,31 +792,78 @@ def _same(a: dict, b: dict) -> bool:
     return a["role"].lower() == b["role"].lower() and a.get("gender") == b.get("gender") and close
 
 
+def _role_list(text: str | None) -> list[str]:
+    d = _parse(text or "") or {}
+    v = d.get("roles")
+    if not isinstance(v, list):  # a bare list, or one role per line
+        m = re.search(r"\[[^\]]*\]", text or "")
+        try:
+            v = json.loads(m.group(0)) if m else []
+        except Exception:
+            v = []
+    out = []
+    for x in v:
+        x = " ".join(str(x).split()).strip(" ,.-\"'")
+        x = re.sub(r"(?i)^(?:an?|the)\s+", "", _debrand(_NAME.sub("", x)))
+        if 2 < len(x) <= 40 and not _CROWD.search(x) and not _TWO.search(x) and x.lower() not in [o.lower() for o in out]:
+            out.append(x)
+    return out
+
+
 def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, log=print) -> dict:
-    """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): more are
-    asked for in batches of EXTRA_BATCH, each batch shown the cast so far. Cached with the bible."""
+    """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): new role
+    names first, then those roles written out in batches of EXTRA_BATCH, each with the gender
+    that keeps the cast about half women and half men (a role only one gender holds keeps it).
+    Cached with the bible."""
     chars = bible.get("characters") or []
     theme = bible.get("theme", "")
     if not theme or bible.get("source") != "gemma-3-12b" or len(chars) >= n:
         return bible
     start = len(chars)
-    for attempt in range(8):
-        if len(chars) >= n:
-            break
-        k = min(EXTRA_BATCH, n - len(chars) + 2)
-        q = EXTRA_PROMPT.format(theme=theme.replace('"', "'"), cast=_cast_line(chars), n=k,
-                                character_keys=CHARACTER_KEYS, strict=STRICT)
-        text = llm(q, seed=seed + 101 + attempt, max_length=320 * k + 600, log=log)
-        if text is None:
-            break
-        if out_root:  # kept for debugging the cast
+
+    def dump(tag, text):
+        if out_root and text:  # kept for debugging the cast
             try:
                 os.makedirs(cache_dir(out_root), exist_ok=True)
-                with open(os.path.join(cache_dir(out_root), f"{_key(theme, seed)}_x{attempt}.txt"), "w",
-                          encoding="utf-8") as f:
+                with open(os.path.join(cache_dir(out_root), f"{_key(theme, seed)}_{tag}.txt"), "w", encoding="utf-8") as f:
                     f.write(text)
             except Exception:
                 pass
+
+    taken = [c.get("role") or c["who"].split(",")[0] for c in chars]
+    roles: list[str] = []
+    for attempt in range(3):
+        need = n - len(chars) - len(roles) + 4
+        if need <= 4:
+            break
+        text = llm(ROLES_PROMPT.format(theme=theme.replace('"', "'"), taken=", ".join(taken + roles), n=need),
+                   seed=seed + 211 + attempt, max_length=14 * need + 120, log=log)
+        dump(f"r{attempt}", text)
+        if text is None:
+            break
+        known = {r.lower() for r in taken + roles}
+        roles += [r for r in _role_list(text) if r.lower() not in known]
+    log(f"[FrissonVision] theme: {len(roles)} new roles: {', '.join(roles)}")
+    women = sum(1 for c in chars if c.get("gender") == "woman")
+    men = sum(1 for c in chars if c.get("gender") == "man")
+    queue = []
+    for r in roles:
+        g = _gender_of("", r, "", "")
+        if not g:
+            g = "man" if women > men else "woman"
+        women, men = women + (g == "woman"), men + (g == "man")
+        queue.append((r, g))
+    attempt = 0
+    while queue and len(chars) < n and attempt < 8:
+        batch, queue = queue[:EXTRA_BATCH], queue[EXTRA_BATCH:]
+        wanted = "; ".join(f"{_article(r)} {r} ({g})" for r, g in batch)
+        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), n=len(batch), wanted=wanted,
+                                      character_keys=CHARACTER_KEYS, strict=STRICT),
+                   seed=seed + 101 + attempt, max_length=320 * len(batch) + 600, log=log)
+        dump(f"x{attempt}", text)
+        attempt += 1
+        if text is None:
+            break
         d = _parse(text)
         new = _characters((d or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d else []
         added = 0
@@ -820,14 +874,14 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
                 continue
             chars.append(c)
             added += 1
-        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added} of {len(new)} read, {k} asked)")
-        if not added:
-            continue
+        got = {(c.get("role") or "").lower() for c in new}
+        queue += [(r, g) for r, g in batch if r.lower() not in got and _role(r).lower() not in got][:2]  # a dropped one, once more
+        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added} of {len(batch)} asked)")
     if len(chars) > start:
         # a role's own action never names another character (as in _characters, over the whole cast)
-        roles = _role_words(chars)
+        roles_ = _role_words(chars)
         for c in chars:
-            others = roles - _role_words([c])
+            others = roles_ - _role_words([c])
             pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(others, key=len, reverse=True)) +
                              r")s?\b") if others else None
             for key in ("doing", "face"):
