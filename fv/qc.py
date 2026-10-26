@@ -59,7 +59,7 @@ THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mout
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
           "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.45,
           "id_face_h": 0.25, "tilt": 50.0, "bars": 0.06}
-VERSION = 7  # takes checked by an older QC are checked again
+VERSION = 8  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -285,19 +285,16 @@ def frame_bars(a) -> tuple[float, float]:
 
 
 def clip_bars(g) -> tuple[float, float]:
-    """(share of frames with bars, biggest strip) for gray frames (N, H, W). Bars that grow or
-    move count frame by frame (st3's cutaways shrank into a black frame over a second; st9's
-    barred portrait slid from left to right as the camera panned). A strip on one side counts
-    only when it moves (its width changes by 8% of the frame, or strips show on both sides): a
-    black galley curtain at the edge of sx02w's cabin was as dark and flat as a bar but stayed
-    put. Night sky at the top is no bar (top/bottom count only as a symmetric letterbox)."""
+    """(share of frames with bars, biggest bar) for gray frames (N, H, W): pillar box, letter box
+    or a picture shrinking inside black, counted frame by frame so bars that grow count (st3's
+    cutaways pulled back into a black frame over a second; sx03's pillarboxed debutante; st9's
+    letterboxed cutaway). Only bars on both sides count: a dark strip on one side was always
+    scenery (sx02w's black galley curtain; st9's dark lockers framing the shot)."""
     fr = [_frame_lr(a) for a in g]
     if not fr:
         return 0.0, 0.0
-    ls, rs = [x[1] for x in fr], [x[2] for x in fr]
-    moving = (max(ls) - min(ls) >= 0.08) or (max(rs) - min(rs) >= 0.08) or (max(ls) >= 0.05 and max(rs) >= 0.05)
-    hits = sum(1 for sym, l, r in fr if sym >= 0.03 or (moving and max(l, r) >= 0.08))
-    return hits / len(fr), max(max(ls), max(rs))
+    hits = sum(1 for sym, _, _ in fr if sym >= 0.03)
+    return hits / len(fr), max(sym for sym, _, _ in fr)
 
 
 def path_bars(path: str) -> tuple[float, float]:
