@@ -245,11 +245,13 @@ EYEWEAR = re.compile(r"(?i)\b(glasses|eyeglasses|spectacles|sunglasses|shades|su
                      r"lorgnettes?|eyewear|cat-eye|horn-rimmed|wire-rimmed|aviators|bifocals|frames)\b")
 FACIAL_HAIR = re.compile(r"(?i)\b(beards?|bearded|moustaches?|mustaches?|stubble|goatees?|sideburns|whiskers|"
                          r"facial hair|five o'clock shadow|mutton ?chops)\b")
-_WOMAN_ROLE = re.compile(r"(?i)\b(woman|women|lady|ladies|girl|waitress|actress|hostess|stewardess|seamstress|"
+_WOMAN_ROLE = re.compile(r"(?i)\b(woman|women|lady|ladies|girl|girlfriend|waitress|actress|hostess|stewardess|seamstress|"
                          r"priestess|empress|queen|princess|duchess|countess|baroness|nun|maid|matron|mother|wife|"
-                         r"widow|bride|cowgirl|showgirl|ballerina|songstress|heiress|governess|she|her)\b")
-_MAN_ROLE = re.compile(r"(?i)\b(man|men|gentleman|guy|waiter|actor|host|steward|priest|emperor|king|prince|duke|"
-                       r"count|baron|monk|father|husband|widower|groom|cowboy|showman|he|his|him)\b")
+                         r"widow|bride|cowgirl|showgirl|ballerina|songstress|heiress|governess|daughter|sister|aunt|"
+                         r"niece|grandmother|granddaughter|grandma|gal|lass|madam|mrs|miss|she|her)\b")
+_MAN_ROLE = re.compile(r"(?i)\b(man|men|gentleman|guy|boyfriend|waiter|actor|host|steward|priest|emperor|king|prince|duke|"
+                       r"count|baron|monk|father|husband|widower|groom|cowboy|showman|son|brother|uncle|nephew|"
+                       r"grandfather|grandson|grandpa|fella|lad|mister|sir|he|his|him)\b")
 
 
 def _drop_clauses(s: str, pat: re.Pattern) -> str:
@@ -805,6 +807,13 @@ def _role_list(text: str | None) -> list[str]:
     for x in v:
         x = " ".join(str(x).split()).strip(" ,.-\"'")
         x = re.sub(r"(?i)^(?:an?|the)\s+", "", _debrand(_NAME.sub("", x)))
+        # groups are more than one person ("rodeo clown's family", st2e), and a customer is generic
+        if re.search(r"(?i)\b(family|families|kids|children|friends|crew|band|gang|group|team|couple|parents|"
+                     r"customers?|passengers?|residents?|locals|tourists?|visitors?)\b", x):
+            continue
+        if re.search(r"(?i)\w'?s\s+(?:wife|husband|son|daughter|mother|father|boyfriend|girlfriend|roommate|sister|"
+                     r"brother|cousin|friend|neighbou?r|assistant|family|kid|child|partner|date|fan)\b", x):
+            continue  # someone's relative is a role made from another role (st2e: "the diner waitress's boyfriend")
         if 2 < len(x) <= 40 and not _CROWD.search(x) and not _TWO.search(x) and x.lower() not in [o.lower() for o in out]:
             out.append(x)
     return out
