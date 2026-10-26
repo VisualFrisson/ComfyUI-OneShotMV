@@ -85,7 +85,10 @@ def _intense(s: dict) -> bool:
     alone can't tell them apart in songs that stay loud throughout (rap verses are as loud as
     the hook); without labels, the loud sections count."""
     if s.get("label"):
-        return s.get("is_drop") or s["label"] in INTENSE
+        # a final chorus is often labelled "outro" (Pink Pony Club from 3:10, st2d: the last chorus,
+        # 4 dB under the loudest section, planned as all holds): a loud outro counts too
+        return s.get("is_drop") or s["label"] in INTENSE or \
+            (s["label"] == "outro" and s.get("loud") and s.get("energy", 0.0) >= 0.6)
     return s["loud"]
 
 
