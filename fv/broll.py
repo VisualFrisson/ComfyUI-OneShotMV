@@ -57,7 +57,8 @@ STILL = " Nobody in the picture. No text, no lettering."  # + casting.REALISM_SC
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
           "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
-            "flicker, deformed hands, distorted faces, letterbox, black bars, widescreen bars, frame border")
+            "flicker, deformed hands, distorted faces, letterbox, black bars, widescreen bars, frame border, "
+            "picture in picture, frame within a frame, shrinking picture, zoom out to black, black border")
 # a lyric cutaway has nobody in it (n39: a stranger turned up on the beach in an artist's video)
 NEGATIVE_EMPTY = NEGATIVE + ", person, people, face, crowd, figure, silhouette"
 
@@ -325,6 +326,19 @@ def finalize(p: dict, log=print) -> list[int]:
     by_id = {r["id"]: r for r in p["renders"]}
     cand = [by_id[i] for i in p.get("broll_candidates", []) if i in by_id]
     ok = [r for r in cand if r.get("path") and os.path.exists(r["path"])]
+    # cutaways get no take QC: drop the ones that shrink into a black frame or show bars (st3: two
+    # cutaways pulled back into a picture inside black over about a second); twice the slots were
+    # rendered, so another candidate takes the slot
+    from . import qc
+    clean = []
+    for r in ok:
+        share, biggest = qc.path_bars(r["path"])
+        r.setdefault("broll", {})["bars"] = round(share, 3)
+        if share >= 0.1:
+            log(f"[FrissonVision] b-roll: r{r['id']:03d}R dropped, black bars in {share:.0%} of its frames")
+            continue
+        clean.append(r)
+    ok = clean
     shots = {s["index"]: s for s in p.get("shots", [])}
     share = float(p.get("broll_share", 0.0))
     n = max(1, int(round(len(shots) * share))) if share > 0 else 0

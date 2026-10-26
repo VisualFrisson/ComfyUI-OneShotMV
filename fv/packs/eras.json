@@ -6,7 +6,7 @@
  "casting": {
   "template": "Cinematic medium close-up of {who}, singing passionately toward the camera with the mouth open mid-word, {background}, {light}, shot on a wide-angle lens slightly below eye level, shallow depth of field. Photorealistic film still, an invented person, natural colour, subtle film grain.",
   "sing": "{who} sings along to the song the way a real person sings a song they love. The lips shape each word in time with the voice, a relaxed jaw, small natural head movements on the beat, natural breathing. The camera pushes in very slowly. Both hands stay below the frame.",
-  "negative": "modern clothing in a period scene, text, watermark, blurry, deformed face, deformed teeth, closed mouth, still frame, microphone, celebrity likeness",
+  "negative": "modern clothing in a period scene, text, watermark, blurry, deformed face, deformed teeth, closed mouth, still frame, microphone, celebrity likeness, letterbox, black bars, black border, picture in picture",
   "people": [
    [
     "a Roman market trader in a linen tunic with a weathered tan face and short grey hair",

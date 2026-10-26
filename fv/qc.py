@@ -59,7 +59,7 @@ THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mout
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
           "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.45,
           "id_face_h": 0.25, "tilt": 50.0, "bars": 0.06}
-VERSION = 5  # takes checked by an older QC are checked again
+VERSION = 6  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -259,6 +259,46 @@ def black_bars(gray) -> float:
     return float(max(side(a.mean(0)), side(a.mean(1))))
 
 
+def frame_bars(a) -> tuple[float, float]:
+    """(symmetric, one-sided) bar size for one gray frame (0..1): flat near-black strips at the
+    edges, as a share of the width or height. Frames dark in the middle (a fade, a black frame)
+    are left to the exposure check."""
+    a = np.asarray(a, dtype=np.float32)
+    h, w = a.shape
+    if a[int(h * 0.3):int(h * 0.7), int(w * 0.3):int(w * 0.7)].mean() < 0.05:
+        return 0.0, 0.0
+    cm, cs, rm, rs = a.mean(0), a.std(0), a.mean(1), a.std(1)
+
+    def run(m, sd):
+        k = 0
+        while k < len(m) // 2 and m[k] < 0.03 and sd[k] < 0.012:
+            k += 1
+        return k / max(1, len(m))
+    l, r, t, b = run(cm, cs), run(cm[::-1], cs[::-1]), run(rm, rs), run(rm[::-1], rs[::-1])
+    return max(min(l, r), min(t, b)), max(l, r, t, b)
+
+
+def clip_bars(g) -> tuple[float, float]:
+    """(share of frames with bars, biggest bar) for gray frames (N, H, W). Bars that grow or move
+    count frame by frame (st3's cutaways shrank into a black frame over a second; st9's barred
+    portrait slid from left to right as the camera panned); tested on 70 clean clips (1 false
+    hit, a fade to black, now skipped) and the 3 barred ones (31-69% of frames)."""
+    fb = [frame_bars(a) for a in g]
+    if not fb:
+        return 0.0, 0.0
+    hits = sum(1 for sym, one in fb if sym >= 0.03 or one >= 0.08)
+    return hits / len(fb), max(one for _, one in fb)
+
+
+def path_bars(path: str) -> tuple[float, float]:
+    """clip_bars of a video file (b-roll candidates are screened with it)."""
+    try:
+        frames, _ = _read(path, size=160, max_frames=240)
+        return clip_bars(np.stack([f.mean(2) for f in frames]).astype(np.float32) / 255)
+    except Exception:
+        return 0.0, 0.0
+
+
 def image_bars(path: str) -> float:
     """black_bars of an image file (a portrait or keyframe); 0.0 if it can't be read."""
     try:
@@ -296,9 +336,9 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["exposure_bad"] = round(bad, 3)
     if bad > THRESH["exposure_frac"]:
         r["fail"].append("exposure")
-    bb = black_bars(g)
-    r["bars"] = round(bb, 3)
-    if bb >= THRESH["bars"]:
+    share, biggest = clip_bars(g)
+    r["bars"], r["bars_max"] = round(share, 3), round(biggest, 3)
+    if share >= 0.1 or black_bars(g) >= THRESH["bars"]:
         r["fail"].append("bars")
     jmax, jmed, jat = cut_jump(frames)
     r["jump"], r["jump_at"] = round(jmax, 3), jat

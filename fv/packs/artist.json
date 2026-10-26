@@ -88,7 +88,7 @@
    "a red turtleneck",
    "a striped rugby shirt"
   ],
-  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles",
+  "negative": "fog, haze, smoke, static, bad teeth, deformed teeth, blurry, overexposed, underexposed, low contrast, washed out colors, excessive noise, poor lighting, flickering, distorted proportions, unnatural skin tones, deformed facial features, asymmetrical face, missing facial features, extra limbs, disfigured hands, low quality, still frame, closed mouth, microphone, watermark, overlay, titles, subtitles, letterbox, black bars, black border, picture in picture",
   "edit_wide": "Photo of the same person as in image 1, photographed again somewhere new: a {shot} {lens}, shot {angle}. They are {action} {place}, singing with the mouth open mid-word. Wearing {wear}. {light}. Keep their exact face, identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.",
   "places": [
    "on a rooftop at dusk with the city lights behind",
