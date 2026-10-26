@@ -45,7 +45,7 @@ PROMPT_ACTION = """You are editing a music video set in this world: "{world}". O
 MOMENT_STILL = ("Candid medium shot on a 35mm lens of {who}, wearing {wear}, {action}, absorbed in what they are "
                 "doing, mouth closed, not singing, not looking at the camera. {light}. Setting: {place}. An invented "
                 "person, the only person in frame. No text, no lettering.")
-MOMENT_MOTION = ("Candid medium shot of {who} {action}: natural, unhurried movement, the mouth stays closed, not "
+MOMENT_MOTION = ("Candid medium shot of {who}, {action}: natural, unhurried movement, the mouth stays closed, not "
                  "singing, not looking at the camera. The handheld camera drifts slightly. No one else in frame. "
                  "No text appears.")
 MOMENT_FALLBACK = ["adjusting something with careful hands", "tidying up after a long day", "stretching and looking around",
@@ -193,6 +193,8 @@ def _action_for(p: dict, pack: dict, d: dict, seed: int, log=print) -> str:
                       seed=seed, max_length=60, log=log)
     act = " ".join((text or "").strip().strip('"').split()).split("\n")[0].rstrip(".").strip()
     act = themes._no_props(themes._debrand(act))
+    if len(act.split()) < 2:
+        act = ""  # "folding" alone: the prop scrub took the object (st2b's mother folding a newspaper)
     if act and act[:1].isupper():
         act = act[0].lower() + act[1:]
     if not re.match(r"^[a-z]+ing\b", act or "") or len(act.split()) > 14:
