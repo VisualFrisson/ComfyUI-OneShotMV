@@ -50,8 +50,8 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
 "camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
-"actions": a list of {actions} things one person does in this world's places while singing, seen in a wide shot, specific to its roles and places (never generic like "working on a task"). They are alone and their hands are free. At most 9 words each.
-"poses": a list of {poses} different poses or expressions for a portrait in this world, in the theme's tone. At most 12 words each.
+"actions": a list of {actions} things a person does in this world's places while singing, seen in a wide shot, each starting with a verb ending in -ing, never naming a role or another person, and never generic like "working on a task". They are alone and their hands are free. At most 9 words each.
+"poses": a list of {poses} different expressions for a portrait in this world, in the theme's tone, describing the face only, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
 # phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
@@ -172,6 +172,28 @@ def _camera(v) -> str:
     if len(v) < 12 or _CROWD.search(v) or re.search(r"(?i)\b(modern|contemporary|present-day|smartphone)\b", v):
         return ""  # present day: the brief's own modern look
     return v
+
+
+def _role_words(chars: list) -> set:
+    """The role nouns of a world's characters ('waitress', 'go-go dancer', 'mother')."""
+    out = set()
+    for c in chars or []:
+        who = str(c.get("who", "")) if isinstance(c, dict) else str(c)
+        role = re.sub(r"^(?:an?|the)\s+", "", who.split(",")[0].strip(), flags=re.I).lower()
+        if role and not re.fullmatch(r"(?:young |older |old )?(?:wo)?man|person|lady|guy", role):
+            out.add(role)
+            out.add(role.split()[-1])  # 'dancer' for 'go-go dancer'
+    return {r for r in out if len(r) > 3}
+
+
+def _no_others(v: list, roles: set) -> list:
+    """Drop actions and poses that name a character (Pink Pony Club st2b: 'The waitress refills a
+    coffee cup' in the mother's portrait drew the waitress next to her, seven portraits with two
+    people), or start with 'The ...'; keep the list if that would empty it."""
+    pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(roles, key=len, reverse=True)) + r")s?\b") \
+        if roles else None
+    keep = [x for x in v if not re.match(r"(?i)^the\s", x.strip()) and not (pat and pat.search(x))]
+    return keep if len(keep) >= 3 else [re.sub(r"(?i)^the\s+[a-z -]+?\s+(?=[a-z]+s\b)", "", x) for x in v]
 
 
 def _plain(wear: str) -> str:
@@ -481,6 +503,10 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                 for k in ("actions", "places", "poses"):
                     if isinstance(cached.get(k), list):
                         cached[k] = [y for y in (_no_props(x) for x in cached[k]) if len(y) > 3]
+                roles = _role_words(cached.get("characters") or [])
+                for k in ("actions", "poses"):
+                    if isinstance(cached.get(k), list):
+                        cached[k] = _no_others(cached[k], roles)
                 if isinstance(cached.get("wear"), list):
                     cached["wear"] = [_plain(x) for x in cached["wear"]]
                 if isinstance(cached.get("light"), list):
@@ -510,6 +536,9 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         for k in ("actions", "places", "poses"):
             lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
         lists["wear"] = [_plain(x) for x in lists["wear"]]
+        roles = _role_words(_characters(d.get("characters")))
+        for k in ("actions", "poses"):
+            lists[k] = _no_others(lists[k], roles)
         lists["light"] = _alone(lists["light"], _LIGHT_SPARE, n_min=4)
         lists["places"] = _alone(lists["places"])
         chars = _characters(d.get("characters"))
