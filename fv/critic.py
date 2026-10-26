@@ -229,7 +229,8 @@ def fit_targets(boxes: list, max_scale: float = 1.6) -> tuple[float, float]:
     med = ws[len(ws) // 2]
     # a touch above the largest face, so even that one can be moved into place, but never more
     # than a third above the typical one (the zoom costs resolution and head room)
-    tw = min(max(ws) * 1.06, med * 1.35, med * max_scale)
+    # (st2e at 1.35: hats and hair touched the top of the frame on the drop)
+    tw = min(max(ws) * 1.06, med * 1.2, med * max_scale)
     ty = float(np.clip(cys[len(cys) // 2], 0.36, 0.46))
     return tw, ty
 
