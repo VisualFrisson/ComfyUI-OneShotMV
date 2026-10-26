@@ -38,17 +38,22 @@ def _pick(rng: random.Random, seq, used: dict, key: str):
     return v
 
 
+NAT_CLOSE = ('singing along to the song the way a real person sings a song they love. The lips shape each word in time with the voice, a relaxed jaw, small natural head movements on the beat, a blink now and then, natural breathing.')
+NAT_MED = ('singing along to the song. The lips shape each word in time with the voice, relaxed and natural, shoulders and head moving gently with the rhythm, natural breathing.')
 DEFAULT_FRAMING = {"close": {"shot": "Extreme close-up portrait", "lens": "on a wide-angle lens very close to the face",
-                             "sing": "Handheld close-up of {who} singing straight into the camera. The lips form each word "
-                                     "clearly with wide open mouth movements and jaw motion, natural breathing. Both hands stay below the frame."}}
+                             "sing": "Handheld close-up of {who} " + NAT_CLOSE + " Both hands stay below the frame."}}
 
 
 # Dense vocals (rap, fast flows): a prompt that asks for a mouth that snaps on every syllable
 # lifted SyncNet confidence on every dense shot it was tried on (n28: 3.3-4.0 -> 4.3-4.5,
 # 2.2-2.6 -> 4.0); on sparse stretches no prompt, face or setting helped. See fv/lipsync.py.
-ARTICULATE = ("The mouth moves sharply on every syllable: the lips close on the consonants and open wide on the "
-              "vowels, the jaw snapping with each word, in time with the voice.")
-_LIPS = re.compile(r"The lips form each word clearly with [^.]*\.")
+ARTICULATE = ("The lips shape every syllable in time with the voice, relaxed and natural, with small natural head "
+              "movements on the beat.")
+# Natural singing (Oct 26, the user: "make the images/video look more real and less AI"): "wide open
+# mouth movements" and the snapping-jaw articulation read as performed-for-the-AI. A/B on three
+# st2c singer clips (same still, seed, audio): SyncNet 5.64 / 3.75 / 5.35 against 5.59 / 3.79 / 5.48,
+# with softer mouths, blinks and the odd gesture.
+_LIPS = re.compile(r"The (?:lips (?:form|shape) each word|mouth moves sharply on every syllable)[^.]*\.")
 
 
 def articulate(text: str, sentence: str | None = None) -> str:
@@ -251,9 +256,7 @@ SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera w
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
 SCENE_SING = {
-    "medium": "Medium shot of {who} {action}, singing toward the camera. The lips form each word clearly with "
-              "open mouth movements, shoulders and head move with the rhythm, natural breathing. {move} "
-              "No one else in frame.",
+    "medium": "Medium shot of {who} {action}, " + NAT_MED + " {move} No one else in frame.",
     "wide": "Wide shot of {who} {action}, singing along, the lips forming the words, moving freely with the "
             "rhythm. {move} No one else in frame.",
 }
@@ -308,9 +311,7 @@ THEME_CLOSE = ("{shot} of {who}, {upright}{attitude}, singing straight into the 
                "from {angle} {lens}. Wearing {wear}. {light}. Background: {place}. An invented person, the only "
                "one in frame. " + REAL_PHOTO)
 ATTITUDE = "expressive and a little over the top"  # without a theme's own poses
-THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} singing straight into the camera. The lips form each word "
-                    "clearly with wide open mouth movements, expressive lips and jaw moving with the lyrics, natural "
-                    "breathing, small head bobs and eyebrow raises on the beat. {move} The framing stays "
+THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} " + NAT_CLOSE + " {move} The framing stays "
                     "head-and-shoulders and never moves in closer. Both hands stay below the frame. No one else "
                     "in frame.")
 # themed close-ups are head-and-shoulders (n41: they lip-sync far better than medium shots and
