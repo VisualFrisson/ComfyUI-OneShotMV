@@ -1109,6 +1109,20 @@ def _insert_fix(prompt: str, fix: str) -> str:
     return prompt[:m.end()] + fix + " " + prompt[m.end():]
 
 
+def _empty_place(prompt: str) -> str:
+    """'Background: a mirrored dressing room.' -> 'Background: the same place, empty after everyone has
+    left, with no mirrors.' (a picture re-made for other people in it)."""
+    def sub(m):
+        place = re.sub(r"(?i)^(?:an?|the)\s+", "", m.group(2).strip())
+        place = re.sub(r"(?i)\b(?:crowded|busy|packed|bustling)\s+", "", place)
+        mirrors = ""
+        if re.search(r"(?i)\bmirror", place):  # a mirror shows the person twice, or someone behind
+            place = re.sub(r"(?i)\bmirrored\s+|,?\s*\b(?:lined|ringed|filled|full)\s+with\s+mirrors?\b", "", place)
+            mirrors = ", plain walls and no mirrors"
+        return f"{m.group(1)} the {place}, empty after everyone has left{mirrors}."
+    return re.sub(r"(?i)\b(Background:|Setting:)\s*([^.]+)\.", sub, prompt, count=1)
+
+
 def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: bool = True, log=print) -> dict:
     """Check every still of a unique-cast run (fv/critic.py); re-make the ones with faults (new
     seeds, a line that says what to fix) and check again, at most max_passes times; then keep the
@@ -1160,10 +1174,14 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
             g = _bump(json.load(open(jf, encoding="utf-8")), 31 * (pass_idx + 1))
             fix = critic.fix_lines(it["takes"][-1]["faults"], it["check"], era)
             tag = f"{it['name']}_c{pass_idx + 1}"
+            people = "people" in it["takes"][-1]["faults"]
             for node in g.values():
                 ins = node.get("inputs", {})
                 if node.get("class_type") == "CLIPTextEncode" and isinstance(ins.get("text"), str):
-                    ins["text"] = _insert_fix(ins["text"], fix)
+                    t = ins["text"]
+                    if people:  # st2e: a new seed alone kept the dressing room's mirrors and the arena's crowd
+                        t = _empty_place(t)
+                    ins["text"] = _insert_fix(t, fix)
                 if node.get("class_type") == "SaveImage":
                     ins["filename_prefix"] = f"{rel}/{tag}"
             json.dump(g, open(os.path.join(run_dir, "jobs", f"critic{pass_idx + 1}_{tag}.json"), "w",
