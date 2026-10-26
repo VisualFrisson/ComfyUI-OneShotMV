@@ -59,7 +59,7 @@ THRESH = {"min_frames_frac": 0.85, "frozen": 0.006, "exposure_frac": 0.25, "mout
           "sync_conf": 4.5, "sync_offset": 9, "sync_singing": 0.55,
           "noface": 0.4, "tooclose": {"close": 0.95, "medium": 0.75, "wide": 0.45}, "id_min": 0.20, "id_min_key": 0.45,
           "id_face_h": 0.25, "tilt": 50.0, "bars": 0.06}
-VERSION = 6  # takes checked by an older QC are checked again
+VERSION = 7  # takes checked by an older QC are checked again
 
 
 def cut_jump(frames) -> tuple[float, float, int]:
@@ -259,14 +259,14 @@ def black_bars(gray) -> float:
     return float(max(side(a.mean(0)), side(a.mean(1))))
 
 
-def frame_bars(a) -> tuple[float, float]:
-    """(symmetric, one-sided) bar size for one gray frame (0..1): flat near-black strips at the
-    edges, as a share of the width or height. Frames dark in the middle (a fade, a black frame)
-    are left to the exposure check."""
+def _frame_lr(a) -> tuple[float, float, float]:
+    """(symmetric bar, left strip, right strip) for one gray frame (0..1): flat near-black strips
+    at the edges, as a share of the width or height. Frames dark in the middle (a fade, a black
+    frame) are left to the exposure check."""
     a = np.asarray(a, dtype=np.float32)
     h, w = a.shape
     if a[int(h * 0.3):int(h * 0.7), int(w * 0.3):int(w * 0.7)].mean() < 0.05:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     cm, cs, rm, rs = a.mean(0), a.std(0), a.mean(1), a.std(1)
 
     def run(m, sd):
@@ -275,21 +275,29 @@ def frame_bars(a) -> tuple[float, float]:
             k += 1
         return k / max(1, len(m))
     l, r, t, b = run(cm, cs), run(cm[::-1], cs[::-1]), run(rm, rs), run(rm[::-1], rs[::-1])
-    # a strip on one side only counts left or right (a barred still panning across); a black
-    # night sky at the top or a dark floor is no bar (st6's parking lot)
-    return max(min(l, r), min(t, b)), max(l, r)
+    return max(min(l, r), min(t, b)), l, r
+
+
+def frame_bars(a) -> tuple[float, float]:
+    """(symmetric, one-sided left/right) bar size for one gray frame."""
+    sym, l, r = _frame_lr(a)
+    return sym, max(l, r)
 
 
 def clip_bars(g) -> tuple[float, float]:
-    """(share of frames with bars, biggest bar) for gray frames (N, H, W). Bars that grow or move
-    count frame by frame (st3's cutaways shrank into a black frame over a second; st9's barred
-    portrait slid from left to right as the camera panned); tested on 70 clean clips (1 false
-    hit, a fade to black, now skipped) and the 3 barred ones (31-69% of frames)."""
-    fb = [frame_bars(a) for a in g]
-    if not fb:
+    """(share of frames with bars, biggest strip) for gray frames (N, H, W). Bars that grow or
+    move count frame by frame (st3's cutaways shrank into a black frame over a second; st9's
+    barred portrait slid from left to right as the camera panned). A strip on one side counts
+    only when it moves (its width changes by 8% of the frame, or strips show on both sides): a
+    black galley curtain at the edge of sx02w's cabin was as dark and flat as a bar but stayed
+    put. Night sky at the top is no bar (top/bottom count only as a symmetric letterbox)."""
+    fr = [_frame_lr(a) for a in g]
+    if not fr:
         return 0.0, 0.0
-    hits = sum(1 for sym, one in fb if sym >= 0.03 or one >= 0.08)
-    return hits / len(fb), max(one for _, one in fb)
+    ls, rs = [x[1] for x in fr], [x[2] for x in fr]
+    moving = (max(ls) - min(ls) >= 0.08) or (max(rs) - min(rs) >= 0.08) or (max(ls) >= 0.05 and max(rs) >= 0.05)
+    hits = sum(1 for sym, l, r in fr if sym >= 0.03 or (moving and max(l, r) >= 0.08))
+    return hits / len(fr), max(max(ls), max(rs))
 
 
 def path_bars(path: str) -> tuple[float, float]:
