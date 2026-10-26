@@ -227,9 +227,22 @@ def _camera_part(camera: str | None) -> str:
     cam = " ".join((camera or "").split()).strip(" .")
     if not cam:
         return REALISM_CAMERA
-    # a film-camera line alone sometimes came out black-and-white (Y2K v4c, stress test st4)
-    colour = "" if re.search(r"(?i)black[- ]and[- ]white|monochrome|b&w", cam) else " Full colour."
-    return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}.{colour} Imperfect off-centre framing."
+    # always colour: a film-camera line alone sometimes came out black-and-white (Y2K v4c, st4), and
+    # Gemma wrote "a grainy black and white image" for ancient Rome and 1926 (sx05w: half the
+    # singers in black and white)
+    cam = _no_mono(cam)
+    return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}. Full colour. Imperfect off-centre framing."
+
+
+_MONO = re.compile(r"(?i),?\s*\b(?:in |a |an )?(?:grainy |soft |high-contrast |crisp )?(?:black[- ]and[- ]white|monochrome|b&w|"
+                   r"sepia(?:[- ]toned)?|greyscale|grayscale)\b(?: image| photograph| film| tones?| look)?")
+
+
+def _no_mono(cam: str) -> str:
+    out = _MONO.sub("", cam)
+    out = re.sub(r"(?i)\bproducing\s*(?=with\b|,|$)", "producing a colour image ", out)
+    out = re.sub(r"\s+,", ",", re.sub(r"\s{2,}", " ", out)).strip(" ,.")
+    return out or cam
 
 
 def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera: str | None = None) -> str:
@@ -452,7 +465,8 @@ def era_line(theme: str) -> str:
     else:
         era = _ERA_NAMES[m.group(4).lower()]
     cars = bool(re.search(r"\b(19|20)\d", era))  # a car brief in a medieval court would bring carts
-    return (f"Hair, clothes, glasses{', vehicles' if cars else ''} and every building, fixture and object in frame are "
+    # no "glasses": naming them drew glasses on every other face (sx02w, sx05w's gladiators)
+    return (f"Hair, clothes{', vehicles' if cars else ''} and every building, fixture and object in frame are "
             f"period-accurate for {era}, nothing modern.")
 
 
