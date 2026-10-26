@@ -41,7 +41,7 @@ OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallb
 # Rome): a bigger cast, every shot its own character. The first call writes the world and 12
 # characters; extend() asks for more in batches until every shot has someone new.
 N_CHARACTERS = 12
-EXTRA_BATCH = 12
+EXTRA_BATCH = 8  # st2e: batches of 12 came back cut off (+5, then +0)
 
 # One character, the keys the model fills (shared by the world call and the extra-cast calls). The
 # v6 bibles had one "who" field and Gemma wrote just the role ("a Hotel Valet"): no gender, age or
@@ -291,7 +291,15 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
         role = " ".join((low.get("role") or "").split())
         if role:
             role = _adults(_debrand(_NAME.sub("", role)))
+            # the role alone: "rodeo clown entertaining the crowd" (st2e) put a crowd in the portrait,
+            # "cowgirl in pink fringe" repeats the outfit; what they do and wear has its own key
+            short = re.sub(r"\s+(?:(?!(?:king|viking|darling|wedding|building|evening|morning|earring|string|swing|"
+                           r"wing|ring|spring|ceiling|clothing|pudding|sterling|duckling|lightning)\s)[a-z]+ing\s+"
+                           r"(?:the|a|an|his|her|their|its|some|[a-z]+s)\b.*|"
+                           r"(?:in|on|at|with|from|during|behind|near)\s.*)$", "", role).strip(" ,")
+            role = short if len(short) >= 3 else role
             look = _adults(_debrand(" ".join((low.get("look") or low.get("appearance") or "").split()).strip(" ,.")))
+            look = look[:1].lower() + look[1:] if look[:2].istitle() or look[:1].isupper() and look[1:2].islower() else look
             look = _no_props(_drop_clauses(look, EYEWEAR))  # a face never comes with glasses unasked
             gender = _gender_of(low.get("gender", ""), role, look, wear)
             if gender == "woman":
@@ -460,7 +468,42 @@ def _parse(text: str) -> dict | None:
                 return d
         except Exception:
             continue
-    return None
+    return _salvage(t)
+
+
+def _salvage(t: str) -> dict | None:
+    """A cut-off answer (the model ran out of length mid-list): the complete character objects."""
+    i = t.find('"characters"')
+    if i < 0:
+        return None
+    out, depth, start, in_str, esc = [], 0, None, False, False
+    for k in range(t.find("[", i) + 1, len(t)):
+        ch = t[k]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = k
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    out.append(json.loads(re.sub(r",\s*}", "}", t[start:k + 1])))
+                except Exception:
+                    pass
+                start = None
+        elif ch == "]" and depth == 0:
+            break
+    return {"characters": out} if out else None
 
 
 _NAME = re.compile(r"^[A-Z][a-z]+(?: [A-Z][a-z]+)+\s*:\s*")  # "Elara Vance: 23, ..." -> "23, ..."
@@ -736,7 +779,7 @@ def _same(a: dict, b: dict) -> bool:
     if not a.get("role") or not b.get("role"):
         return a.get("who") == b.get("who")
     try:
-        close = abs(int(a.get("age") or 0) - int(b.get("age") or 0)) < 10
+        close = abs(int(a.get("age") or 0) - int(b.get("age") or 0)) < 6
     except ValueError:
         close = True
     return a["role"].lower() == b["role"].lower() and a.get("gender") == b.get("gender") and close
@@ -750,15 +793,23 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
     if not theme or bible.get("source") != "gemma-3-12b" or len(chars) >= n:
         return bible
     start = len(chars)
-    for attempt in range(6):
+    for attempt in range(8):
         if len(chars) >= n:
             break
         k = min(EXTRA_BATCH, n - len(chars) + 2)
         q = EXTRA_PROMPT.format(theme=theme.replace('"', "'"), cast=_cast_line(chars), n=k,
                                 character_keys=CHARACTER_KEYS, strict=STRICT)
-        text = llm(q, seed=seed + 101 + attempt, max_length=200 * k + 400, log=log)
+        text = llm(q, seed=seed + 101 + attempt, max_length=320 * k + 600, log=log)
         if text is None:
             break
+        if out_root:  # kept for debugging the cast
+            try:
+                os.makedirs(cache_dir(out_root), exist_ok=True)
+                with open(os.path.join(cache_dir(out_root), f"{_key(theme, seed)}_x{attempt}.txt"), "w",
+                          encoding="utf-8") as f:
+                    f.write(text)
+            except Exception:
+                pass
         d = _parse(text)
         new = _characters((d or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d else []
         added = 0
@@ -769,7 +820,7 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
                 continue
             chars.append(c)
             added += 1
-        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added})")
+        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added} of {len(new)} read, {k} asked)")
         if not added:
             continue
     if len(chars) > start:
