@@ -141,7 +141,10 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait") -> list[str]:
         out.append("head")
     if _yes(ans.get("text")):
         out.append("text")
-    modern = ans.get("modern", ans.get("out_of_place")) or []
+    # only a period World's "from after {era}" list counts: in a present-day World the "out of place"
+    # list named the World's own things (st2e: bookshelves in a record store, bottles behind a bar,
+    # the disco ball the World line asks for)
+    modern = ans.get("modern") or []
     if isinstance(modern, str):
         modern = [modern] if modern.strip().lower() not in ("", "none", "[]") else []
     things = [str(x) for x in modern if str(x).strip() and not _NOT_A_THING.search(str(x))
