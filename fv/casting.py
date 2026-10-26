@@ -531,7 +531,9 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
             move = _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")
             sing = THEME_CLOSE_SING.format(who=short, move=move)
-        twin = {"who": who, "detail": "", "wear": "Wearing " + wear + ".", "light": light,
+        # the period lock on the look edits too (sx03's 1813 drop looks came back in a modern suit,
+        # modern glasses and with a microphone stand)
+        twin = {"who": who, "detail": era, "wear": "Wearing " + wear + ".", "light": light,
                 "background": _place_noun(place)}
         if era:
             portrait = portrait.rstrip() + " " + era
