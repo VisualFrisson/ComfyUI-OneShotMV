@@ -241,6 +241,7 @@ _MONO = re.compile(r"(?i),?\s*\b(?:in |a |an )?(?:grainy |soft |high-contrast |c
 def _no_mono(cam: str) -> str:
     out = _MONO.sub("", cam)
     out = re.sub(r"(?i)\bproducing\s*(?=with\b|,|$)", "producing a colour image ", out)
+    out = re.sub(r"(?i),?\s*\b(?:using|on|with)\s*(?=,|$)", "", out)  # "using black and white film," (sx04w)
     out = re.sub(r"\s+,", ",", re.sub(r"\s{2,}", " ", out)).strip(" ,.")
     return out or cam
 
