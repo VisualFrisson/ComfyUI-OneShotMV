@@ -93,8 +93,15 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float):
     """quiet / build / drop at a time: the intense sections (_intense) are drops; the last
     `build_bars` bars before one are the build; the rest holds."""
     hot = [s for s in secs if _intense(s)]
+    # a window that opens inside a chorus (a song loud from end to end: sx01, Electric Love, was
+    # one 32 s chorus, so every shot was a close-up on the beat and no cutaway could go in) still
+    # gets its build: the first `build_bars` bars, at most a third of the window
+    total = max((s["end"] for s in secs), default=0.0)
+    lead = min(build_bars * bar_len, total / 3) if hot and hot[0]["start"] <= 0.05 else 0.0
 
     def phase(t: float) -> str:
+        if t + 0.01 < lead:
+            return "build"
         if any(s["start"] - 1e-3 <= t + 0.01 < s["end"] for s in hot):
             return "drop"
         nxt = [s["start"] for s in hot if s["start"] > t + 0.01]
