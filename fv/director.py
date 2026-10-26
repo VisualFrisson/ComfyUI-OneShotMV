@@ -859,6 +859,10 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                                and rep.get("id_sim", 1.0) < qc.THRESH["id_min_key"]))
                 except Exception:
                     pass  # keep the bars verdict
+                # the fault survived a re-roll on the same still (sx04w's store owner: the head out of
+                # frame in all three takes, steady camera and all): the still is the problem
+                if not bad and pass_idx >= 1 and set(fails) & {"headcut", "noface", "sideways", "people", "bars"}:
+                    bad = True
                 if bad:
                     g2, nk = remake(pname, g)
                     if g2 is not None:
