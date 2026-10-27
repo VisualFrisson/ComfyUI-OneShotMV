@@ -264,6 +264,10 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     from .casting import era_line
     era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink (st6)
     drums = os.path.join(run_dir, "drums.wav")
+    # whoever comes into view in a period World's clips is dressed for it (casting.period_background)
+    from .casting import period_background
+    from .critic import check_era
+    pera = check_era(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")
     rel = p.get("run_rel", "")
     preset, fmt = p["preset"], p["format"]
     rfps = p.get("render_fps", formats.PRESETS[preset]["fps"])
@@ -290,8 +294,9 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d["action"] = _action_for(p, pack, d, seed=p.get("seed", 1) * 100 + k, log=log)
             img = " ".join((MOMENT_STILL.format(**d) + " " + era).split())
             img_still = finish_prompt(img, "medium", camera=camera)
-            motion = " ".join(MOMENT_MOTION.format(who=d["who"], action=d["action"]).split()) + " " + \
-                f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars."
+            motion = period_background(" ".join(MOMENT_MOTION.format(who=d["who"], action=d["action"]).split()) + " " +
+                                       f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars.",
+                                       pera)
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
@@ -313,6 +318,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
                 f"{d['light']}. Setting: {d['place']}. Photorealistic, full frame with no black bars, natural colour, " \
                 "subtle film grain."
+            motion = period_background(motion, pera)
             if stills:
                 keys.append(graphs.krea2_portrait(prompt=img_still, seed=seed, prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
@@ -331,7 +337,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
                                                   prefix=f"{rel}/k{rid:03d}R",
                                                   size1=s1, size2=s2).nodes)
             clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key if stills else None,
-                                           prompt=img + STILL + MOTION, negative=NEGATIVE_EMPTY, frames=frames,
+                                           prompt=period_background(img + STILL + MOTION, pera),
+                                           negative=NEGATIVE_EMPTY, frames=frames,
                                            seed=seed, prefix=f"{rel}/r{rid:03d}R").nodes)
         r = {"id": rid, "shot": s["index"], "role": "R", "performer": -1, "t_start": round(t_start, 4),
              "frames": frames, "fps": rfps, "size": "medium" if kind in ("dance", "moment") else "wide", "sync_delay": 0.0,

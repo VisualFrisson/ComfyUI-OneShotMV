@@ -80,14 +80,14 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     are all different characters before the looks on the drop take theirs."""
     out = _cast_voice(pack, n, seed, sizes, fmt, leads, phases)
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
-    era = ""
-    if any((c.get("check") or {}).get("crowd") for c in out):
-        from .critic import check_era
-        era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
+    from .critic import check_era
+    era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
         if (c.get("check") or {}).get("crowd"):
             c["portrait"], c["sing"] = crowd_behind(c["portrait"], era), crowd_behind(c["sing"], era)
+        if c.get("sing"):
+            c["sing"] = period_background(c["sing"], era)
         if c.get("twin_prompt"):
             c["twin_prompt"] = c["twin_prompt"].rstrip() + " " + edit_realism(c.get("size", "close") == "close")
     return out
@@ -280,13 +280,27 @@ def crowd_behind(prompt: str, era: str = "") -> str:
     """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
     become one person in focus with the stands behind as a blur; in a period World every spectator
     in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd)."""
-    dressed = (f" Every spectator in the crowd wears the clothes of {era}: no t-shirts, caps, sunglasses or "
-               "other modern clothes anywhere.") if era else ""
+    # said as what is there, never naming the unwanted clothes (naming a thing draws it)
+    dressed = (f" Every spectator in the crowd is dressed in the clothes of {era}, as in a big-budget "
+               "period film.") if era else ""
     p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND + dressed, prompt)
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
     p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur" +
                (f", all in the clothes of {era}." if era else "."), p)
+    # a moving camera brings new people into the frame, and LTX dresses them in modern clothes (the
+    # user, Oct 27): in front of a crowd the camera stays put
+    p = re.sub(r"(?i)\bThe (?:handheld )?camera (?:sways|drifts|bobs|tracks|arcs)[^.]*\.",
+               "The camera holds almost still at the same distance.", p)
     return p
+
+
+def period_background(sing: str, era: str) -> str:
+    """Every clip in a period World: whoever is or comes into the background is dressed for the
+    period (the user, Oct 27: as the camera moves, LTX's new background people were in modern
+    clothes). Positive words only: the clips run at cfg 1, where a negative prompt does nothing."""
+    if not era or "comes into view" in sing:
+        return sing
+    return sing.rstrip() + f" Everyone in the background, including anyone who comes into view, is dressed in the clothes of {era}."
 
 
 def edit_realism(close: bool = True) -> str:

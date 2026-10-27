@@ -36,7 +36,8 @@ _NOT_A_THING = re.compile(r"(?i)\b(camera|lighting|light|lens|photo|photograph|p
                           r"likely|possibly|maybe|unclear)\b")
 
 # how bad each fault is (the best take has the lowest total)
-WEIGHT = {"people": 3, "gender": 3, "beard": 3, "glasses": 3, "head": 3, "mono": 3, "text": 1, "modern": 1, "outfit": 1,
+WEIGHT = {"people": 3, "gender": 3, "beard": 3, "glasses": 3, "head": 3, "mono": 3, "crowd": 2, "text": 1, "modern": 1,
+          "outfit": 1,
           "unread": 0}
 
 
@@ -84,6 +85,10 @@ def rubric(check: dict, world: str, era: str) -> str:
     mq = MODERN_PERIOD.format(era=era) if era else MODERN_NOW
     out = RUBRIC.format(who=who, wear=check.get("wear") or "their own clothes", world=world.split(":")[0].strip(),
                         modern_key="modern" if era else "out_of_place", modern_q=mq)
+    if check.get("crowd") and era:  # the crowd behind dressed for the period (sx05i: t-shirts in the Colosseum)
+        out = out.replace('"outfit_matches":', f'"crowd_modern": true if anyone in the crowd or background is '
+                          f'wearing clothes from after {era} (such as t-shirts, caps, hoodies, jeans or sunglasses), '
+                          f'else false, "outfit_matches":')
     if check.get("crowd"):  # a spectacle World: the blurred stands behind are wanted (casting.crowd_behind)
         out = out.replace("how many living people you can see anywhere in the picture, counting small, blurred or "
                           "far-away figures and reflections, but not statues, paintings or carvings",
@@ -107,7 +112,7 @@ def parse(text: str | None) -> dict | None:
         pass
     # one key per line, no commas (rare): pick the fields out one by one
     out = {}
-    for k in ("people", "gender", "facial_hair", "glasses", "head_in_frame", "text", "outfit_matches"):
+    for k in ("people", "gender", "facial_hair", "glasses", "head_in_frame", "text", "outfit_matches", "crowd_modern"):
         mm = re.search(rf'"{k}"\s*:\s*("?)([^",}}\n]+)\1', t)
         if mm:
             v = mm.group(2).strip().lower()
@@ -166,6 +171,8 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait", era: str = "")
         out.append("modern")
     if "outfit_matches" in ans and not _yes(ans.get("outfit_matches")):
         out.append("outfit")
+    if _yes(ans.get("crowd_modern")):
+        out.append("crowd")
     return out
 
 
@@ -241,6 +248,9 @@ def fix_lines(fs: list[str], check: dict, era: str, ans: dict | None = None) -> 
         out.append(f"Every object, garment and hairdo in the picture existed in {era}.")
     if "mono" in fs:
         out.append("A full-colour photograph: rich, natural colour in the skin, the clothes and the surroundings.")
+    if "crowd" in fs and era:
+        out.append(f"Every spectator in the crowd behind is dressed in the clothes of {era}, as in a big-budget "
+                   "period film.")
     if "outfit" in fs and check.get("wear"):
         out.append(f"The outfit is exactly this: {check['wear']}.")
     return " ".join(out)
