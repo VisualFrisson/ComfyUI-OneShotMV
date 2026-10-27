@@ -82,8 +82,14 @@ def rubric(check: dict, world: str, era: str) -> str:
     if g:
         who += f", a {g}" + (f" aged about {age}" if age else "")
     mq = MODERN_PERIOD.format(era=era) if era else MODERN_NOW
-    return RUBRIC.format(who=who, wear=check.get("wear") or "their own clothes", world=world.split(":")[0].strip(),
-                         modern_key="modern" if era else "out_of_place", modern_q=mq)
+    out = RUBRIC.format(who=who, wear=check.get("wear") or "their own clothes", world=world.split(":")[0].strip(),
+                        modern_key="modern" if era else "out_of_place", modern_q=mq)
+    if check.get("crowd"):  # a spectacle World: the blurred stands behind are wanted (casting.crowd_behind)
+        out = out.replace("how many living people you can see anywhere in the picture, counting small, blurred or "
+                          "far-away figures and reflections, but not statues, paintings or carvings",
+                          "how many people are close to the camera and in sharp focus, not counting the blurred "
+                          "crowd far in the background")
+    return out
 
 
 def parse(text: str | None) -> dict | None:

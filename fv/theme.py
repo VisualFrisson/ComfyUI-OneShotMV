@@ -970,9 +970,58 @@ def _named_roles(theme: str) -> list[str]:
         item = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", item.strip())
         role = re.split(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
                         r"fanning|carrying|by|near|under|and)\b", item)[0].strip(" .,")
+        role = role.split(",")[0].strip()  # "champion murmillo gladiator, scarred and oiled"
+        if _GEAR.search(role.split()[-1] if role.split() else ""):
+            continue  # "..., a short sword and a tall shield": the last character's kit, not a character
         if 2 < len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r in out]:
             out.append(role)
     return out
+
+
+_GEAR = re.compile(r"(?i)^(?:swords?|sica|shields?|nets?|tridents?|helmets?|spears?|lances?|guards?|wraps?|greaves|"
+                   r"breastbands?|breastplates?|caps?|hats?|togas?|tunics?|robes?|silks?|pearls?|wreaths?|pelts?|"
+                   r"branch(?:es)?|cloaks?|capes?|bags?|cases?|cups?|trays?|aprons?|dress(?:es)?|suits?|coats?|"
+                   r"jackets?|shirts?|boots?|shoes?|gloves?|scarf|scarves|belts?|sashes?|necklaces?|earrings?|"
+                   r"bracelets?|bangles?|rings?|fans?|whips?|ropes?|chains?|daggers?|knives|knife|axes?|bows?|"
+                   r"arrows?|clubs?|staffs?|sticks?|torch(?:es)?|lamps?|flowers?|bouquets?|baskets?|jugs?|"
+                   r"bottles?|glasses?|goblets?|coins?|purses?|scrolls?|tablets?|horses?|chariots?|lions?|dogs?)$")
+
+
+# A World built on a spectacle in front of a crowd (the user, Oct 27, on sx05h: "With less arena
+# backdrop its hard to get the gladiator event vibe"): the crowd stays behind the singer as a soft blur
+_CROWD_WORLD = re.compile(r"(?i)\b(?:packed|roaring|cheering|screaming|crowded|full)\s+(?:\w+\s+){0,2}?"
+                          r"(?:stands|crowd|arena|stadium|colosseum|grandstands?|tiers|audience|amphitheatre|bleachers)\b")
+
+
+def crowd_world(theme: str) -> bool:
+    return bool(_CROWD_WORLD.search(theme or ""))
+
+
+def story_positions(chars: list[dict], theme: str) -> list[int | None]:
+    """Each character's place in the World line's own list of characters (None for the ones it
+    doesn't name): the World line is cast in its own order (the user, Oct 27: the gladiator video
+    "should lean heavily into gladiators singing and start with them ... then cut to people in the
+    crowd")."""
+    named = _named_roles(theme)
+    out = []
+    for c in chars:
+        role = (c.get("role") or (c.get("who") or "").split(",")[0]).strip()
+        role = re.sub(r"(?i)^(?:an?|the)\s+", "", role)
+        base = _ADJ.sub("", role.lower()).strip()
+        # the closest name first: "second gladiatrix" is not "gladiatrix"
+        pos = next((k for k, r in enumerate(named) if r.lower() == role.lower()), None)
+        if pos is None:
+            pos = next((k for k, r in enumerate(named) if _ADJ.sub("", r.lower()).strip() == base), None)
+        if pos is None:
+            pos = next((k for k, r in enumerate(named) if _has_role(r, [role])), None)
+        out.append(pos)
+    # one character per named role: a second "gladiator" match keeps no position
+    seen, res = set(), []
+    for pos in out:
+        res.append(pos if pos is not None and pos not in seen else None)
+        if pos is not None:
+            seen.add(pos)
+    return res
 
 
 def _has_role(role: str, cast: list[str]) -> bool:

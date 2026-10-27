@@ -82,6 +82,8 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
+        if (c.get("check") or {}).get("crowd"):
+            c["portrait"], c["sing"] = crowd_behind(c["portrait"]), crowd_behind(c["sing"])
         if c.get("twin_prompt"):
             c["twin_prompt"] = c["twin_prompt"].rstrip() + " " + edit_realism(c.get("size", "close") == "close")
     return out
@@ -263,6 +265,20 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
         return " ".join(f"{p} {REALISM_SCENE.replace(REALISM_CAMERA, cam)}".split())
     tail = ONE_ADULT + " " + REALISM_PERSON + " " + cam + (" " + CLOSE_SKIN if size == "close" else "")
     return " ".join(f"{p} {tail}".split())
+
+
+CROWD_BEHIND = ("The only person in focus, with the packed, roaring crowd of the stands far behind as a soft "
+                "blur of distant faces and colour, nobody else near.")
+_ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in frame\.")
+
+
+def crowd_behind(prompt: str) -> str:
+    """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
+    become one person in focus with the stands behind as a blur."""
+    p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND, prompt)
+    p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
+    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur.", p)
+    return p
 
 
 def edit_realism(close: bool = True) -> str:
@@ -514,7 +530,8 @@ def _same_place(a: str | None, b: str | None) -> bool:
     return bool(wa and wb) and (wa[:2] == wb[:2] or len(set(wa[:3]) & set(wb[:3])) >= 2)
 
 
-def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | None = None) -> list[int]:
+def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | None = None,
+                  story: list | None = None) -> list[int]:
     """Which character plays each of n shots (the user, Oct 26: a bigger cast, no repeats, a cut
     can go to anyone of either gender, and neighbours that look alike read as blended): every
     character once before any repeats, the World line's own characters first (n_main: those from
@@ -523,9 +540,23 @@ def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | N
     them, and never the same place twice in a row."""
     out, pools, prev = [], [], None
     n_main = len(chars) if n_main is None else max(0, min(n_main, len(chars)))
+    # story order: the World line's own characters in the order it names them (the user, Oct 27:
+    # gladiators first, then the crowd), the rest after them as before
+    told = sorted((pos, i) for i, pos in enumerate(story or []) if pos is not None and i < len(chars))
+    told = [i for _, i in told] if len(told) >= 3 else []
+    first = True
     for _ in range(n):
+        if told:
+            pick = told.pop(0)
+            out.append(pick)
+            prev = pick
+            continue
         if not any(pools):
-            main, rest = list(range(n_main)), list(range(n_main, len(chars)))
+            main = [i for i in range(n_main) if i not in out or not first]
+            rest = [i for i in range(n_main, len(chars)) if i not in out or not first]
+            if not main and not rest:
+                main, rest = list(range(n_main)), list(range(n_main, len(chars)))
+            first = False
             rng.shuffle(main)
             rng.shuffle(rest)
             pools = [main, rest]
@@ -562,9 +593,15 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     rng, used, out = random.Random(seed), {}, []
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
     tod, era = time_of_day(th.get("theme", "")), era_line(th.get("theme", ""))
+    from .theme import crowd_world
+    crowd = crowd_world(th.get("theme", ""))
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     unique = bool(c.get("unique")) and bool(chars)
-    assign = _unique_order(chars, n, random.Random(seed * 13 + 5), th.get("n_main", 12)) if unique else []
+    story = None
+    if unique and c.get("story", True):
+        from .theme import story_positions
+        story = story_positions(chars, th.get("theme", ""))
+    assign = _unique_order(chars, n, random.Random(seed * 13 + 5), th.get("n_main", 12), story) if unique else []
     # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
     order = []
     # the leads first: v4b's 16 singers drew from the same cycle as the 24 looks on the drop and
@@ -650,6 +687,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             entry["check"] = {"role": ch.get("role") or short, "gender": ch.get("gender", ""), "age": ch.get("age", ""),
                               "look": ch.get("look", ""), "wear": wear, "eyewear": bool(ch.get("eyewear")),
                               "place": _place_noun(place)}
+            if crowd:
+                entry["check"]["crowd"] = True
         if ci is not None:
             entry["char"] = ci
         if drop:
