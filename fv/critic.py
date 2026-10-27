@@ -189,14 +189,17 @@ def saturation(path: str) -> float:
     # lit pixels only: a face against a black tunnel counted its dark background as grey and read
     # 0.0 (sx05f, the venator and the secutor in full colour); a real black-and-white frame reads
     # about 0.04 on its lit pixels too
+    # and the most colourful of them (95th percentile): a black suit on a white runway is a colour
+    # photo with a grey median (sx06g read 0.02-0.08 on four colour portraits; their 95th
+    # percentile is 0.3-0.6, the black-and-white lanista's 0.08)
     lit = mx > 0.12
     if lit.mean() < 0.02:
         return 0.0
     sat = (mx - mn) / np.maximum(mx, 1e-3)
-    return float(np.median(sat[lit]))
+    return float(np.percentile(sat[lit], 95))
 
 
-MONO_BELOW = 0.09
+MONO_BELOW = 0.18
 
 
 def score(fs: list[str]) -> int:
