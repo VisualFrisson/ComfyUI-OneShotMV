@@ -770,6 +770,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                      "grade": g if g in GRADES else "neutral", "camera": _camera(d.get("camera")), "raw": text}
             if len(chars) >= 6:
                 bible["characters"] = chars
+                bible["n_main"] = len(chars)  # the World line's own characters come first in the cast
             break
         log("[FrissonVision] theme: the model's answer was missing lists, trying again")
     if bible is None:

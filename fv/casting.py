@@ -500,16 +500,23 @@ DROP_ANGLE = "eye level, facing the camera straight on"
 DROP_MOVE = "The camera holds steady at head-and-shoulders distance."
 
 
-def _unique_order(chars: list[dict], n: int, rng: random.Random) -> list[int]:
+def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | None = None) -> list[int]:
     """Which character plays each of n shots (the user, Oct 26: a bigger cast, no repeats, a cut
     can go to anyone of either gender, and neighbours that look alike read as blended): every
-    character once before any repeats, each shot the other gender from the one before when there
-    is one left, and never the same place twice in a row."""
-    out, pool, prev = [], [], None
+    character once before any repeats, the World line's own characters first (n_main: those from
+    the first world call; sx05c's games day went to a vinegar merchant and a herbalist while
+    gladiators waited), each shot the other gender from the one before when one is left among
+    them, and never the same place twice in a row."""
+    out, pools, prev = [], [], None
+    n_main = len(chars) if n_main is None else max(0, min(n_main, len(chars)))
     for _ in range(n):
-        if not pool:
-            pool = list(range(len(chars)))
-            rng.shuffle(pool)
+        if not any(pools):
+            main, rest = list(range(n_main)), list(range(n_main, len(chars)))
+            rng.shuffle(main)
+            rng.shuffle(rest)
+            pools = [main, rest]
+        pool = next(pl for pl in pools if pl)
+
         def ok(i, gender=True, place=True):
             if prev is None:
                 return True
@@ -543,7 +550,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     tod, era = time_of_day(th.get("theme", "")), era_line(th.get("theme", ""))
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     unique = bool(c.get("unique")) and bool(chars)
-    assign = _unique_order(chars, n, random.Random(seed * 13 + 5)) if unique else []
+    assign = _unique_order(chars, n, random.Random(seed * 13 + 5), th.get("n_main", 12)) if unique else []
     # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
     order = []
     # the leads first: v4b's 16 singers drew from the same cycle as the 24 looks on the drop and
