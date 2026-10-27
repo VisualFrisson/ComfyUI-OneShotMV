@@ -944,7 +944,9 @@ _BACKSTAGE = re.compile(r"(?i)\b(vendors?|sellers?|merchants?|traders?|hawkers?|
                         r"bakers?|labou?rers?|workers?|makers?|artists?|painters?|sculptors?|carpenters?|smiths?|"
                         r"armou?rers?|tailors?|fortune[- ]tellers?|medics?|doctors?|nurses?|physicians?|rakers?|"
                         r"carriers?|measurers?|criers?|players?|musicians?|pipers?|flautists?|harpists?|drummers?|"
-                        r"trumpeters?|lyrists?|astrologers?|soothsayers?|beggars?|slaves?)\b")
+                        r"trumpeters?|lyrists?|astrologers?|soothsayers?|beggars?|slaves?|medicus|medici|augurs?|"
+                        r"haruspex|operators?|technicians?|attendants?|keepers?|handlers?|grooms?|stewards?|"
+                        r"servants?|assistants?|apprentices?|engineers?|builders?)\b")
 _ADJ = re.compile(r"(?i)^(?:(?:beautiful|young|old|elderly|rich|wealthy|champion|famous|elegant|glamorous|grizzled|"
                   r"veteran|proud|powerful|noble|handsome|stunning)\s+)+")
 
