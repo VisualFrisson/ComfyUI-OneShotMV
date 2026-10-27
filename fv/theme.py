@@ -71,7 +71,13 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 # each with the gender the cast needs.
 ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Roles already in the video: {taken}.
-List {n} more roles, jobs or kinds of people who belong in this world, every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
+List {n} more roles, jobs or kinds of people who belong in this theme's own places at its own moment (when the theme is one day, one event or one night, the people who are really there then and part of it), every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
+
+# A role only one gender held there and then keeps that gender (the user's strict accuracy, Oct 26):
+# checked over the whole cast once it is written (sx05c's first world call gave a woman chariot racer)
+GENDER_PROMPT = """A music video is set in this world: "{theme}"
+For each role below, say who really held it in this world's place and time: "women" if only women did, "men" if only men did, "both" if both did. Roles: {roles}.
+Answer with one JSON object only, no other text, each role exactly as written with its answer: {{"roles": {{"<role>": "women" or "men" or "both", ...}}}}"""
 
 FILL_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Write these {n} characters for it, in this order, one each: {wanted}.
@@ -416,7 +422,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v8".encode("utf-8")).hexdigest()[:16]  # v8: role, gender, age, look; bigger cast; roles with their real gender
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v9".encode("utf-8")).hexdigest()[:16]  # v9: role, gender, age, look; bigger cast; roles of the theme's moment, with their real gender
 
 
 # ------------------------------------------------------------------ the language model
@@ -826,6 +832,66 @@ def _role_list(text: str | None) -> list[tuple[str, str]]:
     return out
 
 
+def _true_genders(chars: list[dict], theme: str, seed: int, dump, log=print) -> int:
+    """Characters whose gender their role never had in this world's place and time are written
+    again with the right one (or left out); returns how many changed."""
+    roles = []
+    for c in chars:
+        r = c.get("role") or c["who"].split(",")[0]
+        if r not in roles:
+            roles.append(r)
+    if not roles:
+        return 0
+    text = llm(GENDER_PROMPT.format(theme=theme.replace('"', "'"), roles="; ".join(roles)),
+               seed=seed + 307, max_length=14 * len(roles) + 120, log=log)
+    dump("g", text)
+    d = _parse(text or "") or {}
+    ans = d.get("roles") if isinstance(d.get("roles"), dict) else d
+    held = {}
+    for k, v in (ans or {}).items():
+        v = str(v).strip().lower()
+        if v in ("women", "woman", "female"):
+            held[str(k).strip().lower()] = "woman"
+        elif v in ("men", "man", "male"):
+            held[str(k).strip().lower()] = "man"
+    wrong = [i for i, c in enumerate(chars)
+             if c.get("gender") and held.get((c.get("role") or c["who"].split(",")[0]).lower(), c["gender"]) != c["gender"]]
+    if not wrong:
+        log("[FrissonVision] theme: every role has its real gender")
+        return 0
+    want = [(chars[i].get("role") or chars[i]["who"].split(",")[0], held[(chars[i].get("role") or chars[i]["who"].split(",")[0]).lower()])
+            for i in wrong]
+    log("[FrissonVision] theme: wrong gender for " + ", ".join(f"{r} (should be {g})" for r, g in want))
+    redo = {}
+    for b in range(0, len(want), EXTRA_BATCH):
+        batch = want[b:b + EXTRA_BATCH]
+        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), n=len(batch),
+                                      wanted="; ".join(f"{_article(r)} {r} ({g})" for r, g in batch),
+                                      character_keys=CHARACTER_KEYS, strict=STRICT),
+                   seed=seed + 401 + b, max_length=320 * len(batch) + 600, log=log)
+        dump(f"gx{b}", text)
+        d2 = _parse(text or "")
+        for c in (_characters((d2 or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d2 else []):
+            key = (c.get("role") or "").lower()
+            if c.get("gender") and key and key not in redo:
+                c["who"] = _people([c["who"]])[0]
+                c["place"] = _places([c["place"]])[0] if c["place"] else ""
+                redo[key] = c
+    out, changed = [], 0
+    for i, c in enumerate(chars):
+        if i not in wrong:
+            out.append(c)
+            continue
+        new = redo.get((c.get("role") or c["who"].split(",")[0]).lower())
+        if new is not None and new.get("gender") == held.get((c.get("role") or "").lower()):
+            out.append(new)
+            changed += 1
+        else:
+            changed += 1  # left out: a wrong person is worse than one fewer
+    chars[:] = out
+    return changed
+
+
 def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, log=print) -> dict:
     """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): new role
     names first, then those roles written out in batches of EXTRA_BATCH, each with the gender
@@ -833,9 +899,8 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
     Cached with the bible."""
     chars = bible.get("characters") or []
     theme = bible.get("theme", "")
-    if not theme or bible.get("source") != "gemma-3-12b" or len(chars) >= n:
+    if not theme or bible.get("source") != "gemma-3-12b" or (len(chars) >= n and bible.get("genders_checked")):
         return bible
-    start = len(chars)
 
     def dump(tag, text):
         if out_root and text:  # kept for debugging the cast
@@ -896,7 +961,9 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
         got = {(c.get("role") or "").lower() for c in new}
         queue += [(r, g) for r, g in batch if r.lower() not in got and _role(r).lower() not in got][:2]  # a dropped one, once more
         log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added} of {len(batch)} asked)")
-    if len(chars) > start:
+    _true_genders(chars, theme, seed, dump, log)
+    bible["genders_checked"] = True
+    if chars:  # saved with the gender check done (and any new characters)
         # a role's own action never names another character (as in _characters, over the whole cast)
         roles_ = _role_words(chars)
         for c in chars:
