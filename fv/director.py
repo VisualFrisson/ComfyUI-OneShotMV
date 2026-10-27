@@ -73,7 +73,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
            broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
-           look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "", log=print) -> dict:
+           look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "",
+           cast_order: str = "as written", crowd: str = "auto", log=print) -> dict:
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
@@ -205,6 +206,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         phases = ["quiet"] * p["performers"]
         for r in p["renders"]:
             phases[r["performer"]] = shot_of.get(r["shot"], {}).get("phase", "quiet")
+        # the Director's cast order and crowd choices (casting._cast_theme)
+        pk.setdefault("casting", {})["story"] = (cast_order or "as written") != "mixed"
+        pk["casting"]["crowd_mode"] = crowd if crowd in ("on", "off") else "auto"
+        p["cast_order"], p["crowd"] = (cast_order or "as written"), pk["casting"]["crowd_mode"]
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
         s1, s2 = formats.portrait_size(fmt)
         port = {}
@@ -389,8 +394,64 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
+    try:
+        summary += "\n\n" + plan_preview(p, queued=queue)
+    except Exception as e:  # never let the preview stop a run
+        log(f"[FrissonVision] preview skipped ({e})")
     return {"run_dir": run_dir, "run_id": run_id, "run_rel": rel, "jobs": len(jobs), "prompt_ids": ids,
             "summary": summary, "bundle": os.path.join(run_dir, "jobs.json")}
+
+
+def _clock(t: float) -> str:
+    return f"{int(t // 60)}:{t % 60:04.1f}"
+
+
+def plan_preview(p: dict, queued: bool = True) -> str:
+    """The plan as the user will see it, shot by shot (the user, Oct 27: show the hidden step, the
+    World the tool wrote from a short theme, before anything renders): time, energy, framing and
+    who is in each shot, where, in what; then the World's characters left out, and how to change it."""
+    th = p.get("theme") or {}
+    cast = {c["id"]: c for c in p.get("cast") or []}
+    lines = ["PLAN" + ("" if queued else " (preview: nothing rendered; turn queue_renders on to render it)")]
+    if th.get("theme"):
+        lines.append("World: " + th["theme"].split(":")[0].strip())
+    if th.get("camera"):
+        lines.append("Camera: " + th["camera"])
+    lines.append(f"Cast order: {p.get('cast_order', 'as written')}   Crowd behind singers: {p.get('crowd', 'auto')}")
+    lines.append("")
+    used = set()
+    for s in p.get("shots", []):
+        rs = [r for r in p["renders"] if r.get("shot") == s["index"] and not r.get("unused")]
+        br = next((r for r in rs if r.get("role") == "R"), None)
+        a = next((r for r in rs if r.get("role") == "A"), None)
+        head = f"{s['index'] + 1:>3}  {_clock(s['t0'])}  {s['t1'] - s['t0']:4.1f}s  {s.get('energy', ''):<6} {s.get('size', ''):<6}"
+        if br is not None and (br.get("broll") or {}).get("check"):
+            ck = br["broll"]["check"]
+            who = f"b-roll: {ck.get('role', '')} ({ck.get('gender', '')}, {ck.get('age', '')})"
+            where = ck.get("place", "")
+            wear = ck.get("wear", "")
+        elif br is not None:
+            who, where, wear = "b-roll: " + ((br.get("broll") or {}).get("line") or "a cutaway")[:60], "", ""
+        elif a is not None and a.get("performer") in cast:
+            c = cast[a["performer"]]
+            ck = c.get("check") or {}
+            if c.get("char") is not None:
+                used.add(c["char"])
+            who = f"{ck.get('role') or c.get('who', '')} ({ck.get('gender', '')}, {ck.get('age', '')})" if ck else c.get("who", "")
+            where, wear = ck.get("place", ""), ck.get("wear", "")
+        else:
+            who, where, wear = "?", "", ""
+        lines.append(f"{head}  {who}" + (f" | {wear}" if wear else "") + (f" | {where}" if where else ""))
+    chars = th.get("characters") or []
+    left = [str(ch.get("role") or ch.get("who", "").split(",")[0]) for i, ch in enumerate(chars) if i not in used]
+    if left:
+        lines.append("")
+        lines.append(f"In the World but not in this video ({len(left)}): " + ", ".join(left[:30]))
+    lines.append("")
+    lines.append("To change it: edit the World line (theme). The characters it names are cast first, in the order "
+                 "it names them; say who leads, where and in what. The same seed keeps this cast; a new seed "
+                 "re-casts.")
+    return "\n".join(lines)
 
 
 def _energy_map(p: dict, pk: dict) -> str:

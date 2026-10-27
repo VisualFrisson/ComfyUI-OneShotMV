@@ -616,7 +616,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     acts = {"medium": SCENE_ACTIONS["medium"], "wide": th.get("actions") or SCENE_ACTIONS["wide"]}
     tod, era = time_of_day(th.get("theme", "")), era_line(th.get("theme", ""))
     from .theme import crowd_world
-    crowd = crowd_world(th.get("theme", ""))
+    mode = c.get("crowd_mode") or "auto"
+    crowd = crowd_world(th.get("theme", "")) if mode == "auto" else mode == "on"
     chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
     unique = bool(c.get("unique")) and bool(chars)
     story = None

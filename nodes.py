@@ -221,7 +221,11 @@ class FVDirector:
             "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1}),
             "twins": (["auto", "loud", "all", "off"], {"default": "auto",
                       "tooltip": "Pose-matched twins for flash inserts (voice mode)"}),
-            "queue_renders": ("BOOLEAN", {"default": True}),
+            "queue_renders": ("BOOLEAN", {"default": True,
+                              "tooltip": "Off = preview: plans the video and lists every shot (time, energy, who, "
+                                         "wearing what, where) in the summary, rendering nothing. Check it, edit "
+                                         "the World line if needed, then turn this on and press Queue again (the "
+                                         "song analysis and the World are cached, so it starts faster)"}),
         }, "optional": {
             "theme": ("STRING", {"default": "", "multiline": True,
                       "tooltip": "The world of the whole video in a line or two, e.g. 'astronauts and ground crew on "
@@ -282,6 +286,14 @@ class FVDirector:
                             "tooltip": "Experimental, with staged: each drop group's looks come from one LTX clip "
                                        "that switches person on the beat. Faster when it works; looks it doesn't "
                                        "deliver cleanly get their own clip"}),
+            "cast_order": (["as written", "mixed"], {"default": "as written",
+                           "tooltip": "as written: the characters the World line names are cast first, in the "
+                                      "order it names them (write who leads first); mixed: shuffled, women and "
+                                      "men alternating"}),
+            "crowd": (["auto", "on", "off"], {"default": "auto",
+                      "tooltip": "People behind the singers. auto: a soft-focus crowd when the World is a packed "
+                                 "spectacle (arena, stadium, crowded stands), otherwise nobody else in frame; "
+                                 "on / off: always / never"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -297,7 +309,8 @@ class FVDirector:
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
             framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False,
-            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle"):
+            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
+            cast_order="as written", crowd="auto"):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -314,7 +327,8 @@ class FVDirector:
                               broll_style=broll_style, lip_repair=lip_repair, staged=staged,
                               look_groups=look_groups,
                               cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high},
-                              audio_fx=audio_fx or "")
+                              audio_fx=audio_fx or "", cast_order=cast_order or "as written",
+                              crowd=crowd or "auto")
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
