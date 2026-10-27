@@ -61,7 +61,7 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "characters": a list of {characters} different characters, all adults, {character_keys} When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, skin tones, builds, faces and hairdos; no two people look alike and no two outfits are alike. {strict}
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
 "light": a list of {light} lighting setups, each a real source you could point at in this world (window daylight, the sun, a lamp, overhead tubes, a camera's own flash, studio softboxes, streetlights), said plainly with its colour; no coloured gels, washes or backdrops, no mood words, never photographers, crowds or other people. At most 14 words each.
-"camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a present-day world: an unretouched modern digital photograph.
+"camera": one plain sentence of at most 22 words starting with "Shot on": the kind of camera, film or video this world would have been photographed with in its own time, and the colour, grain and flash it gives; no brand or model names, no mood words. For a world from before colour photography (before about 1940): colour motion-picture film like a lavish period film, never a black-and-white process. For a present-day world: an unretouched modern digital photograph.
 "actions": a list of {actions} things anyone in this world could do in its places while singing, seen in a wide shot, each starting with a verb ending in -ing, never tied to one role, never naming a role or another person, and never generic like "working on a task". They are alone and their hands are free. At most 9 words each.
 "poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
@@ -180,10 +180,21 @@ _CAM_BRANDS = re.compile(r"(?i)\b(kodak|fuji(?:film)?|ilford|agfa|canon|nikon|le
                          r"ultramax|colorplus|instax|mju|stylus|t4|t2|g2|elph|sure ?shot)\b\s*)?(?:\d{2,4}\b\s*)?")
 
 
+# black-and-white processes: Rome's bible picked "a large format glass plate camera using wet
+# collodion process", and Krea drew 3 of 15 portraits (every take) in pure black and white (sx05f)
+_MONO_CAMERA = re.compile(r"(?i)\b(?:wet[- ]?collodion|collodion|glass[- ]plate|daguerreotype|tintype|ambrotype|"
+                          r"calotype|albumen|cyanotype|silver[- ]gelatin|orthochromatic|black[- ]and[- ]white|"
+                          r"b\s*&\s*w|monochrome|monochromatic|sepia|silent[- ]film|hand[- ]crank(?:ed)?)\b")
+COLOUR_PERIOD_CAMERA = ("Shot on colour motion-picture film like a lavish period film, fine grain, "
+                        "rich natural colour and warm practical light")
+
+
 def _camera(v) -> str:
-    """The world's period camera line, without brand or model names."""
+    """The world's period camera line, without brand or model names, always in colour."""
     if not isinstance(v, str):
         return ""
+    if _MONO_CAMERA.search(v):
+        return COLOUR_PERIOD_CAMERA
     v = _CAM_BRANDS.sub("", " ".join(v.split())).strip(" .,")
     # "The video was captured using X, utilizing Y for a nostalgic feel, resulting in a grainy
     # aesthetic" (the first v4 bible) -> "Shot on X, Y, a grainy look"
@@ -731,6 +742,8 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                     cached["light"] = _alone(cached["light"], _LIGHT_SPARE, n_min=4)
                 if isinstance(cached.get("places"), list):
                     cached["places"] = _alone(cached["places"])
+                if cached.get("camera"):
+                    cached["camera"] = _camera(cached["camera"])
                 if isinstance(cached.get("characters"), list):
                     cached["characters"] = _characters(cached["characters"], allow_eyewear=eyewear_ok(theme))
                     for c in cached["characters"]:
