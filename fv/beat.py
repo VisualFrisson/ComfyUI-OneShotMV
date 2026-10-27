@@ -360,31 +360,47 @@ def pick_boundaries(nov: np.ndarray, energy: np.ndarray, low: np.ndarray,
 
 
 def label_sections(sections: list[dict]) -> None:
-    """Section labels by energy. The user's rule (Oct 27): low energy (intro, break, outro) is only
-    for intros and minimal bridges, sections well below the song's usual level; once the song
-    gets going, medium (verse, build) is the norm; the drop and the clearly loudest sections are
-    high (chorus). Tertiles marked a loud rap verse as a break (Big Dawgs 0:21-0:32 at 0.84 of the
-    peak, the 33rd percentile being 0.85)."""
+    """Section labels by loudness against the song's usual level (energies here are in dB, before
+    analyze() rescales them). The user's rule (Oct 27): low energy (intro, break, outro) is only for
+    the intro and minimal bridges; once the song gets going, medium (verse, build) is the norm; the
+    drop and the clearly louder sections are high (chorus). The tertiles this replaces called a loud
+    rap verse a break (Big Dawgs 0:21-0:37, 0.5 dB under the song's median)."""
     if not sections:
         return
-    en = np.array([s["energy"] for s in sections])
-    hi = max(float(np.percentile(en, 75)), 0.6)
-    lo = 0.55 * float(np.median(en))
+    en = np.array([s["energy"] for s in sections], dtype=float)
+    med, top = float(np.median(en)), float(en.max())
+    hi = max(float(np.percentile(en, 75)), med + 0.6, top - 3.0)
     last = len(sections) - 1
+    lead = True  # still in the quiet opening
     for i, s in enumerate(sections):
+        e = s["energy"]
+        lead = lead and e <= med - 3.0
         if s.get("is_drop"):
             s["label"] = "drop"
-        elif s["energy"] >= hi:
+        elif e >= hi:
             s["label"] = "chorus"
-        elif s["energy"] <= lo:
-            s["label"] = "intro" if i == 0 else ("outro" if i == last else "break")
+        elif lead:
+            s["label"] = "intro"
         elif i == last:
-            s["label"] = "outro"  # a loud last section: plan._intense treats it as a chorus when loud
+            # quiet: the outro (low); loud: usually the last chorus, which plan._intense counts as
+            # high when loud (Pink Pony Club from 3:19, Electric Love from 3:03)
+            s["label"] = "outro"
+        elif e <= med - 4.5:
+            s["label"] = "break"  # Pink Pony Club's bridge, 5 dB under the song's usual level
         else:
             s["label"] = "verse"
         nxt = sections[i + 1] if i + 1 < len(sections) else None
-        if nxt is not None and nxt.get("is_drop") and s["label"] != "chorus":
+        if nxt is not None and nxt.get("is_drop") and s["label"] not in ("chorus", "intro"):
             s["label"] = "build"
+    # a quiet bar or two early on means the song hasn't got going yet: everything up to it is the
+    # intro (Big Dawgs: beat in at 0:05, a dropout at 0:16, the verse at 0:21; the user hears 0-0:22
+    # as the intro)
+    early = [i for i, s in enumerate(sections) if s["label"] in ("intro", "break") and s["start"] < 25.0
+             and i < last]
+    if early:
+        for s in sections[:early[-1] + 1]:
+            if s["label"] in ("intro", "break", "verse", "build"):
+                s["label"] = "intro"
 
 
 def find_drop(sections: list[dict], bar_energy: np.ndarray, bar_low: np.ndarray,
