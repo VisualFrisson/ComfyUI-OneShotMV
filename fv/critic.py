@@ -23,7 +23,7 @@ _CLIP = None
 
 RUBRIC = """You are checking one picture for a music video before it is used. It should show exactly one person: {who}. Wearing: {wear}. The video is set in: {world}.
 Look carefully at the whole picture and answer with one JSON object only, no other text:
-{{"people": <how many people you can see anywhere in the picture, counting small, blurred or far-away figures and reflections>, "gender": "man" or "woman" or "unclear", "facial_hair": true if this person has a beard, a moustache or stubble, else false, "glasses": true if this person wears glasses, sunglasses or goggles, else false, "head_in_frame": true if the whole head and face are inside the picture, else false, "text": true if any letters, words, numbers or logos are visible anywhere, else false, "{modern_key}": [{modern_q}], "outfit_matches": true if the clothes match the description, else false, "problems": "<short list of what is wrong, or none>"}}"""
+{{"people": <how many living people you can see anywhere in the picture, counting small, blurred or far-away figures and reflections, but not statues, paintings or carvings>, "gender": "man" or "woman" or "unclear", "facial_hair": true if this person has a beard, a moustache or stubble, else false, "glasses": true if this person wears glasses, sunglasses or goggles, else false, "head_in_frame": true if the whole head and face are inside the picture, else false, "text": true if any letters, words, numbers or logos are visible anywhere, else false, "{modern_key}": [{modern_q}], "outfit_matches": true if the clothes match the description, else false, "problems": "<short list of what is wrong, or none>"}}"""
 MODERN_PERIOD = ("objects, clothes or hairstyles you can see that did not exist in {era}; leave out the photograph "
                  "itself, the camera, the lighting and the picture's style")
 MODERN_NOW = "things you can see that clearly do not belong in this world; leave out the photograph itself, the camera and the lighting"
@@ -118,7 +118,7 @@ def _yes(v) -> bool:
     return str(v).strip().lower() in ("true", "yes", "1")
 
 
-def faults(ans: dict | None, check: dict, kind: str = "portrait") -> list[str]:
+def faults(ans: dict | None, check: dict, kind: str = "portrait", era: str = "") -> list[str]:
     """The faults in one answer (empty: the picture passes)."""
     if not ans:
         return ["unread"]
@@ -151,11 +151,33 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait") -> list[str]:
               and str(x).strip().lower() not in ("none", "nothing", "n/a")]
     # glasses are judged on their own (an eyewear-free world names them as modern too)
     things = [x for x in things if not re.search(r"(?i)\b(glasses|spectacles|sunglasses|goggles)\b", x)]
+    # only things that are clearly from a later time count: in sx05c (ancient Rome) the list named
+    # aprons, headscarves, braids with threads, flour on the hands, a bun and work gloves
+    m = re.search(r"\b(1[5-9]\d\d)", era or "")
+    pat = MODERN_SINCE_1900 if m and int(m.group(1)) >= 1900 else CLEARLY_MODERN
+    things = [x for x in things if pat.search(x)]
     if things:
         out.append("modern")
     if "outfit_matches" in ans and not _yes(ans.get("outfit_matches")):
         out.append("outfit")
     return out
+
+
+CLEARLY_MODERN = re.compile(r"(?i)\b(phones?|smartphones?|cell ?phones?|mobile|laptops?|computers?|screens?|monitors?|"
+                            r"televisions?|tv|headphones|earbuds|earphones|wrist ?watch(?:es)?|watch|digital|electric|"
+                            r"electronic|light ?bulbs?|neon|led|power ?lines?|cables?|wires?|plastic|nylon|polyester|"
+                            r"lycra|spandex|zips?|zippers?|velcro|sneakers|trainers|running shoes|jeans|denim|t-?shirts?|"
+                            r"hoodies?|tracksuits?|baseball caps?|caps? with|logos?|brands?|printed|cars?|trucks?|vans?|"
+                            r"buses|motorcycles?|bicycles?|bikes?|scooters?|engines?|machines?|tractors?|airplanes?|"
+                            r"cameras?|microphones?|bottles? of water|water bottles?|cans?|tins?|backpacks?|"
+                            r"street ?lights?|lamp ?posts?|asphalt|tarmac|concrete|tattoos?|piercings?|modern hairstyle|"
+                            r"dyed hair|hair dye|makeup|lipstick|nail polish)\b")
+
+
+# a 20th-century World had cars, cameras, watches and jeans: only what came decades later
+MODERN_SINCE_1900 = re.compile(r"(?i)\b(smartphones?|cell ?phones?|mobile phones?|laptops?|computers?|flat ?screens?|"
+                               r"touch ?screens?|tablets?|headphones|earbuds|earphones|digital|led|velcro|lycra|spandex|"
+                               r"hoodies?|tracksuits?|water bottles?|smart ?watch(?:es)?|modern hairstyle)\b")
 
 
 def score(fs: list[str]) -> int:

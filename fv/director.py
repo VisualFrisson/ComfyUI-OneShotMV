@@ -1212,7 +1212,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
             try:
                 text = critic.ask(it["image"], critic.rubric(it["check"], world, era))
                 ans = critic.parse(text)
-                fs = critic.faults(ans, it["check"], it["kind"])
+                fs = critic.faults(ans, it["check"], it["kind"], era)
                 take.update(answer=ans if ans else (text or "")[:300], faults=fs, score=critic.score(fs),
                             modern=critic.modern_items(ans))
             except Exception as e:  # never let the check stop a run
