@@ -1109,6 +1109,16 @@ def _insert_fix(prompt: str, fix: str) -> str:
     return prompt[:m.end()] + fix + " " + prompt[m.end():]
 
 
+def _wall_place(prompt: str) -> str:
+    """The second re-make for other people in the picture: a wall of the place right behind the
+    person, so there is no depth for anyone to stand in."""
+    def sub(m):
+        place = re.sub(r"(?i)^(?:an?|the)\s+", "", m.group(2).strip())
+        place = re.sub(r"(?i)\b(?:crowded|busy|packed|bustling|mirrored)\s+", "", place)
+        return f"{m.group(1)} a plain, weathered wall of the {place} right behind them, with nothing and nobody else in view."
+    return re.sub(r"(?i)\b(Background:|Setting:)\s*([^.]+)\.", sub, prompt, count=1)
+
+
 def _empty_place(prompt: str) -> str:
     """'Background: a mirrored dressing room.' -> 'Background: the same place, empty after everyone has
     left, with no mirrors.' (a picture re-made for other people in it)."""
@@ -1136,7 +1146,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
     items = cr.get("items", [])
     th = p.get("theme") or {}
     world = th.get("theme", "")
-    era = critic.era_of(world)
+    era = critic.check_era(world)
     tm = p.setdefault("timing", {})
     tm[f"critic_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
     t0 = _dt.datetime.now()
@@ -1175,11 +1185,14 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
             fix = critic.fix_lines(it["takes"][-1]["faults"], it["check"], era)
             tag = f"{it['name']}_c{pass_idx + 1}"
             people = "people" in it["takes"][-1]["faults"]
+            crowded = sum(1 for tk in it["takes"] if "people" in (tk.get("faults") or [])) >= 2
             for node in g.values():
                 ins = node.get("inputs", {})
                 if node.get("class_type") == "CLIPTextEncode" and isinstance(ins.get("text"), str):
                     t = ins["text"]
-                    if people:  # st2e: a new seed alone kept the dressing room's mirrors and the arena's crowd
+                    if crowded:  # sx07c: the emptied beach club, market and rave still filled up
+                        t = _wall_place(t)
+                    elif people:  # st2e: a new seed alone kept the dressing room's mirrors and the arena's crowd
                         t = _empty_place(t)
                     ins["text"] = _insert_fix(t, fix)
                 if node.get("class_type") == "SaveImage":

@@ -207,6 +207,14 @@ def era_of(theme: str) -> str:
     return _ERA_NAMES[m.group(4).lower()]
 
 
+def check_era(theme: str) -> str:
+    """The era the 'from a later time' question is asked about: none for recent decades (sx07c,
+    Ibiza 1999: it called pink hair, butterfly clips and crop tops modern)."""
+    era = era_of(theme)
+    m = re.search(r"\b(1[5-9]\d\d|20\d\d)", era)
+    return "" if m and int(m.group(1)) >= 1980 else era
+
+
 # ------------------------------------------------------------------ one face size, one place
 def face_box(path: str):
     """[cx, cy, w] of the largest face in an image file (normalised), or None."""
