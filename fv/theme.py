@@ -997,6 +997,37 @@ def crowd_world(theme: str) -> bool:
     return bool(_CROWD_WORLD.search(theme or ""))
 
 
+CROWD_DRESS_PROMPT = """A music video is set in this world: "{theme}"
+Behind the singers there is a big crowd of spectators. Describe what that crowd wears, as a film's costume designer would brief extras: the real garments of that time and place and their colours, concrete nouns only, at most 18 words, no numbers of people, nothing from a later time. Answer with the description only, starting with "a sea of"."""
+
+
+def crowd_dress(bible: dict, seed: int = 1, out_root: str | None = None, log=print) -> str:
+    """What a spectacle World's crowd wears, in concrete garments and colours ("a sea of white wool
+    togas and red and ochre tunics"): "dressed for ancient Rome" was too abstract and Krea filled
+    the stands with modern spectators (sx05j). Written once by Gemma and kept with the bible."""
+    if bible.get("crowd_dress"):
+        return bible["crowd_dress"]
+    theme = bible.get("theme", "")
+    text = llm(CROWD_DRESS_PROMPT.format(theme=theme.replace('"', "'")), seed=seed + 307, max_length=120, log=log)
+    line = " ".join((text or "").replace("\n", " ").split()).strip(' "\'.')
+    m = re.search(r"(?i)\ba sea of\b.*", line)
+    line = m.group(0) if m else ""
+    line = re.sub(r"(?i)\b(t-?shirts?|jeans|caps?|hoodies?|sneakers|trainers|sunglasses|modern)\b[^,;.]*", "", line)
+    line = " ".join(line.split()).strip(" ,;.")
+    if len(line) < 16:
+        return ""
+    bible["crowd_dress"] = line
+    if out_root:
+        path = os.path.join(cache_dir(out_root), _key(theme, seed) + ".json")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(bible, f, indent=1, ensure_ascii=False)
+        except Exception:
+            pass
+    log(f"[FrissonVision] theme: the crowd wears {line}")
+    return line
+
+
 def story_positions(chars: list[dict], theme: str) -> list[int | None]:
     """Each character's place in the World line's own list of characters (None for the ones it
     doesn't name): the World line is cast in its own order (the user, Oct 27: the gladiator video

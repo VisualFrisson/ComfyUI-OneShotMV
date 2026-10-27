@@ -85,7 +85,8 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
         if (c.get("check") or {}).get("crowd"):
-            c["portrait"], c["sing"] = crowd_behind(c["portrait"], era), crowd_behind(c["sing"], era)
+            dress = ((pack.get("casting") or {}).get("theme") or {}).get("crowd_dress") or ""
+            c["portrait"], c["sing"] = crowd_behind(c["portrait"], era, dress), crowd_behind(c["sing"], era, dress)
         if c.get("sing"):
             c["sing"] = period_background(c["sing"], era)
         if c.get("twin_prompt"):
@@ -271,22 +272,26 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
     return " ".join(f"{p} {tail}".split())
 
 
-CROWD_BEHIND = ("The only person in focus, with the packed, roaring crowd of the stands far behind as a soft "
-                "blur of distant faces and colour, nobody else near.")
+CROWD_BEHIND = ("The only person in focus, shot on an 85mm lens wide open: the packed, roaring crowd of the stands "
+                "is far behind, melted into a soft, out-of-focus blur of colour and shapes, with an empty stretch of "
+                "ground between the person and the crowd and nobody else near.")
 _ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in frame\.")
 
 
-def crowd_behind(prompt: str, era: str = "") -> str:
+def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
     """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
     become one person in focus with the stands behind as a blur; in a period World every spectator
     in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd)."""
     # said as what is there, never naming the unwanted clothes (naming a thing draws it)
     dressed = (f" Every spectator in the crowd is dressed in the clothes of {era}, as in a big-budget "
                "period film.") if era else ""
+    if dress:  # the World's own crowd costume (theme.crowd_dress): concrete garments read, "period" doesn't
+        dressed = f" The crowd is {dress}, as in a big-budget period film." if era else f" The crowd is {dress}."
     p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND + dressed, prompt)
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
-    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur" +
-               (f", all in the clothes of {era}." if era else "."), p)
+    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close: the spectators stay in their seats far behind as "
+               "a soft blur" + (f" ({dress})" if dress else f", all in the clothes of {era}" if era else "") +
+               ", and nobody walks into the shot or up to the person.", p)
     # a moving camera brings new people into the frame, and LTX dresses them in modern clothes (the
     # user, Oct 27): in front of a crowd the camera stays put
     p = re.sub(r"(?i)\bThe (?:handheld )?camera (?:sways|drifts|bobs|tracks|arcs)[^.]*\.",

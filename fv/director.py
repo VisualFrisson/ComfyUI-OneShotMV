@@ -209,6 +209,14 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         # the Director's cast order and crowd choices (casting._cast_theme)
         pk.setdefault("casting", {})["story"] = (cast_order or "as written") != "mixed"
         pk["casting"]["crowd_mode"] = crowd if crowd in ("on", "off") else "auto"
+        if bible and pk["casting"]["crowd_mode"] != "off" and (pk["casting"]["crowd_mode"] == "on" or
+                                                               themes.crowd_world(bible.get("theme", ""))):
+            try:
+                dress = themes.crowd_dress(bible, seed=seed, out_root=out_root, log=log)
+                if dress and isinstance(pk["casting"].get("theme"), dict):
+                    pk["casting"]["theme"]["crowd_dress"] = dress
+            except Exception as e:  # never let it stop a run
+                log(f"[FrissonVision] crowd dress skipped ({e})")
         p["cast_order"], p["crowd"] = (cast_order or "as written"), pk["casting"]["crowd_mode"]
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
         s1, s2 = formats.portrait_size(fmt)
