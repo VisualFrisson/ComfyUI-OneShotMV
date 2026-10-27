@@ -15,6 +15,32 @@ def _hash01(i: int, k: int) -> float:
     return ((i * 73856093) ^ (k * 19349663)) % 1000 / 1000.0
 
 
+# Audio-reactive FX level (the user, Oct 26: a drop-down none / subtle / intense). Intense is the
+# look of the first tests, with the 4 px shake (it read as a glitch) swapped for a twitch: jumps of
+# up to 8 px with motion blur, like After Effects' Twitch. Subtle (the default) tones everything
+# down and never twitches; none leaves the picture alone (the grade and grain still apply).
+LEVELS = ["none", "subtle", "intense"]
+INTENSE = {"flash": 0.55, "rgb": 9, "zoom": 0.05, "shake": 0, "twitch": 8, "bloom": 1.0, "ghost": 0.6,
+           "insert_flash": 0.75, "drop_strobe": 1.0, "trail": 0.0}
+SUBTLE = {"flash": 0.3, "rgb": 2, "zoom": 0.025, "shake": 0, "twitch": 0, "bloom": 0.6, "ghost": 0.3,
+          "insert_flash": 0.45, "drop_strobe": 0.4, "trail": 0.0}
+
+
+def level_cfg(base: dict, level: str | None) -> dict:
+    """The pack's FX settings at a level ('none', 'subtle', 'intense'; anything else: the pack's own)."""
+    cfg = dict(base or {})
+    lv = (level or cfg.get("level") or "").strip().lower()
+    if lv == "intense":
+        cfg.update(INTENSE)
+    elif lv == "subtle":
+        cfg.update(SUBTLE)
+    elif lv == "none":
+        cfg.update(SUBTLE)
+        cfg["intensity"] = 0.0
+    cfg["level"] = lv or "pack"
+    return cfg
+
+
 def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_start: bool, j: int,
               fps: float = 24.0, level: float | None = None) -> dict:
     """f: output frame; ev: active edit event; j: frames since that event started.
@@ -31,13 +57,18 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
     flash = 0.3 * cfg["flash"] * snare * lv
     rgb = 0.5 * cfg["rgb"] * snare
     zoom = cfg["zoom"] * kick
-    shake = cfg["shake"] * max(kick, snare) * lv
-    bloom = 0.35 * snare * lv
+    shake = cfg.get("shake", 0) * max(kick, snare) * lv
+    bloom = 0.35 * cfg.get("bloom", 1.0) * snare * lv
     echo = 0.0
-    if drop > 0 and pulse > 0:  # strobe on every beat right after the drop
-        flash = max(flash, 0.75 * cfg["flash"] * pulse)
-        rgb = max(rgb, cfg["rgb"] * pulse)
-        zoom = max(zoom, cfg["zoom"] * 1.3 * pulse)
+    # twitch: a jump of up to `twitch` px on the strong hits, a new direction every frame, drawn
+    # with motion blur (fx.apply_fx)
+    hit = max(kick, snare)
+    twitch = cfg.get("twitch", 0) * lv * max(0.0, (hit - 0.45) / 0.55) if hit > 0.45 else 0.0
+    ds = cfg.get("drop_strobe", 1.0)
+    if drop > 0 and pulse > 0 and ds > 0:  # strobe on every beat right after the drop
+        flash = max(flash, 0.75 * cfg["flash"] * pulse * ds)
+        rgb = max(rgb, cfg["rgb"] * pulse * ds)
+        zoom = max(zoom, cfg["zoom"] * 1.3 * pulse * ds)
     kind = ev["kind"] if ev else "main"
     if kind == "insert":
         n = max(1, ev["f1"] - ev["f0"])
@@ -59,10 +90,15 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
         echo = max(echo, 0.2 * hat)
     if cfg.get("trail"):  # motion trails: the last frames linger behind every move
         echo = max(echo, cfg["trail"] * (0.6 + 0.4 * max(kick, snare)) * (1.0 if loud else 0.5))
+    if shot_start and j < 2 and cfg.get("twitch", 0):
+        twitch = max(twitch, cfg["twitch"] * 0.8 * (1.0 - j / 2.0))
     ang = 2 * math.pi * _hash01(f, 1)
+    tang = 2 * math.pi * _hash01(f, 7)
+    tmag = twitch * I * (0.55 + 0.45 * _hash01(f, 11))
     return {"flash": min(1.0, flash * I), "bloom": min(1.0, bloom * I), "rgb": rgb * I,
             "zoom": zoom * I, "dx": shake * I * math.cos(ang), "dy": shake * I * math.sin(ang),
-            "echo": min(0.9, echo * (1.0 if loud else 0.5))}
+            "tx": tmag * math.cos(tang), "ty": tmag * math.sin(tang),
+            "echo": min(0.9, echo * (1.0 if loud else 0.5) * (1.0 if I > 0 else 0.0))}
 
 
 # ------------------------------------------------------------------ torch side
@@ -91,6 +127,20 @@ def apply_fx(img, p: dict, prev=None):
                              dtype=t.dtype, device=t.device)
         grid = F.affine_grid(theta, t.shape, align_corners=False)
         t = F.grid_sample(t, grid, mode="bilinear", padding_mode="reflection", align_corners=False)
+    tx, ty = p.get("tx", 0.0), p.get("ty", 0.0)
+    if abs(tx) + abs(ty) > 0.5:
+        # the twitch: the frame jumps by (tx, ty) px, smeared along the jump like a shutter that
+        # caught the move (7 samples from where it was to where it lands)
+        acc = None
+        n = 7
+        for k in range(n):
+            u = k / (n - 1)
+            theta = torch.tensor([[[1.0, 0.0, -2 * tx * u / W], [0.0, 1.0, -2 * ty * u / H]]],
+                                 dtype=t.dtype, device=t.device)
+            grid = F.affine_grid(theta, t.shape, align_corners=False)
+            sm = F.grid_sample(t, grid, mode="bilinear", padding_mode="reflection", align_corners=False)
+            acc = sm if acc is None else acc + sm
+        t = acc / n
     px = int(round(p["rgb"]))
     if px >= 1:
         r = torch.roll(t[:, 0:1], shifts=-px, dims=3)

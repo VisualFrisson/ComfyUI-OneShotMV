@@ -163,14 +163,15 @@
  "fx": {
   "intensity": 1.0,
   "flash": 0.55,
-  "rgb": 0,
+  "rgb": 9,
   "zoom": 0.05,
   "shake": 0,
   "ghost": 0.6,
   "quiet_scale": 0.2,
   "insert_flash": 0.75,
   "build_scale": 0.6,
-  "_note": "rgb (colour split) and shake off since Oct 26: on every snare and every cut they read as the picture glitching for a frame or two (the user's note)"
+  "_note": "level: none / subtle / intense (fx.level_cfg). intense = the first tests' hits with the 4 px shake swapped for an 8 px motion-blurred twitch; subtle (default) tones everything down, no twitch; the user's notes of Oct 26",
+  "level": "subtle"
  },
  "finish": {
   "grade_mean": [

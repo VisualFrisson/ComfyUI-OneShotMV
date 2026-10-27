@@ -73,7 +73,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
            broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
-           look_groups: bool = False, cuts: dict | None = None, log=print) -> dict:
+           look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "", log=print) -> dict:
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
@@ -311,6 +311,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 guide_video=dance_path, guide_start=r["src_start"], guide_strength=guide_strength,
                 guide_face=False, key_strengths=(1.0, 1.0, 1.0) if preset == "quality" else (1.0, 1.0)).nodes))
     p["cast"] = cast
+    from . import fx as _fx
+    p["fx_level"] = audio_fx if audio_fx in _fx.LEVELS else (pk.get("fx") or {}).get("level", "subtle")
     if bible:
         p["theme"] = {k: v for k, v in bible.items() if k != "raw"}
         p["finish"] = pk["finish"]

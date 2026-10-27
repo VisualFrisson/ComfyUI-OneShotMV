@@ -124,7 +124,7 @@ def _active(edl: list[dict], f: int):
 
 
 def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True, device=None,
-             out_name: str = "final", progress=None) -> dict:
+             out_name: str = "final", progress=None, fx_level: str | None = None) -> dict:
     import torch
     import torch.nn.functional as F
     plan = json.load(open(os.path.join(run_dir, "plan.json"), encoding="utf-8"))
@@ -161,8 +161,11 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     ctl["beatpulse"] = audiofx.beat_pulses(tlw.get("beats", []), n_out, fps)
     bar_s = 4 * 60.0 / max(1.0, float(plan.get("tempo") or 120.0))
     ctl["drop"] = audiofx.drop_mask((tlw.get("drop") or {}).get("time"), bar_s, n_out, fps)
-    cfg = dict(pack["fx"])
+    # the run's audio-reactive FX level (Director input audio_fx; none / subtle / intense)
+    cfg = fx.level_cfg(pack["fx"], fx_level or plan.get("fx_level"))
     cfg["intensity"] = cfg.get("intensity", 1.0) * fx_intensity
+    # the twitch is up to `twitch` px of the delivered frame (frames are drawn at render size)
+    cfg["twitch"] = cfg.get("twitch", 0) * cw / max(1, dw)
 
     # ---- the cut: re-derived from the shots with the pack's current edit settings, so a
     # re-assemble picks up edit changes without re-rendering

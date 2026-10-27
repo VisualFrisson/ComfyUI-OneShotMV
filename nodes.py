@@ -273,6 +273,11 @@ class FVDirector:
                           "tooltip": "How high-energy sections (choruses, drops) are cut. 'To the music' cuts "
                                      "on the beat to a new face in the same spot: subtle about every half bar, "
                                      "intense about every beat"}),
+            "audio_fx": (["none", "subtle", "intense"], {"default": "subtle",
+                         "tooltip": "Effects that hit with the drums: flash, zoom punch, glow, colour split. "
+                                    "subtle tones them down; intense is stronger and adds a twitch (jumps of up "
+                                    "to 8 px with motion blur) on the big hits; none leaves the picture alone "
+                                    "(the colour grade and film grain still apply)"}),
             "look_groups": ("BOOLEAN", {"default": False,
                             "tooltip": "Experimental, with staged: each drop group's looks come from one LTX clip "
                                        "that switches person on the beat. Faster when it works; looks it doesn't "
@@ -292,7 +297,7 @@ class FVDirector:
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
             framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False,
-            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None):
+            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle"):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -308,7 +313,8 @@ class FVDirector:
                               qc_retries=qc_retries, theme=theme or "", broll_share=broll_share,
                               broll_style=broll_style, lip_repair=lip_repair, staged=staged,
                               look_groups=look_groups,
-                              cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high})
+                              cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high},
+                              audio_fx=audio_fx or "")
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
@@ -323,6 +329,8 @@ class FVAssemble:
         return {"required": {"run_dir": ("STRING", {"default": ""}),
                              "filename_prefix": ("STRING", {"default": "frissonvision/final"})},
                 "optional": {"fx_intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.05}),
+                             "audio_fx": (["from the run", "none", "subtle", "intense"], {"default": "from the run",
+                                          "tooltip": "Re-assemble with another audio-reactive FX level"}),
                              "finish": ("BOOLEAN", {"default": True})}}
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -335,11 +343,12 @@ class FVAssemble:
     def IS_CHANGED(cls, **kw):
         return random.random()
 
-    def run(self, run_dir, filename_prefix, fx_intensity=1.0, finish=True):
+    def run(self, run_dir, filename_prefix, fx_intensity=1.0, finish=True, audio_fx="from the run"):
         _reload()
         import comfy.utils
         pbar = comfy.utils.ProgressBar(100)
         res = fv_assemble.assemble(_resolve(run_dir), fx_intensity=fx_intensity, do_finish=finish,
+                                   fx_level=None if audio_fx == "from the run" else audio_fx,
                                    progress=lambda i, n: pbar.update_absolute(int(100 * i / max(1, n)), 100))
         prev = torch.from_numpy(np.stack(res["previews"]).astype(np.float32) / 255.0) if res["previews"] \
             else torch.zeros(1, 64, 64, 3)
