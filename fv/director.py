@@ -378,15 +378,12 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
               open(os.path.join(run_dir, "jobs.json"), "w", encoding="utf-8"))
     ids = []
     if queue:
-        url = server_url()
-        for name, g in jobs:
-            if name == "zz_assemble" and (not queue_assemble or use_qc):
-                continue
-            if name == "zz_qc" and name in deferred:
-                continue
-            if name in deferred:
-                continue
-            ids.append(queue_prompt(g, url))
+        # at the front, like every later stage: a run's renders go before the next queued Director,
+        # so several runs queued at once finish one after another (Oct 27: five Directors queued
+        # behind sx05f ran before its portraits)
+        first = [g for name, g in jobs
+                 if not (name == "zz_assemble" and (not queue_assemble or use_qc)) and name not in deferred]
+        ids = queue_chain_front(first, server_url())
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
                + (themes.summary(bible) + "\n" if bible else "") + emap +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
