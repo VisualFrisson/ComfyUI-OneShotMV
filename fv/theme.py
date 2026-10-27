@@ -935,6 +935,49 @@ def _true_genders(chars: list[dict], theme: str, seed: int, dump, log=print) -> 
     return changed
 
 
+# Roles that only work behind the scenes or keep a place running: a World built on an event is cast
+# from who performs, rules or watches it (the user, Oct 27, sx05f/g: "each character should be
+# obviously tied to the gladiator event"; Gemma added a sand-raker, an armourer, a fortune teller, a
+# silk merchant, a jewel vendor and a flute player). Kept when the World line names that kind of job.
+_BACKSTAGE = re.compile(r"(?i)\b(vendors?|sellers?|merchants?|traders?|hawkers?|stall ?holders?|cleaners?|sweepers?|"
+                        r"janitors?|clerks?|scribes?|secretar(?:y|ies)|accountants?|mechanics?|porters?|cooks?|chefs?|"
+                        r"bakers?|labou?rers?|workers?|makers?|artists?|painters?|sculptors?|carpenters?|smiths?|"
+                        r"armou?rers?|tailors?|fortune[- ]tellers?|medics?|doctors?|nurses?|physicians?|rakers?|"
+                        r"carriers?|measurers?|criers?|players?|musicians?|pipers?|flautists?|harpists?|drummers?|"
+                        r"trumpeters?|lyrists?|astrologers?|soothsayers?|beggars?|slaves?)\b")
+_ADJ = re.compile(r"(?i)^(?:(?:beautiful|young|old|elderly|rich|wealthy|champion|famous|elegant|glamorous|grizzled|"
+                  r"veteran|proud|powerful|noble|handsome|stunning)\s+)+")
+
+
+def _offstage(role: str, theme: str) -> bool:
+    """An invented role that only works behind the scenes, unless the World line names that job."""
+    t = theme.lower()
+    if re.search(r"(?i)\b(workers?|staff|shift|crew|behind the scenes|backstage)\b", t) and "backstage at" not in t:
+        return False
+    return any(m.group(0).lower().rstrip("s") not in t for m in _BACKSTAGE.finditer(role))
+
+
+def _named_roles(theme: str) -> list[str]:
+    """The characters a World line names ("headline, all invented adults: a murmillo gladiator in a
+    crested helmet, the emperor in a purple toga, ...; places; light"), as role names."""
+    head = theme.split(";")[0]
+    if ":" not in head:
+        return []
+    out = []
+    for item in re.split(r",\s+(?=(?:an?|the)\s)", head.split(":", 1)[1]):
+        item = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", item.strip())
+        role = re.split(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
+                        r"fanning|carrying|by|near|under|and)\b", item)[0].strip(" .,")
+        if 2 < len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r in out]:
+            out.append(role)
+    return out
+
+
+def _has_role(role: str, cast: list[str]) -> bool:
+    r = _ADJ.sub("", role.lower()).strip()
+    return any(r and (r in c.lower() or _ADJ.sub("", c.lower()).strip() in r) for c in cast if c)
+
+
 def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, log=print) -> dict:
     """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): new role
     names first, then those roles written out in batches of EXTRA_BATCH, each with the gender
@@ -955,7 +998,11 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
                 pass
 
     taken = [c.get("role") or c["who"].split(",")[0] for c in chars]
-    roles: list[str] = []
+    # the World line's own characters the first call left out come first (sx05g: 12 of the 16 named,
+    # without the emperor, the patrician matron, the young noblewoman and the praetorian guard)
+    roles: list = [(r, _gender_of("", r, "", "") or "") for r in _named_roles(theme) if not _has_role(r, taken)]
+    if roles:
+        log(f"[FrissonVision] theme: the World line's own characters still to cast: {', '.join(r for r, _ in roles)}")
     for attempt in range(3):
         need = n - len(chars) - len(roles) + 4
         if need <= 4:
@@ -967,7 +1014,11 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
         if text is None:
             break
         known = {r.lower() for r in taken} | {r.lower() for r, _ in roles}
-        roles += [(r, g) for r, g in _role_list(text) if r.lower() not in known]
+        got = _role_list(text)
+        off = [r for r, _ in got if _offstage(r, theme)]
+        if off:
+            log(f"[FrissonVision] theme: left out (behind the scenes): {', '.join(off)}")
+        roles += [(r, g) for r, g in got if r.lower() not in known and r not in off]
     log(f"[FrissonVision] theme: {len(roles)} new roles: {', '.join(f'{r} ({g or chr(63)})' for r, g in roles)}")
     women = sum(1 for c in chars if c.get("gender") == "woman")
     men = sum(1 for c in chars if c.get("gender") == "man")
