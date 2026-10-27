@@ -21,9 +21,10 @@ def _hash01(i: int, k: int) -> float:
 # down and never twitches; none leaves the picture alone (the grade and grain still apply).
 LEVELS = ["none", "subtle", "intense"]
 INTENSE = {"flash": 0.55, "rgb": 9, "zoom": 0.05, "shake": 0, "twitch": 8, "bloom": 1.0, "ghost": 0.6,
-           "insert_flash": 0.75, "drop_strobe": 1.0, "trail": 0.0}
-SUBTLE = {"flash": 0.3, "rgb": 2, "zoom": 0.025, "shake": 0, "twitch": 0, "bloom": 0.6, "ghost": 0.3,
-          "insert_flash": 0.45, "drop_strobe": 0.4, "trail": 0.0}
+           "insert_flash": 0.75, "drop_strobe": 1.0, "trail": 0.0, "echo": 1.0}
+# no echo on subtle (the user, Oct 27: the hi-hat echo stays on intense only)
+SUBTLE = {"flash": 0.3, "rgb": 2, "zoom": 0.025, "shake": 0, "twitch": 0, "bloom": 0.6, "ghost": 0.0,
+          "insert_flash": 0.45, "drop_strobe": 0.4, "trail": 0.0, "echo": 0.0}
 
 
 def level_cfg(base: dict, level: str | None) -> dict:
@@ -78,7 +79,7 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
         rgb = max(rgb, cfg["rgb"] * (0.5 + 0.5 * a))
         zoom = max(zoom, cfg["zoom"] * 1.2)
     elif kind == "ghost":
-        echo = cfg.get("ghost", 0.6)
+        echo = cfg.get("ghost", 0.6) * cfg.get("echo", 1.0)
         rgb = max(rgb, cfg["rgb"] * 0.4)
     if shot_start and j < 3:
         a = 1.0 - j / 3.0
@@ -87,7 +88,7 @@ def fx_params(f: int, ev: dict | None, ctl: dict, loud: bool, cfg: dict, shot_st
         bloom = max(bloom, 0.6 * a)
         zoom = max(zoom, cfg["zoom"] * 0.8 * a)
     if hat > 0.6 and loud:
-        echo = max(echo, 0.2 * hat)
+        echo = max(echo, 0.2 * hat * cfg.get("echo", 1.0))
     if cfg.get("trail"):  # motion trails: the last frames linger behind every move
         echo = max(echo, cfg["trail"] * (0.6 + 0.4 * max(kick, snare)) * (1.0 if loud else 0.5))
     if shot_start and j < 2 and cfg.get("twitch", 0):

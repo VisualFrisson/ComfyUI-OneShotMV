@@ -360,17 +360,26 @@ def pick_boundaries(nov: np.ndarray, energy: np.ndarray, low: np.ndarray,
 
 
 def label_sections(sections: list[dict]) -> None:
+    """Section labels by energy. The user's rule (Oct 27): low energy (intro, break, outro) is only
+    for intros and minimal bridges, sections well below the song's usual level; once the song
+    gets going, medium (verse, build) is the norm; the drop and the clearly loudest sections are
+    high (chorus). Tertiles marked a loud rap verse as a break (Big Dawgs 0:21-0:32 at 0.84 of the
+    peak, the 33rd percentile being 0.85)."""
     if not sections:
         return
     en = np.array([s["energy"] for s in sections])
-    lo, hi = np.percentile(en, 33), np.percentile(en, 75)
+    hi = max(float(np.percentile(en, 75)), 0.6)
+    lo = 0.55 * float(np.median(en))
+    last = len(sections) - 1
     for i, s in enumerate(sections):
         if s.get("is_drop"):
             s["label"] = "drop"
         elif s["energy"] >= hi:
             s["label"] = "chorus"
         elif s["energy"] <= lo:
-            s["label"] = "intro" if i == 0 else ("outro" if i == len(sections) - 1 else "break")
+            s["label"] = "intro" if i == 0 else ("outro" if i == last else "break")
+        elif i == last:
+            s["label"] = "outro"  # a loud last section: plan._intense treats it as a chorus when loud
         else:
             s["label"] = "verse"
         nxt = sections[i + 1] if i + 1 < len(sections) else None

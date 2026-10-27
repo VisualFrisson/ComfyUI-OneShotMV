@@ -497,7 +497,21 @@ DROP_FRAME = {"shot": "Head-and-shoulders portrait",
                       "space above the head, both shoulders and the top of the chest in frame, the face about a "
                       "quarter of the frame height"}
 DROP_ANGLE = "eye level, facing the camera straight on"
-DROP_MOVE = "The camera holds steady at head-and-shoulders distance."
+DROP_MOVE = "Eyes open, looking into the lens. The camera holds steady at head-and-shoulders distance."
+
+
+_PLACE_STOP = {"in", "on", "at", "the", "a", "an", "of", "by", "near", "inside", "under", "with", "and", "draped",
+               "lined", "filled", "beside", "behind", "outside", "its", "their"}
+
+
+def _same_place(a: str | None, b: str | None) -> bool:
+    """'in the imperial box draped in purple' and 'in the imperial box' are one place (sx05e put the
+    emperor and the senator back to back on the same purple drapes)."""
+    if not a or not b:
+        return False
+    wa = [w for w in re.findall(r"[a-z']+", a.lower()) if w not in _PLACE_STOP]
+    wb = [w for w in re.findall(r"[a-z']+", b.lower()) if w not in _PLACE_STOP]
+    return bool(wa and wb) and (wa[:2] == wb[:2] or len(set(wa[:3]) & set(wb[:3])) >= 2)
 
 
 def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | None = None) -> list[int]:
@@ -523,7 +537,7 @@ def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | N
             a, b = chars[i], chars[prev]
             if gender and a.get("gender") and a.get("gender") == b.get("gender"):
                 return False
-            if place and a.get("place") and a.get("place") == b.get("place"):
+            if place and a.get("place") and _same_place(a.get("place"), b.get("place")):
                 return False
             return True
         pick = next((i for i in pool if ok(i)), None)
