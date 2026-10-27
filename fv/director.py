@@ -86,6 +86,18 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     cleanly (65 s instead of 156 s), but in n47 only 10 of 36 looks did (the clip left the
     first look within its first frames, morphed instead of cutting, or showed three people), so
     looks a group doesn't deliver get their own clip after all (_fallback_looks)."""
+    # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
+    # left in memory: at 01:41 UTC Oct 27 the Rome Director started right after an LTX clip and
+    # ComfyUI went down without a word in its log. Start from empty memory.
+    if theme and theme.strip():
+        try:
+            import gc
+            import comfy.model_management as mm  # type: ignore
+            mm.unload_all_models()
+            mm.soft_empty_cache()
+            gc.collect()
+        except Exception:
+            pass
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
