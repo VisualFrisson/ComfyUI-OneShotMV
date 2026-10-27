@@ -186,8 +186,14 @@ def saturation(path: str) -> float:
     from PIL import Image
     im = np.asarray(Image.open(path).convert("RGB").resize((256, 144))).astype(np.float32) / 255
     mx, mn = im.max(-1), im.min(-1)
-    sat = np.where(mx > 0.04, (mx - mn) / np.maximum(mx, 1e-3), 0.0)
-    return float(np.median(sat))
+    # lit pixels only: a face against a black tunnel counted its dark background as grey and read
+    # 0.0 (sx05f, the venator and the secutor in full colour); a real black-and-white frame reads
+    # about 0.04 on its lit pixels too
+    lit = mx > 0.12
+    if lit.mean() < 0.02:
+        return 0.0
+    sat = (mx - mn) / np.maximum(mx, 1e-3)
+    return float(np.median(sat[lit]))
 
 
 MONO_BELOW = 0.09
