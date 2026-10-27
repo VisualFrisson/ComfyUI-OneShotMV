@@ -137,11 +137,17 @@ def cut_modes(ed: dict) -> dict:
 
 
 def subtle_beats(bar_len: float, beat_len: float) -> int:
-    """'To the music, subtle': half a bar (two beats in 4/4), or a whole bar when half a bar would
-    be shorter than 0.6 s (a fast or double-time tempo)."""
-    per_bar = max(1, int(round(bar_len / max(1e-3, beat_len))))
-    half = max(1, per_bar // 2)
-    return half if half * beat_len >= 0.6 else per_bar
+    """'To the music, subtle': two or four beats, whichever lands nearer 1.2 s, and never faster
+    than twice the intense cut (Big Dawgs, tracked at double time, 180 BPM: half a bar was 0.67 s,
+    the same pace as intense; now a bar of 1.33 s, against 0.67 s for intense)."""
+    k = min((2, 4), key=lambda b: abs(b * beat_len - 1.2))
+    return max(k, 2 * intense_beats(beat_len))
+
+
+def intense_beats(beat_len: float) -> int:
+    """'To the music, intense': one or two beats, whichever lands nearer 0.6 s (one beat at 107
+    BPM, 0.56 s, the pace of the first new-system tests)."""
+    return min((1, 2), key=lambda b: abs(b * beat_len - 0.6))
 
 
 def drop_beats(tempo: float, ed: dict) -> int:
@@ -212,7 +218,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
         ks = {}
         for ph, lv in LEVEL_OF.items():
             if modes[lv] == "to the music (intense)":
-                ks[ph] = drop_beats(tempo, ed)
+                ks[ph] = intense_beats(beat_len)
             elif modes[lv] == "to the music (subtle)":
                 ks[ph] = subtle_beats(bar_len, beat_len)
         if ks:
