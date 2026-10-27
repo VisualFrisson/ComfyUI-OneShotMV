@@ -73,7 +73,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
            broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
-           look_groups: bool = False, log=print) -> dict:
+           look_groups: bool = False, cuts: dict | None = None, log=print) -> dict:
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
@@ -112,12 +112,16 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         pk = casting.apply_theme(pk, bible)
         pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
         log("[FrissonVision] " + themes.summary(bible).replace("\n", "\n[FrissonVision] "))
+    if cuts:  # the user's cut per energy level (low / medium / high), over the pack's defaults
+        pk["edit"] = dict(pk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items() if m})
     if mode == "voice":
         if pk["casting"].get("artist") and not (artist_path and os.path.exists(artist_path)):
             raise ValueError("the artist pack needs artist_image_path (one photo of the artist)")
         p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                                twins=None if twins == "auto" else twins, framing=framing)
         p["artist_path"] = artist_path
+        if cuts:  # a re-applied theme starts from the pack again: keep the user's cuts
+            p["cuts"] = planner.cut_modes(pk["edit"])
         if bible and (pk.get("casting") or {}).get("unique"):
             # every shot its own character (the user, Oct 26: a bigger cast, no repeats): enough
             # characters for every singer and every b-roll candidate
@@ -125,7 +129,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             need = p["performers"] + 2 * _broll.slots(p, broll_share) + 2
             if len(bible.get("characters") or []) < need:
                 bible = themes.extend(bible, need, seed=seed, out_root=out_root, log=log)
+                ed_ = pk["edit"]
                 pk = casting.apply_theme(casting.load_pack(pack), bible)
+                pk["edit"] = ed_
                 pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
             p["unique_cast"] = True
     else:
@@ -367,12 +373,42 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 continue
             ids.append(queue_prompt(g, url))
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
-               + (themes.summary(bible) + "\n" if bible else "") +
+               + (themes.summary(bible) + "\n" if bible else "") + _energy_map(p, pk) +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")
     return {"run_dir": run_dir, "run_id": run_id, "run_rel": rel, "jobs": len(jobs), "prompt_ids": ids,
             "summary": summary, "bundle": os.path.join(run_dir, "jobs.json")}
+
+
+def _energy_map(p: dict, pk: dict) -> str:
+    """The song's sections in the window, the energy level each was given and how it is cut
+    (the user, Oct 26: map the song into low / medium / high and edit each level its own way)."""
+    ed = pk.get("edit") or {}
+    if ed.get("cuts") != "energy" or not p.get("shots"):
+        return ""
+    modes = planner.cut_modes(ed)
+    t0 = float(p.get("song_t0", 0.0))
+
+    def mmss(t):
+        return f"{int(t // 60)}:{t % 60:04.1f}"
+    runs = []
+    for s in p["shots"]:
+        lv = planner.LEVEL_OF.get(s.get("phase"), "low")
+        if runs and runs[-1][0] == lv:
+            runs[-1][2] = s["t1"]
+            runs[-1][3] += 1
+        else:
+            runs.append([lv, s["t0"], s["t1"], 1])
+    labels = {round(x["start"], 2): x.get("label", "") for x in p.get("sections", [])}
+    parts = []
+    for lv, a, b, n in runs:
+        ks = [k for k in labels if k <= a + 0.05]
+        lab = labels[max(ks)] if ks else ""
+        lab = "chorus" if lab == "outro" and lv == "high" else lab  # a loud last chorus is labelled outro
+        parts.append(f"{mmss(t0 + a)}-{mmss(t0 + b)} {lv} ({lab}): {modes[lv]}, {n} shot{'s' if n > 1 else ''}")
+    p["energy_map"] = parts
+    return "energy map: " + " | ".join(parts) + "\n"
 
 
 # ------------------------------------------------------------------ take QC + re-rolls

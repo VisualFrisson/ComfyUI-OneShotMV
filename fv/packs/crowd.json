@@ -122,7 +122,7 @@
   }
  },
  "edit": {
-  "_note": "grammar 'hold' with cuts 'energy' (the user's rule, Oct 26): the song in three energies by its sections: low (intro, breaks, a quiet outro) a cut every shot_bars_quiet bars, medium (verses, the build_bars bars before a drop) every shot_bars_build bar, high (choruses, drops) a cut every drop_cut_seconds rounded to whole beats; every shot a new character (cast 'unique': its own portrait and its own singing clip, no looks edited from another shot), drop faces matched to one spot. Without 'cuts': the older hold grammar (drop groups of drop_looks pose-matched looks).",
+  "_note": "grammar 'hold' with cuts 'energy' (the user's rule, Oct 26): the song in three energies by its sections: low (intro, breaks, a quiet outro) a cut every shot_bars_quiet bars, medium (verses, the build_bars bars before a drop) every shot_bars_build bar, high (choruses, drops) a cut every drop_cut_seconds rounded to whole beats; every shot a new character (cast 'unique': its own portrait and its own singing clip, no looks edited from another shot), drop faces matched to one spot. Without 'cuts': the older hold grammar (drop groups of drop_looks pose-matched looks). cut_low / cut_medium / cut_high: every 2 bars, every bar, to the music (subtle: about every half bar) or to the music (intense: about every beat).",
   "grammar": "hold",
   "shot_bars_quiet": 2,
   "shot_bars_build": 1,
@@ -155,18 +155,22 @@
    "build"
   ],
   "match_max_scale": 1.25,
-  "match_max_shift": 0.12
+  "match_max_shift": 0.12,
+  "cut_low": "every 2 bars",
+  "cut_medium": "every bar",
+  "cut_high": "to the music (subtle)"
  },
  "fx": {
   "intensity": 1.0,
   "flash": 0.55,
-  "rgb": 9,
+  "rgb": 0,
   "zoom": 0.05,
-  "shake": 4,
+  "shake": 0,
   "ghost": 0.6,
   "quiet_scale": 0.2,
   "insert_flash": 0.75,
-  "build_scale": 0.6
+  "build_scale": 0.6,
+  "_note": "rgb (colour split) and shake off since Oct 26: on every snare and every cut they read as the picture glitching for a frame or two (the user's note)"
  },
  "finish": {
   "grade_mean": [

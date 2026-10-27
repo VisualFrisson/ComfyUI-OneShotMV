@@ -119,6 +119,31 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float, medium: tuple =
     return phase
 
 
+# How each energy level is cut (the user, Oct 26: a drop-down per level; "to the music, intense" is
+# the beat cut of the first tests, too fast and chaotic for some songs, so the default for high
+# energy is the subtle one, a little faster than a bar)
+CUT_CHOICES = ["every 2 bars", "every bar", "to the music (subtle)", "to the music (intense)"]
+CUT_DEFAULTS = {"low": "every 2 bars", "medium": "every bar", "high": "to the music (subtle)"}
+LEVEL_OF = {"quiet": "low", "build": "medium", "drop": "high"}
+
+
+def cut_modes(ed: dict) -> dict:
+    """{'low': mode, 'medium': mode, 'high': mode} from the pack's edit (cut_low, cut_medium, cut_high)."""
+    out = {}
+    for lv, d in CUT_DEFAULTS.items():
+        m = str(ed.get(f"cut_{lv}") or d).strip().lower()
+        out[lv] = m if m in CUT_CHOICES else d
+    return out
+
+
+def subtle_beats(bar_len: float, beat_len: float) -> int:
+    """'To the music, subtle': half a bar (two beats in 4/4), or a whole bar when half a bar would
+    be shorter than 0.6 s (a fast or double-time tempo)."""
+    per_bar = max(1, int(round(bar_len / max(1e-3, beat_len))))
+    half = max(1, per_bar // 2)
+    return half if half * beat_len >= 0.6 else per_bar
+
+
 def drop_beats(tempo: float, ed: dict) -> int:
     """Beats per shot on the drop (the energy grammar's fast cuts on the rhythm): the whole number
     of beats closest to `drop_cut_seconds` (0.75 s: one beat at 100 BPM, two at 128)."""
@@ -127,14 +152,17 @@ def drop_beats(tempo: float, ed: dict) -> int:
     return max(1, int(round(target / beat_len)))
 
 
-def _split_drop(shots: list[dict], beats: list[float], k: int, min_len: float) -> list[dict]:
-    """Each drop shot cut every k beats: one new person per cut. A last piece shorter than
-    min_len joins the one before it."""
+def _split_drop(shots: list[dict], beats: list[float], k, min_len) -> list[dict]:
+    """Each drop shot (or each shot of a phase in k, when k is {phase: beats}) cut every k beats:
+    one new person per cut. A last piece shorter than min_len joins the one before it."""
     out = []
+    ks = k if isinstance(k, dict) else {"drop": k}
+    mins = min_len if isinstance(min_len, dict) else {"drop": min_len}
     for s in shots:
-        if s.get("phase") != "drop":
+        if s.get("phase") not in ks:
             out.append(s)
             continue
+        k, min_len = ks[s["phase"]], mins[s["phase"]]
         inner = [b for b in beats if s["t0"] + 0.1 < b < s["t1"] - 0.1]
         cuts = [s["t0"]] + inner[k - 1::k] + [s["t1"]]
         pieces = []
@@ -162,6 +190,9 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     phase = _phases(secs, bar_len, ed.get("build_bars", 4), medium)
     nbars = {"quiet": int(ed.get("shot_bars_quiet", 2)), "build": int(ed.get("shot_bars_build", 1)),
              "drop": int(ed.get("drop_group_bars", 1))}
+    modes = cut_modes(ed) if energy else {}
+    if energy:  # the level's cut: bars, or one-bar groups cut to the music below
+        nbars = {ph: 2 if modes[LEVEL_OF[ph]] == "every 2 bars" else 1 for ph in nbars}
     sec_starts = sorted(s["start"] for s in secs)
     shots, i = [], 0
     while i < len(bars):
@@ -177,8 +208,15 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     if shots and dur - shots[-1]["t1"] > 0.05:
         shots[-1]["t1"] = round(dur, 4)
     if energy and beats:
-        k = drop_beats(tempo, ed)
-        shots = _split_drop(shots, beats, k, min_len=0.6 * k * 60.0 / max(40.0, tempo))
+        beat_len = 60.0 / max(40.0, tempo)
+        ks = {}
+        for ph, lv in LEVEL_OF.items():
+            if modes[lv] == "to the music (intense)":
+                ks[ph] = drop_beats(tempo, ed)
+            elif modes[lv] == "to the music (subtle)":
+                ks[ph] = subtle_beats(bar_len, beat_len)
+        if ks:
+            shots = _split_drop(shots, beats, ks, {ph: 0.6 * k * beat_len for ph, k in ks.items()})
         for s in shots:
             s["energy"] = {"quiet": "low", "build": "medium", "drop": "high"}[s["phase"]]
             s["burst"] = s["phase"] == "drop"

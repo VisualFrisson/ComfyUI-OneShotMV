@@ -265,6 +265,14 @@ class FVDirector:
                        "tooltip": "Voice runs queued here: load each model as few times as possible (Krea for "
                                   "every image, LTX for every singer clip and its QC, Klein for every look, LTX "
                                   "for every look clip) and make the looks only from the final singer takes"}),
+            "cuts_low": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["low"],
+                         "tooltip": "How low-energy sections (intro, breaks, a quiet outro) are cut"}),
+            "cuts_medium": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["medium"],
+                            "tooltip": "How medium-energy sections (verses, the build into a drop) are cut"}),
+            "cuts_high": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["high"],
+                          "tooltip": "How high-energy sections (choruses, drops) are cut. 'To the music' cuts "
+                                     "on the beat to a new face in the same spot: subtle about every half bar, "
+                                     "intense about every beat"}),
             "look_groups": ("BOOLEAN", {"default": False,
                             "tooltip": "Experimental, with staged: each drop group's looks come from one LTX clip "
                                        "that switches person on the beat. Faster when it works; looks it doesn't "
@@ -284,7 +292,7 @@ class FVDirector:
     def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
             framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix", lip_repair=False,
-            staged=True, look_groups=False):
+            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -299,7 +307,8 @@ class FVDirector:
                               artist_path=_resolve(artist_image_path) if artist_image_path else "",
                               qc_retries=qc_retries, theme=theme or "", broll_share=broll_share,
                               broll_style=broll_style, lip_repair=lip_repair, staged=staged,
-                              look_groups=look_groups)
+                              look_groups=look_groups,
+                              cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high})
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
