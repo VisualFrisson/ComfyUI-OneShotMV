@@ -36,7 +36,7 @@ _NOT_A_THING = re.compile(r"(?i)\b(camera|lighting|light|lens|photo|photograph|p
                           r"likely|possibly|maybe|unclear)\b")
 
 # how bad each fault is (the best take has the lowest total)
-WEIGHT = {"people": 3, "gender": 3, "beard": 3, "glasses": 3, "head": 3, "text": 1, "modern": 1, "outfit": 1,
+WEIGHT = {"people": 3, "gender": 3, "beard": 3, "glasses": 3, "head": 3, "mono": 3, "text": 1, "modern": 1, "outfit": 1,
           "unread": 0}
 
 
@@ -180,6 +180,19 @@ MODERN_SINCE_1900 = re.compile(r"(?i)\b(smartphones?|cell ?phones?|mobile phones
                                r"hoodies?|tracksuits?|water bottles?|smart ?watch(?:es)?|modern hairstyle)\b")
 
 
+def saturation(path: str) -> float:
+    """Median colour saturation of a picture (sx05c: three Roman portraits came out nearly black and
+    white at 0.05-0.08; the next lowest was 0.11)."""
+    from PIL import Image
+    im = np.asarray(Image.open(path).convert("RGB").resize((256, 144))).astype(np.float32) / 255
+    mx, mn = im.max(-1), im.min(-1)
+    sat = np.where(mx > 0.04, (mx - mn) / np.maximum(mx, 1e-3), 0.0)
+    return float(np.median(sat))
+
+
+MONO_BELOW = 0.09
+
+
 def score(fs: list[str]) -> int:
     return sum(WEIGHT.get(f, 1) for f in fs)
 
@@ -211,6 +224,8 @@ def fix_lines(fs: list[str], check: dict, era: str, ans: dict | None = None) -> 
         out.append("Plain, unmarked surfaces everywhere, with no writing or symbols.")
     if "modern" in fs and era:
         out.append(f"Every object, garment and hairdo in the picture existed in {era}.")
+    if "mono" in fs:
+        out.append("A full-colour photograph: rich, natural colour in the skin, the clothes and the surroundings.")
     if "outfit" in fs and check.get("wear"):
         out.append(f"The outfit is exactly this: {check['wear']}.")
     return " ".join(out)

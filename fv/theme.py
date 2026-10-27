@@ -71,7 +71,7 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 # each with the gender the cast needs.
 ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Roles already in the video: {taken}.
-List {n} more roles, jobs or kinds of people who belong in this theme's own places at its own moment (when the theme is one day, one event or one night, the people who are really there then and part of it), every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
+List {n} more roles, jobs or kinds of people who belong in this theme's own places at its own moment (when the theme is one day, one event or one night, the people who are really there then and part of it). Most of them belong in these places of the theme, as part of what happens there: {places}. Every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
 
 # A role only one gender held there and then keeps that gender (the user's strict accuracy, Oct 26):
 # checked over the whole cast once it is written (sx05c's first world call gave a woman chariot racer)
@@ -422,7 +422,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v9".encode("utf-8")).hexdigest()[:16]  # v9: role, gender, age, look; bigger cast; roles of the theme's moment, with their real gender
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v10".encode("utf-8")).hexdigest()[:16]  # v10: extra roles from the theme's own places; v9: role, gender, age, look; bigger cast; roles of the theme's moment, with their real gender
 
 
 # ------------------------------------------------------------------ the language model
@@ -812,6 +812,19 @@ def _same(a: dict, b: dict) -> bool:
     return a["role"].lower() == b["role"].lower() and a.get("gender") == b.get("gender") and close
 
 
+def _theme_places(bible: dict) -> str:
+    """The places the World line itself names (the part after the colon), else the bible's places:
+    sx05c's extra cast drifted to a Roman market day (vinegar merchant, tax collector, herbalist)
+    on a World set at the games."""
+    th = bible.get("theme", "")
+    # World lines read "headline: who; where; light" (the sample lines and every stress-test line)
+    parts = [x.strip(" .") for x in re.split(r"[;:]", th)[1:] if x.strip()]
+    named = [parts[1]] if len(parts) >= 3 else []
+    if not named:
+        named = [p_.replace("in ", "", 1) for p_ in (bible.get("places") or [])[:6]]
+    return "; ".join(named)[:600] or "the places of the theme"
+
+
 def _role_list(text: str | None) -> list[tuple[str, str]]:
     d = _parse(text or "") or {}
     v = d.get("roles")
@@ -934,7 +947,7 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
         if need <= 4:
             break
         text = llm(ROLES_PROMPT.format(theme=theme.replace('"', "'"), taken=", ".join(taken + [r for r, _ in roles]),
-                                       n=need, strict=STRICT),
+                                       n=need, strict=STRICT, places=_theme_places(bible)),
                    seed=seed + 211 + attempt, max_length=24 * need + 160, log=log)
         dump(f"r{attempt}", text)
         if text is None:

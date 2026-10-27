@@ -1213,6 +1213,13 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                 text = critic.ask(it["image"], critic.rubric(it["check"], world, era))
                 ans = critic.parse(text)
                 fs = critic.faults(ans, it["check"], it["kind"], era)
+                try:
+                    sat = critic.saturation(it["image"])
+                    take["saturation"] = round(sat, 3)
+                    if sat < critic.MONO_BELOW:
+                        fs.append("mono")
+                except Exception:
+                    pass
                 take.update(answer=ans if ans else (text or "")[:300], faults=fs, score=critic.score(fs),
                             modern=critic.modern_items(ans))
             except Exception as e:  # never let the check stop a run
@@ -1241,6 +1248,8 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                 ins = node.get("inputs", {})
                 if node.get("class_type") == "CLIPTextEncode" and isinstance(ins.get("text"), str):
                     t = ins["text"]
+                    if "mono" in it["takes"][-1]["faults"]:  # sx05c: "muted" colour went grey
+                        t = re.sub(r"(?i)\bMuted, true-to-life colour\b", "Rich, natural, true-to-life colour", t)
                     if crowded:  # sx07c: the emptied beach club, market and rave still filled up
                         t = _wall_place(t)
                     elif people:  # st2e: a new seed alone kept the dressing room's mirrors and the arena's crowd

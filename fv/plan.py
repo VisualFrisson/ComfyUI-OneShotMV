@@ -199,6 +199,9 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     modes = cut_modes(ed) if energy else {}
     if energy:  # the level's cut: bars, or one-bar groups cut to the music below
         nbars = {ph: 2 if modes[LEVEL_OF[ph]] == "every 2 bars" else 1 for ph in nbars}
+        if bar_len < 1.4:  # a double-time grid (Big Dawgs at 180 BPM: 1.33 s bars): bars in pairs, or
+            # "every bar" is the same pace as the subtle cut on the drop and the drop doesn't lift
+            nbars = {ph: 2 * n for ph, n in nbars.items()}
     sec_starts = sorted(s["start"] for s in secs)
     shots, i = [], 0
     while i < len(bars):
