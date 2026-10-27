@@ -80,10 +80,14 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     are all different characters before the looks on the drop take theirs."""
     out = _cast_voice(pack, n, seed, sizes, fmt, leads, phases)
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
+    era = ""
+    if any((c.get("check") or {}).get("crowd") for c in out):
+        from .critic import check_era
+        era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
     for c in out:
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
         if (c.get("check") or {}).get("crowd"):
-            c["portrait"], c["sing"] = crowd_behind(c["portrait"]), crowd_behind(c["sing"])
+            c["portrait"], c["sing"] = crowd_behind(c["portrait"], era), crowd_behind(c["sing"], era)
         if c.get("twin_prompt"):
             c["twin_prompt"] = c["twin_prompt"].rstrip() + " " + edit_realism(c.get("size", "close") == "close")
     return out
@@ -272,12 +276,16 @@ CROWD_BEHIND = ("The only person in focus, with the packed, roaring crowd of the
 _ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in frame\.")
 
 
-def crowd_behind(prompt: str) -> str:
+def crowd_behind(prompt: str, era: str = "") -> str:
     """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
-    become one person in focus with the stands behind as a blur."""
-    p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND, prompt)
+    become one person in focus with the stands behind as a blur; in a period World every spectator
+    in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd)."""
+    dressed = (f" Every spectator in the crowd wears the clothes of {era}: no t-shirts, caps, sunglasses or "
+               "other modern clothes anywhere.") if era else ""
+    p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND + dressed, prompt)
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
-    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur.", p)
+    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur" +
+               (f", all in the clothes of {era}." if era else "."), p)
     return p
 
 
