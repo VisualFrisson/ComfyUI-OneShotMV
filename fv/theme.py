@@ -969,7 +969,8 @@ def _named_roles(theme: str) -> list[str]:
     for item in re.split(r",\s+(?=(?:an?|the)\s)", head.split(":", 1)[1]):
         item = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", item.strip())
         role = re.split(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
-                        r"fanning|carrying|by|near|under|and)\b", item)[0].strip(" .,")
+                        r"fanning|carrying|by|near|under|and|alone|standing|sitting|waiting|leaning|"
+                        r"waving)\b", item)[0].strip(" .,")
         role = role.split(",")[0].strip()  # "champion murmillo gladiator, scarred and oiled"
         if _GEAR.search(role.split()[-1] if role.split() else ""):
             continue  # "..., a short sword and a tall shield": the last character's kit, not a character
