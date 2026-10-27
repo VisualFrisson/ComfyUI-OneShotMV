@@ -367,6 +367,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             p["critic"]["deferred"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs)
                                        if n in p["critic"]["later"]]
         p["timing"] = {"queued": _dt.datetime.now().isoformat(timespec="seconds")}
+    emap = _energy_map(p, pk)  # kept in the plan too (p["energy_map"])
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"{i:03d}_{name}.json"), "w", encoding="utf-8"), indent=1)
@@ -387,7 +388,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 continue
             ids.append(queue_prompt(g, url))
     summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
-               + (themes.summary(bible) + "\n" if bible else "") + _energy_map(p, pk) +
+               + (themes.summary(bible) + "\n" if bible else "") + emap +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
                f"{'queued' if queue else 'written (not queued)'}.\nOutput folder: {run_dir}")

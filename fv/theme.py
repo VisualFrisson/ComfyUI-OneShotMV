@@ -484,6 +484,17 @@ def _parse(text: str) -> dict | None:
                 return d
         except Exception:
             continue
+    # curly quotes as the JSON's own quotes (sx02c's role list switched to them halfway through)
+    if "\u201c" in t or "\u201d" in t:
+        t2 = t.replace("\u201c", '"').replace("\u201d", '"')
+        for fix in (lambda s: s, lambda s: re.sub(r",\s*([\]}])", r"\1", s)):
+            try:
+                d = json.loads(fix(t2))
+                if isinstance(d, dict):
+                    return d
+            except Exception:
+                continue
+        t = t2
     return _salvage(t)
 
 
@@ -804,6 +815,11 @@ def _same(a: dict, b: dict) -> bool:
 def _role_list(text: str | None) -> list[tuple[str, str]]:
     d = _parse(text or "") or {}
     v = d.get("roles")
+    if not isinstance(v, list) and text:
+        # a cut-off or malformed answer: the role / gender pairs one by one
+        t = (text or "").replace("\u201c", '"').replace("\u201d", '"')
+        v = [{"role": m.group(1), "gender": m.group(2)} for m in
+             re.finditer(r'"role"\s*:\s*"([^"\n]{2,60})"\s*,\s*"gender"\s*:\s*"(\w+)"', t)]
     if not isinstance(v, list):  # a bare list, or one role per line
         m = re.search(r"\[[^\]]*\]", text or "")
         try:
