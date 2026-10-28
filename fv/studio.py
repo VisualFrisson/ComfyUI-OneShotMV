@@ -630,6 +630,7 @@ def _run(name: str) -> dict:
         "versions": _versions(d, p), "pickup": _pickup_state(d, p, done),
         "soft_clips": len(_soft_clips(d, p)) if done else 0,
         "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
+        "fx_levels": (done or {}).get("fx_levels") or _fv("assemble").fx_levels(p),
         "looks": [{"id": "none", "name": "As made"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
         "looks_sig": _file_sig(_fv("finish").__file__),  # in the preview URLs, so browsers drop old tiles
     }
@@ -1251,14 +1252,18 @@ async def _api(request: web.Request, route: str) -> web.Response:
             return web.json_response({"prompt_id": pid, "estimate": est})
         if route == "recut":
             d = _run_dir(body.get("run", ""))
-            fx = body.get("fx", "subtle")
-            if fx not in ("none", "subtle", "intense"):
-                fx = "subtle"
+            ok = ("none", "subtle", "intense")
+            fx = body.get("fx", "subtle")  # one level, or {low, medium, high}: one per music energy
+            if isinstance(fx, dict):
+                fxl = {k: fx.get(k) if fx.get(k) in ok else "subtle" for k in ("low", "medium", "high")}
+            else:
+                fxl = {k: fx if fx in ok else "subtle" for k in ("low", "medium", "high")}
             # the choice stays with the run: the screen shows it, and later cuts (pickups) keep it
             pj = os.path.join(d, "plan.json")
             plan_ = _load(pj, {}) or {}
             if plan_:
-                plan_["fx_level"] = fx
+                plan_["fx_levels"] = fxl
+                plan_["fx_level"] = fxl["medium"]
                 fu = dict(plan_.get("finish_user") or {})
                 if body.get("look") is not None:
                     fu["look"] = str(body["look"]) if str(body["look"]) in _look_names() else "none"
@@ -1269,7 +1274,7 @@ async def _api(request: web.Request, route: str) -> web.Response:
                 json.dump(plan_, open(pj, "w", encoding="utf-8"), indent=1)
             rel = os.path.relpath(d, _out()).replace(os.sep, "/")
             g = {"1": {"class_type": "FVAssemble", "inputs": {"run_dir": d, "filename_prefix": rel,
-                                                            "fx_intensity": 1.0, "finish": True, "audio_fx": fx}}}
+                                                            "fx_intensity": 1.0, "finish": True, "audio_fx": "from the run"}}}
             pid = await _blocking(_queue_graph, g)
             return web.json_response({"prompt_id": pid})
         if route == "sharpen":

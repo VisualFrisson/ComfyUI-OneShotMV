@@ -353,14 +353,33 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .slider b{text-align:right;font-size:12px;color:var(--text)}
 .grainprev{margin-top:10px;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:16/9}
 .grainprev img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
-.applybar{position:sticky;bottom:0;z-index:3;margin:-8px -6px 0;padding:22px 6px 14px;background:linear-gradient(to bottom,transparent,var(--bg) 22px)}
+.refine-h{margin:0 2px 2px;font-size:24px;line-height:1.1;font-weight:800;letter-spacing:-.01em}
+.acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:40px}
+.acc-h h3{flex:none}
+.acc-sum{margin-left:auto;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc.open .acc-sum{visibility:hidden}
+.acc-h .chev{flex:none;color:var(--muted);transition:transform .15s}
+.acc.open .acc-h .chev{transform:rotate(180deg)}
+.acc-b{margin-top:10px}
+.refine .ed.acc .tiny{margin:0 0 12px}
+.fxrows{display:grid;gap:10px}
+.fxrow{display:grid;gap:6px}
+.fxlab{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+.fxlab i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.fxrow .seg{display:grid;grid-template-columns:repeat(3,1fr)}
+.refine .ed h3{color:var(--accent)}
+.applybar .btn{font-size:17px;min-height:54px;font-weight:800}
+.applybar{padding:2px 0 0}
 .applybar .btn:disabled{opacity:1;color:var(--muted);background:var(--panel2);border-color:var(--line2)}
 html[data-look="neon"] .slider input{accent-color:var(--g3)}
 html[data-look="neon"] .grade{border:1px solid var(--line2);position:relative;isolation:isolate;overflow:visible}
 html[data-look="neon"] .grade .gimg{border-radius:9px 9px 0 0;overflow:hidden}
 html[data-look="neon"] .grade[aria-pressed=true]::before{content:"";position:absolute;inset:-5px;border-radius:15px;padding:2.5px;background:var(--grad);pointer-events:none;
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
-html[data-look="neon"] .refine .ed h3{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+html[data-look="neon"] .refine .ed h3{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-look="neon"] .refine-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.03em;font-size:28px}
+html[data-look="neon"] .applybar .btn{font-size:18px;letter-spacing:.05em}
 html[data-look="neon"] .fixpanel{background:var(--panel2);border-color:var(--line2);box-shadow:inset 3px 0 0 var(--g3)}
 html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase}
 </style>
@@ -843,6 +862,7 @@ function renderUpdate(r){
 
 // ---------------------------------------------------------------- 4. Result
 const pickKey = run => "pickups." + run;
+let REFINE_OPEN = "fx";  // the Result screen's open Edit and refine panel
 async function viewResult(run){
   setSteps(3);
   const app = $("#app");
@@ -852,8 +872,9 @@ async function viewResult(run){
   const sing = r.shots.filter(s => s.kind === "sing").length;
   const P = { list: store.get(pickKey(run), []), sel: null, mode: "take", note: "" };
   const shooting = r.pickup && r.pickup.state === "running";
-  const F0 = Object.assign({fx: r.fx_now || "subtle"}, r.finish || {});
-  const E = Object.assign({}, F0);
+  const fx0 = r.fx_levels || {low: r.fx_now || "subtle", medium: r.fx_now || "subtle", high: r.fx_now || "subtle"};
+  const F0 = Object.assign({fx: Object.assign({}, fx0)}, r.finish || {});
+  const E = Object.assign({}, F0, {fx: Object.assign({}, fx0)});
   app.innerHTML = `
   <div class="head"><div><h1>${esc(r.world.headline || "Your video")}</h1><p class="sub">${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
     <div class="row"><a class="btn" href="#/">New video</a>
@@ -883,19 +904,22 @@ async function viewResult(run){
         <p style="margin:12px 0 0"><a href="#" id="showplan" style="font-size:13px;font-weight:600">The plan, shot by shot</a></p></section>
     </div>
     <aside class="colside refine" aria-label="Edit and refine">
-      <h2 class="label" style="margin:2px 4px 0">Edit and refine</h2>
-      <section class="card ed" aria-labelledby="eh1"><h3 id="eh1">Audio-reactive FX</h3><p class="tiny">Flash, zoom punch, glow and color split on the drums.</p>
-        <div class="seg" role="group" aria-label="Audio-reactive FX" id="efx"></div></section>
-      <section class="card ed" aria-labelledby="eh2"><div class="row" style="justify-content:space-between"><h3 id="eh2">Color grade</h3><button type="button" class="linkbtn" id="asmade">As made</button></div>
-        <p class="tiny">On top of the default look. A still from your video shows each one.</p>
-        <div class="grades" role="group" aria-label="Color grade" id="grades"></div></section>
-      <section class="card ed" aria-labelledby="eh3"><h3 id="eh3">Grain</h3>
-        <label class="slider"><span>Intensity</span><input type="range" id="gi" min="0" max="100" step="1"><b class="mono" id="giv"></b></label>
-        <label class="slider"><span>Size</span><input type="range" id="gs" min="0.5" max="4" step="0.5"><b class="mono" id="gsv"></b></label>
-        <div class="grainprev"><img id="grainimg" alt="The middle of a frame at 1080p, pixel for pixel, with this grain"></div>
-        <p class="tiny" style="margin:6px 0 0">Pixel for pixel at 1080p: the grain goes on after the upscale.</p></section>
-      <section class="card ed" aria-labelledby="eh4"><h3 id="eh4">Vignette</h3>
-        <label class="slider"><span>Intensity</span><input type="range" id="vg" min="0" max="95" step="1"><b class="mono" id="vgv"></b></label></section>
+      <h2 class="refine-h">Edit and refine</h2>
+      <section class="card ed acc" data-acc="fx"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-fx"><h3>Audio-reactive FX</h3><span class="acc-sum" id="sum-fx"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
+        <div class="acc-b" id="acc-fx" hidden><p class="tiny">Flash, zoom punch, glow and color split on the drums, set for each energy in the song.</p>
+          <div class="fxrows" id="efx"></div></div></section>
+      <section class="card ed acc" data-acc="grade"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grade"><h3>Color grade</h3><span class="acc-sum" id="sum-grade"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
+        <div class="acc-b" id="acc-grade" hidden><div class="row" style="justify-content:space-between;gap:10px"><p class="tiny" style="margin:0">On top of the default look. A still from your video shows each one.</p><button type="button" class="linkbtn" id="asmade">As made</button></div>
+          <div class="grades" role="group" aria-label="Color grade" id="grades"></div></div></section>
+      <section class="card ed acc" data-acc="grain"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grain"><h3>Grain</h3><span class="acc-sum" id="sum-grain"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
+        <div class="acc-b" id="acc-grain" hidden>
+          <label class="slider"><span>Intensity</span><input type="range" id="gi" min="0" max="100" step="1"><b class="mono" id="giv"></b></label>
+          <label class="slider"><span>Size</span><input type="range" id="gs" min="0.5" max="4" step="0.5"><b class="mono" id="gsv"></b></label>
+          <div class="grainprev"><img id="grainimg" alt="The middle of a frame at 1080p, pixel for pixel, with this grain"></div>
+          <p class="tiny" style="margin:6px 0 0">Pixel for pixel at 1080p: the grain goes on after the upscale.</p></div></section>
+      <section class="card ed acc" data-acc="vig"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-vig"><h3>Vignette</h3><span class="acc-sum" id="sum-vig"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
+        <div class="acc-b" id="acc-vig" hidden>
+          <label class="slider"><span>Intensity</span><input type="range" id="vg" min="0" max="95" step="1"><b class="mono" id="vgv"></b></label></div></section>
       <div class="applybar"><button class="btn" id="apply" type="button" disabled style="width:100%">No changes yet</button>
         <p class="tiny center" style="margin:8px 0 0">A new cut with these settings; nothing re-renders. The cut before is replaced.</p></div>
     </aside>
@@ -962,9 +986,9 @@ async function viewResult(run){
     $("#shoot").innerHTML = `Shoot ${P.list.length} pickup${P.list.length > 1 ? "s" : ""} <span class="mono eta-b">about ${mins(pkEstimate())}</span>`;
     primary();
   }
-  // one gradient button per view: pickups to shoot, else changes to apply, else the download
+  // Download always carries the gradient; Shoot and Apply light up when they have work to do
   function primary(){ const pk = !!P.list.length && !shooting, ch = dirty() && !shooting;
-    $("#shoot").classList.toggle("primary", pk); $("#apply").classList.toggle("primary", !pk && ch); $("#dl").classList.toggle("primary", !pk && !ch); }
+    $("#shoot").classList.toggle("primary", pk); $("#apply").classList.toggle("primary", ch); }
   $("#shoot").onclick = async () => {
     if (!P.list.length) return;
     try{
@@ -974,18 +998,27 @@ async function viewResult(run){
     }catch(e){ overlay(); toast("Pickups didn't start: " + e.message, 9000); }
   };
   // edit and refine: FX, grade, grain, vignette; one Apply re-cuts with all of them
-  const dirty = () => ["fx","look","grain","grain_size","vignette"].some(k => String(E[k]) !== String(F0[k]));
-  const drawFxSeg = () => { $("#efx").innerHTML = ["none","subtle","intense"].map(f => `<button type="button" class="opt" data-x="${f}" aria-pressed="${E.fx===f}">${f}${f === "subtle" ? " (default)" : ""}</button>`).join("");
-    $("#efx").querySelectorAll(".opt").forEach(el => el.onclick = () => { E.fx = el.dataset.x; drawFxSeg(); drawApply(); }); };
+  const ENERGIES = [["low", "Low energy"], ["medium", "Medium energy"], ["high", "High energy"]];
+  const dirty = () => JSON.stringify(E.fx) !== JSON.stringify(F0.fx) || ["look","grain","grain_size","vignette"].some(k => String(E[k]) !== String(F0[k]));
+  const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
+  const drawFxSeg = () => {
+    $("#efx").innerHTML = ENERGIES.map(([k, label]) => `<div class="fxrow"><span class="fxlab"><i style="background:${LEVEL_COL[k]}"></i>${label}</span>
+      <div class="seg" role="group" aria-label="${label}: audio-reactive FX">${["none","subtle","intense"].map(f => `<button type="button" class="opt" data-en="${k}" data-x="${f}" aria-pressed="${E.fx[k]===f}">${cap(f)}</button>`).join("")}</div></div>`).join("");
+    $("#efx").querySelectorAll(".opt").forEach(el => el.onclick = () => { E.fx[el.dataset.en] = el.dataset.x; drawFxSeg(); drawApply(); });
+    const v = ENERGIES.map(([k]) => E.fx[k]);
+    $("#sum-fx").textContent = v.every(x => x === v[0]) ? cap(v[0]) : `${cap(v[0])} · ${cap(v[1])} · ${cap(v[2])}`;
+  };
   const grades = (r.looks || []).filter(l => l.id !== "none");
   const drawGrades = () => {
     $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
     $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); drawGrain(); });
     $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
+    const lk = grades.find(l => l.id === E.look); $("#sum-grade").textContent = lk ? lk.name : "As made";
   };
   $("#asmade").onclick = () => { E.look = "none"; drawGrades(); drawApply(); drawGrain(); };
   const gi = $("#gi"), gs = $("#gs"), vg = $("#vg");
-  const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({0.5:"finest",1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%"; };
+  const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({0.5:"finest",1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%";
+    $("#sum-grain").textContent = +E.grain > 0 ? `${gi.value}% · ${$("#gsv").textContent}` : "Off"; $("#sum-vig").textContent = +E.vignette > 0 ? vg.value + "%" : "Off"; };
   let grainT = 0;
   const drawGrain = () => { clearTimeout(grainT); grainT = setTimeout(() => {
     const im = $("#grainimg"), px = Math.round((im.parentNode.clientWidth || 300) * (window.devicePixelRatio || 1) / 16) * 16;
@@ -994,7 +1027,14 @@ async function viewResult(run){
   gs.oninput = () => { E.grain_size = +gs.value; drawSliders(); drawApply(); drawGrain(); };
   vg.oninput = () => { E.vignette = +vg.value / 100; drawSliders(); drawApply(); };
   const drawApply = () => { const a = $("#apply"), d = dirty(); a.disabled = !d || shooting; a.textContent = d ? "Apply changes · about 2 min" : "No changes yet"; primary(); };
-  drawFxSeg(); drawGrades(); drawSliders(); drawApply(); drawGrain();
+  drawFxSeg(); drawGrades(); drawSliders(); drawApply();
+  // one panel open at a time; the open one is remembered across cuts
+  const openPanel = k => { REFINE_OPEN = k;
+    document.querySelectorAll(".refine .acc").forEach(sec => { const on = sec.dataset.acc === k;
+      sec.classList.toggle("open", on); sec.querySelector(".acc-h").setAttribute("aria-expanded", String(on)); sec.querySelector(".acc-b").hidden = !on; });
+    if (k === "grain") drawGrain(); };
+  document.querySelectorAll(".refine .acc-h").forEach(b => b.onclick = () => { const k = b.parentNode.dataset.acc; openPanel(REFINE_OPEN === k ? null : k); });
+  openPanel(REFINE_OPEN);
   $("#apply").onclick = async () => {
     try{
       overlay("Making the new cut", "The same shots with the new FX, grade, grain and vignette. Nothing re-renders.");

@@ -115,6 +115,17 @@ def cover(f, size, cv2):
     return r[y:y + H, x:x + W]
 
 
+def fx_levels(plan: dict, override: str | None = None) -> dict:
+    """{low, medium, high} -> none / subtle / intense: the override for all three, else the run's
+    own per-energy choice (plan fx_levels), else its single fx_level, else subtle."""
+    ok = ("none", "subtle", "intense")
+    if override in ok:
+        return {k: override for k in ("low", "medium", "high")}
+    one = plan.get("fx_level") if plan.get("fx_level") in ok else "subtle"
+    per = plan.get("fx_levels") or {}
+    return {k: per.get(k) if per.get(k) in ok else one for k in ("low", "medium", "high")}
+
+
 def _active(edl: list[dict], f: int):
     best, start = None, None
     for e in edl:
@@ -163,11 +174,18 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     ctl["beatpulse"] = audiofx.beat_pulses(tlw.get("beats", []), n_out, fps)
     bar_s = 4 * 60.0 / max(1.0, float(plan.get("tempo") or 120.0))
     ctl["drop"] = audiofx.drop_mask((tlw.get("drop") or {}).get("time"), bar_s, n_out, fps)
-    # the run's audio-reactive FX level (Director input audio_fx; none / subtle / intense)
-    cfg = fx.level_cfg(pack["fx"], fx_level or plan.get("fx_level"))
-    cfg["intensity"] = cfg.get("intensity", 1.0) * fx_intensity
-    # the twitch is up to `twitch` px of the delivered frame (frames are drawn at render size)
-    cfg["twitch"] = cfg.get("twitch", 0) * cw / max(1, dw)
+    # the audio-reactive FX level for each music energy (the Studio: low / medium / high, each
+    # none / subtle / intense); an explicit fx_level (the node's audio_fx) sets all three
+    fx_by = fx_levels(plan, fx_level)
+
+    def _fx_cfg(lv):
+        c = fx.level_cfg(pack["fx"], lv)
+        c["intensity"] = c.get("intensity", 1.0) * fx_intensity
+        # the twitch is up to `twitch` px of the delivered frame (frames are drawn at render size)
+        c["twitch"] = c.get("twitch", 0) * cw / max(1, dw)
+        return c
+    cfgs = {k: _fx_cfg(v) for k, v in fx_by.items()}
+    cfg = cfgs["medium"]  # the phase ramps (quiet / build / drop) use one set
 
     # ---- the cut: re-derived from the shots with the pack's current edit settings, so a
     # re-assemble picks up edit changes without re-rendering
@@ -242,6 +260,11 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
 
     shots = plan.get("shots", [])
     shot_starts = {int(round(s["t0"] * fps)) for s in shots}
+    energy = ["medium"] * n_out  # each output frame's music energy, from its shot
+    for s in shots:
+        e = s.get("energy") if s.get("energy") in cfgs else "medium"
+        for k in range(max(0, int(round(s["t0"] * fps))), min(n_out, int(round(s["t1"] * fps)))):
+            energy[k] = e
 
     def loud_at(f):
         t = f / fps
@@ -316,11 +339,11 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             other = frame_for(ev["from"], t + ev.get("from_dt", 0.0))
             if other is not None:
                 n = max(1, ev["f1"] - ev["f0"])
-                a = cfg.get("ghost", 0.6) * (1 - j / n)
+                a = cfgs[energy[f]].get("ghost", 0.6) * (1 - j / n)
                 xo = torch.from_numpy(np.ascontiguousarray(other)).to(device).float() / 255
                 xo = warp(xo, ev.get("from_align"))
                 x = x * (1 - a) + xo * a
-        p = fx.fx_params(f, ev, ctl, loud_at(f), cfg, f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps,
+        p = fx.fx_params(f, ev, ctl, loud_at(f), cfgs[energy[f]], f in shot_starts or (ev is not None and ev["kind"] == "switch"), j, fps,
                          level=None if level is None else float(level[min(f, n_out - 1)]))
         y = fx.apply_fx(x, p, prev)
         prev = y
@@ -349,7 +372,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     try:  # the run is finished: FVRunResult (and so an SDK client) hands this video out
         import datetime as _dt
         json.dump({"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,
-                   "fx": fx_level or plan.get("fx_level") or "subtle", "finish": plan.get("finish_user") or {},
+                   "fx": fx_level or plan.get("fx_level") or "subtle", "fx_levels": fx_by,
+                   "finish": plan.get("finish_user") or {},
                    "at": _dt.datetime.now().isoformat(timespec="seconds")},
                   open(os.path.join(run_dir, "done.json"), "w", encoding="utf-8"), indent=1)
     except OSError:
