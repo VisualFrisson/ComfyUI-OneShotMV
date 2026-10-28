@@ -88,7 +88,7 @@ LOOK_NOTES = {
     "neon": ("Good Time, The Neon Demon, Mandy", "Punchy, saturated colour: magenta in the shadows, cool highlights."),
     "natural": ("No Country for Old Men", "Believable daylight and skin, restrained saturation, warm tungsten."),
     "lowcon": ("Arrival, Nomadland", "Blacks never reach black, soft highlights, gentle tonal steps, a little murky."),
-    "lowkey": ("The Godfather", "Most of the frame falls into deep amber shadow; the light picks out faces."),
+    "lowkey": ("The Godfather", "Most of the frame falls into deep amber shadow, while faces and lights stay bright."),
     "tobacco": ("O Brother, Where Art Thou?", "Dusty yellow-brown over everything; greens turned to straw."),
     "romantic": ("Her", "Peach, coral, cream and warm neutrals; blue held back; a soft mist on the highlights."),
     "technicolor": ("La La Land, The Wizard of Oz", "Rich, saturated primaries across the full rainbow."),
@@ -191,7 +191,11 @@ def apply_look(x, name: str, amount: float = 1.0):
         y = lift(con(sat(y, 0.76), 0.76, 0.42), 0.075, (0.0, 0.004, 0.01))
         y = y * 0.93
     elif name == "lowkey":
-        y = y.clamp(0, 1) ** 1.45
+        x0 = y.clamp(0, 1)
+        y = x0 ** 1.45  # deep shadows
+        # the highs and whites come back up (Oct 28: the faces and lights were too dim)
+        w = ((lum(x0) - 0.4) / 0.6).clamp(0, 1) ** 1.3
+        y = y + (x0 * 1.06 - y) * w * 0.85
         y = y * v(1.08, 0.99, 0.8)
         y = split(y, (0.008, 0.002, -0.012), (0.035, 0.016, -0.03), bal=0.35)
         y = con(sat(y, 0.9), 1.08, 0.3)
