@@ -169,7 +169,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 - `OneShotMV_Motion.json`: a song and a dance clip in.
 - `OneShotMV_Recut.json`: re-cut a finished run with different FX intensity.
 
-Press Queue once. The Director queues every job, and the finished video lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Next to it you'll find:
+Press Queue once. The Director queues every job, and the finished video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`. Next to it you'll find:
 - the plan;
 - the QC report;
 - the EDL;

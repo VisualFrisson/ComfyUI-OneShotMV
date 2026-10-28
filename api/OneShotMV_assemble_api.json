@@ -3,7 +3,7 @@
   "class_type": "FVAssemble",
   "inputs": {
    "run_dir": "",
-   "filename_prefix": "frissonvision/final",
+   "filename_prefix": "oneshot-mv/final",
    "fx_intensity": 1.0,
    "finish": true
   }

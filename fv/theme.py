@@ -8,7 +8,7 @@ the way a pack does, so a 60-shot run never repeats a look and every shot stays 
 The model is Gemma 3 12B, the LTX-2.3 text encoder every OneShot MV install already has
 (run through ComfyUI's own Generate Text), so a theme costs about a minute and no download.
 Without it the theme falls back to templates built around the theme sentence.
-Results are cached per theme + seed in output/frissonvision/themes/."""
+Results are cached per theme + seed in output/oneshot-mv/themes/."""
 from __future__ import annotations
 
 import hashlib
@@ -429,7 +429,17 @@ def _own(s: str, ing: bool = False) -> str:
 
 
 def cache_dir(out_root: str) -> str:
-    return os.path.join(out_root, "frissonvision", "themes")
+    """output/oneshot-mv/themes; the first call copies the cache from the old name
+    (output/frissonvision/themes) so cached Worlds and casts carry over the rename."""
+    new = os.path.join(out_root, "oneshot-mv", "themes")
+    old = os.path.join(out_root, "frissonvision", "themes")
+    if not os.path.isdir(new) and os.path.isdir(old):
+        try:
+            import shutil
+            shutil.copytree(old, new)
+        except Exception:
+            return old
+    return new
 
 
 def _key(theme: str, seed: int) -> str:

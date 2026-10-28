@@ -102,11 +102,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_id = _slug(run_name) if run_name else f"{mode}-{pack}-{fmt.replace(':', 'x')}-{preset}-{stamp}"
     base_id, k = run_id, 1
-    while os.path.isdir(os.path.join(out_root, "frissonvision", "runs", run_id)) and \
-            os.listdir(os.path.join(out_root, "frissonvision", "runs", run_id)):
+    while os.path.isdir(os.path.join(out_root, "oneshot-mv", "runs", run_id)) and \
+            os.listdir(os.path.join(out_root, "oneshot-mv", "runs", run_id)):
         k += 1  # never reuse a run folder: ComfyUI's save counters would shift every file name
         run_id = f"{base_id}-{k}"
-    rel = f"frissonvision/runs/{run_id}"
+    rel = f"oneshot-mv/runs/{run_id}"
     run_dir = os.path.join(out_root, *rel.split("/"))
     os.makedirs(os.path.join(run_dir, "jobs"), exist_ok=True)
     stems.write_wav(os.path.join(run_dir, "song.wav"), audio, sr)

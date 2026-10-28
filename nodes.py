@@ -56,13 +56,13 @@ def _file_ref(path: str) -> dict:
 
 
 def _inputs_dir() -> str:
-    d = os.path.join(folder_paths.get_output_directory(), "frissonvision", "inputs")
+    d = os.path.join(folder_paths.get_output_directory(), "oneshot-mv", "inputs")
     os.makedirs(d, exist_ok=True)
     return d
 
 
 def _save_image_input(image) -> str:
-    """IMAGE tensor -> PNG under output/frissonvision/inputs (named by content, so reruns reuse it)."""
+    """IMAGE tensor -> PNG under output/oneshot-mv/inputs (named by content, so reruns reuse it)."""
     import hashlib
     from PIL import Image
     arr = (image[0].detach().cpu().float().clamp(0, 1).numpy() * 255 + 0.5).astype(np.uint8)
@@ -341,7 +341,7 @@ class FVAssemble:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {"run_dir": ("STRING", {"default": ""}),
-                             "filename_prefix": ("STRING", {"default": "frissonvision/final"})},
+                             "filename_prefix": ("STRING", {"default": "oneshot-mv/final"})},
                 "optional": {"fx_intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.05}),
                              "audio_fx": (["from the run", "none", "subtle", "intense"], {"default": "from the run",
                                           "tooltip": "Re-assemble with another audio-reactive FX level"}),

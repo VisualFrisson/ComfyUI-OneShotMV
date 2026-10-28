@@ -29,7 +29,7 @@ Each performer lip-syncs the vocal (LTX audio-to-video).
 
 **broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. With **broll_style** `mix`, weak lip sync gets a shot that shows what the words are about (Whisper finds the words) and instrumental gaps get a performer dancing to the track; `lyrics` or `dance` uses one kind. 0 turns it off.
 
-The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.
+The finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`. Watch the queue: a 30 s run is roughly 40 to 100 jobs.
 
 **Packs**
 - **crowd**: a new face every shot.
@@ -56,7 +56,7 @@ MOTION_NOTE = """## OneShot MV: motion
 - **spotlight**: one dark stage, costume changes, motion trails.
 - **wardrobe**: a new world every beat.
 
-The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.
+The finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.
 
 Use music and footage you have the rights to."""
 
@@ -157,7 +157,7 @@ def motion():
 def recut():
     w = W()
     w.node("MarkdownNote", [0, 0], [380, 260], [RECUT_NOTE], title="How it works")
-    a = w.node("FVAssemble", [410, 0], [380, 200], ["frissonvision/runs/<run>", "frissonvision/recut", 1.0, True],
+    a = w.node("FVAssemble", [410, 0], [380, 200], ["oneshot-mv/runs/<run>", "oneshot-mv/recut", 1.0, True],
                outputs=[{"name": "preview", "type": "IMAGE"}, {"name": "video_path", "type": "STRING"}],
                title="OneShot MV: Assemble")
     p = w.node("PreviewImage", [820, 0], [420, 420], [], inputs=[{"name": "images", "type": "IMAGE"}])

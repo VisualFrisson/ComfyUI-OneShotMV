@@ -61,8 +61,8 @@
     "Node name for S&R": "FVAssemble"
    },
    "widgets_values": [
-    "frissonvision/runs/<run>",
-    "frissonvision/recut",
+    "oneshot-mv/runs/<run>",
+    "oneshot-mv/recut",
     1.0,
     true
    ],
