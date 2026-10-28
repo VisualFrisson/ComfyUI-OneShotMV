@@ -131,6 +131,8 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     pack = casting.load_pack(plan["pack"])
     if plan.get("finish"):  # a theme's grade (fv/theme.py)
         pack["finish"] = plan["finish"]
+    if plan.get("finish_user"):  # the Studio's colour grade, grain and vignette for this run
+        pack["finish"] = dict(pack["finish"], **plan["finish_user"])
     fps = plan["out_fps"]
     fmt = plan["format"]
     rw, rh = formats.render_size(fmt, plan["preset"])
@@ -343,6 +345,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     try:  # the run is finished: FVRunResult (and so an SDK client) hands this video out
         import datetime as _dt
         json.dump({"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,
+                   "fx": fx_level or plan.get("fx_level") or "subtle", "finish": plan.get("finish_user") or {},
                    "at": _dt.datetime.now().isoformat(timespec="seconds")},
                   open(os.path.join(run_dir, "done.json"), "w", encoding="utf-8"), indent=1)
     except OSError:

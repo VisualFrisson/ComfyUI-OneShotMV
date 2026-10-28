@@ -628,6 +628,8 @@ def _run(name: str) -> dict:
         "finished_at": (done or {}).get("at", ""),
         "song": _view(os.path.join(d, "song.wav")) if os.path.isfile(os.path.join(d, "song.wav")) else "",
         "versions": _versions(d, p), "pickup": _pickup_state(d, p, done),
+        "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
+        "looks": [{"id": "none", "name": "As made"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
     }
 
 
@@ -732,15 +734,15 @@ def _pickup_state(d: str, p: dict, done: dict | None) -> dict:
     if not pk:
         return {}
     last = pk[-1]
+    ids = set(last.get("prompt_ids") or (_load(os.path.join(d, f"pickup{last['n']}_jobs.json"), {}) or {}).get("prompt_ids") or [])
     try:
         running, pending = _queue_lists()
-        ids = set(last.get("prompt_ids") or [])
         left = sum(1 for x in list(running) + list(pending) if x[1] in ids)
     except Exception:
         left = 0
     finished = bool(done) and str((done or {}).get("at", "")) >= str(last.get("at", ""))
     state = "done" if finished else ("running" if left else "stopped")
-    total = len(last.get("prompt_ids") or [])
+    total = len(ids)
     import time
     el = (time.time() - float(last.get("t", time.time()))) / 60
     est = float(last.get("estimate_min") or 0)
@@ -854,11 +856,169 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
         1.0 + 0.035 * float(p.get("duration") or 30)
     p.setdefault("pickups", []).append({"n": k, "at": _dt.datetime.now().isoformat(timespec="seconds"),
                                         "t": time.time(), "items": changes, "estimate_min": round(est, 1)})
-    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
-    ids = director.queue_chain_front(chain)
-    p["pickups"][-1]["prompt_ids"] = ids
-    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)  # written in full before any job can read it
+    # queued in order at the back: front-queueing a chain from an idle server lets its first
+    # POST (the cut) start before the rest are queued (Oct 28: the cut ran before the clip)
+    ids = [director.queue_prompt(g) for g in chain]
+    json.dump({"prompt_ids": ids}, open(os.path.join(d, f"pickup{k}_jobs.json"), "w", encoding="utf-8"))
     return {"pickup": k, "jobs": len(chain), "estimate_min": round(est, 1)}
+
+
+# ------------------------------------------------------------------ the finish: grade, grain, vignette
+def _fv(name: str):
+    """A core module, reloaded when its file changed: edits show up here without a restart
+    (the nodes reload the same modules each time they run)."""
+    import importlib
+    mod = importlib.import_module("." + name, __package__)
+    try:
+        mt = os.path.getmtime(mod.__file__)
+        if getattr(mod, "_studio_mtime", None) != mt:
+            mod = importlib.reload(mod)
+            mod._studio_mtime = mt
+    except Exception as e:  # keep the loaded module if an edit is broken
+        print(f"[OneShotMV] studio reload {name} failed: {e}")
+    return mod
+
+
+SHOWN_LOOKS = ["teal_orange", "print_2383", "golden", "faded70s"]  # the four on the Result screen (the user picks)
+
+
+def _look_names() -> dict:
+    return _fv("finish").LOOKS
+
+
+def _finish_cfg(p: dict) -> dict:
+    """The finish the cut uses: the pack's, the World's grade, then the Studio's choices."""
+    from . import casting
+    cfg = dict(casting.load_pack(p.get("pack", "crowd")).get("finish") or {})
+    if p.get("finish"):
+        cfg = dict(p["finish"])
+    cfg.update(p.get("finish_user") or {})
+    return cfg
+
+
+def _finish_settings(p: dict) -> dict:
+    c = _finish_cfg(p)
+    return {"look": c.get("look", "none"), "grain": round(float(c.get("grain", 0.05)), 3),
+            "grain_size": round(float(c.get("grain_size", 1.0)), 2), "vignette": round(float(c.get("vignette", 0.55)), 3)}
+
+
+def _preview_frame(d: str, p: dict, shot: int | None):
+    """A frame (render size, 0..1 tensor) from the middle of a sung shot's clip."""
+    import numpy as np_
+    import torch
+    from . import formats
+    from .assemble import ClipReader
+    rw, rh = formats.render_size(p["format"], p["preset"])
+    shots = p.get("shots", [])
+    if shot is None:  # a close-up in the loudest part, else the first sung shot
+        cands = [s for s in shots if s.get("energy") == "high" and s.get("size") == "close"] or shots
+        shot = cands[len(cands) // 2]["index"] if cands else 0
+    rs = [r for r in p["renders"] if r.get("shot") == shot and r.get("role") == "A" and not r.get("unused")] or \
+        [r for r in p["renders"] if r.get("role") == "A"]
+    r = rs[0]
+    pth = r.get("path", "")
+    if not os.path.exists(pth) and r.get("path_before"):
+        pth = r["path_before"]
+    rd = ClipReader(pth, (rw, rh))
+    f = rd.get(rd.n // 2) if rd.ok else None
+    if f is None:
+        raise ValueError("no frame to preview")
+    return torch.from_numpy(np_.ascontiguousarray(f)).float() / 255, shot
+
+
+def _lab_cache(d: str, p: dict):
+    import torch
+    from . import formats
+    from .assemble import ClipReader
+    lab_stats = _fv("finish").lab_stats
+    cp = os.path.join(d, "studio_lab.json")
+    hit = _load(cp)
+    if hit:
+        return torch.tensor(hit["mean"]), torch.tensor(hit["std"])
+    rw, rh = formats.render_size(p["format"], p["preset"])
+    samples = []
+    for r in p["renders"][:: max(1, len(p["renders"]) // 12)]:
+        rd = ClipReader(r.get("path", ""), (rw, rh))
+        if rd.ok:
+            f = rd.get(rd.n // 2)
+            if f is not None:
+                samples.append(torch.from_numpy(np.ascontiguousarray(f)).float() / 255)
+    if not samples:
+        return None
+    m, sd = lab_stats(samples)
+    json.dump({"mean": m.tolist(), "std": sd.tolist()}, open(cp, "w"))
+    return m, sd
+
+
+def _graded(d: str, p: dict, frame, look: str, overrides: dict | None = None):
+    import torch
+    import torch.nn.functional as F
+    from . import formats
+    Finisher = _fv("finish").Finisher
+    cfg = _finish_cfg(p)
+    cfg.update(overrides or {})
+    cfg["look"] = look
+    y = Finisher(cfg, _lab_cache(d, p), seed=3)(frame, 0)
+    rw, rh = formats.render_size(p["format"], p["preset"])
+    cx, cy, cw, ch = formats.deliver_crop(p["format"], p["preset"])
+    if (cw, ch) != (rw, rh):
+        y = y[cy:cy + ch, cx:cx + cw]
+    w = 560
+    h = int(round(w * y.shape[0] / y.shape[1]))
+    y = F.interpolate(y.permute(2, 0, 1)[None], size=(h, w), mode="bilinear", align_corners=False, antialias=True)[0]
+    return (y.permute(1, 2, 0).clamp(0, 1) * 255 + 0.5).byte().numpy()
+
+
+def _look_preview(name: str, look: str, shot: int | None) -> str:
+    from PIL import Image
+    if look not in _look_names():
+        look = "none"
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    st = _finish_settings(p)
+    key = hashlib.sha1(json.dumps([look, shot, st["grain"], st["grain_size"], st["vignette"],
+                                   (p.get("finish") or {}).get("grade_mean")]).encode()).hexdigest()[:12]
+    out = os.path.join(d, "studio_previews", f"{look}_{key}.jpg")
+    if not os.path.exists(out):
+        frame, _ = _preview_frame(d, p, shot)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        Image.fromarray(_graded(d, p, frame, look)).save(out, quality=86)
+    return out
+
+
+def _look_sheet(name: str) -> str:
+    """Every look on three frames of the run, for choosing which four the Result screen shows."""
+    from PIL import Image, ImageDraw
+    LOOKS = _fv("finish").LOOKS
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    shots = [s for s in p.get("shots", []) if any(r.get("shot") == s["index"] and r.get("role") == "A" for r in p["renders"])]
+    pick = [shots[len(shots) // 6]["index"], shots[len(shots) // 2]["index"], shots[(5 * len(shots)) // 6]["index"]]
+    frames = [_preview_frame(d, p, i)[0] for i in pick]
+    looks = list(LOOKS)
+    tiles = [[_graded(d, p, f, lk) for f in frames] for lk in looks]
+    th, tw = tiles[0][0].shape[:2]
+    lab = 34
+    sheet = Image.new("RGB", (tw * 3, (th + lab) * len(looks)), (13, 16, 21))
+    dr = ImageDraw.Draw(sheet)
+    for i, lk in enumerate(looks):
+        y0 = i * (th + lab)
+        dr.text((10, y0 + 9), f"{i}. {LOOKS[lk]}  ({lk})", fill=(238, 240, 244))
+        for j, t in enumerate(tiles[i]):
+            sheet.paste(Image.fromarray(t), (j * tw, y0 + lab))
+    out = os.path.join(d, "studio_previews", "look_sheet.jpg")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    sheet.save(out, quality=84)
+    return out
+
+
+def _xml(name: str) -> str:
+    export = _fv("export")
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    done = _load(os.path.join(d, "done.json")) or {}
+    return export.write_xml(p, os.path.join(d, "final.xml"), done.get("video", ""), os.path.join(d, "song.wav"))
 
 
 def _runs() -> list[dict]:
@@ -909,6 +1069,17 @@ async def _api(request: web.Request, route: str) -> web.Response:
         return web.json_response(await _blocking(_estimate, b))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
+    if route.startswith("xml/"):
+        path = await _blocking(_xml, route[4:])
+        return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{os.path.basename(os.path.dirname(path))}.xml"',
+                                                "Cache-Control": "no-store"})
+    if route.startswith("look/"):
+        shot = q.get("shot")
+        path = await _blocking(_look_preview, route[5:], q.get("look", "none"), int(shot) if shot not in (None, "") else None)
+        return web.FileResponse(path, headers={"Cache-Control": "max-age=3600"})
+    if route.startswith("looksheet/"):
+        path = await _blocking(_look_sheet, route[10:])
+        return web.FileResponse(path, headers={"Cache-Control": "no-store"})
     if route.startswith("run/"):
         return web.json_response(await _blocking(_run, route[4:]))
     if route.startswith("job/"):
@@ -933,6 +1104,19 @@ async def _api(request: web.Request, route: str) -> web.Response:
             fx = body.get("fx", "subtle")
             if fx not in ("none", "subtle", "intense"):
                 fx = "subtle"
+            # the choice stays with the run: the screen shows it, and later cuts (pickups) keep it
+            pj = os.path.join(d, "plan.json")
+            plan_ = _load(pj, {}) or {}
+            if plan_:
+                plan_["fx_level"] = fx
+                fu = dict(plan_.get("finish_user") or {})
+                if body.get("look") is not None:
+                    fu["look"] = str(body["look"]) if str(body["look"]) in _look_names() else "none"
+                for k, lo, hi in (("grain", 0.0, 0.2), ("grain_size", 1.0, 4.0), ("vignette", 0.0, 0.95)):
+                    if body.get(k) is not None:
+                        fu[k] = round(min(hi, max(lo, float(body[k]))), 3)
+                plan_["finish_user"] = fu
+                json.dump(plan_, open(pj, "w", encoding="utf-8"), indent=1)
             rel = os.path.relpath(d, _out()).replace(os.sep, "/")
             g = {"1": {"class_type": "FVAssemble", "inputs": {"run_dir": d, "filename_prefix": rel,
                                                             "fx_intensity": 1.0, "finish": True, "audio_fx": fx}}}

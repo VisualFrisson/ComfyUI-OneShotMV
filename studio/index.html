@@ -160,7 +160,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 /* result */
 .player{background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .player video{width:100%;display:block;max-height:72vh;background:#000}
-.strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(64px,1fr);gap:3px;overflow-x:auto}
+.strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(64px,1fr);gap:3px;overflow-x:auto;position:relative}
 .strip button{padding:0;border-radius:6px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid transparent;min-height:44px}
 .strip img{width:100%;height:56px;object-fit:cover;display:block}
 .strip button{position:relative}
@@ -323,6 +323,44 @@ html[data-look="neon"] .emap{border-radius:3px;height:12px;gap:3px}
 html[data-look="neon"] .lvl{font-size:12px;letter-spacing:.08em}
 html[data-look="neon"] .lvl i{border-radius:2px}
 html[data-look="neon"] .looksw{font-family:var(--mono)}
+
+/* result: shots, fix panel, refine column */
+.strip.big{grid-auto-columns:minmax(92px,1fr)}
+.strip.big img,.strip.big .noimg{height:72px}
+.strip .noimg{display:block;background:var(--panel2)}
+.strip .sn{position:absolute;left:3px;top:3px;font:600 10px/1 var(--mono);background:rgba(8,10,13,.7);color:#fff;border-radius:4px;padding:2px 4px}
+.strip .fixhint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.04em;color:#fff;background:rgba(8,10,13,.55);opacity:0;transition:opacity .12s}
+.strip button:hover .fixhint,.strip button:focus-visible .fixhint{opacity:1}
+.fixpanel{margin-top:16px;padding:16px;border-radius:12px;background:var(--panel2);border:1px solid var(--line2)}
+.fixhead{display:flex;gap:14px;align-items:flex-start}
+.fixhead img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;display:block}
+.fixgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:700px){.fixgrid{grid-template-columns:1fr}.fixhead img{width:110px}}
+.refine .ed h3{margin:0;font-size:16px;font-weight:800}
+.refine .ed .tiny{margin:4px 0 12px}
+.grades{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grade{padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid var(--line);text-align:left;display:flex;flex-direction:column}
+.grade[aria-pressed=true]{border-color:var(--accent)}
+.grade .gimg{display:block;aspect-ratio:16/9;background:linear-gradient(90deg,var(--panel2),var(--line2),var(--panel2));background-size:200% 100%;animation:shim 1.4s linear infinite}
+.grade .gimg.ok{animation:none;background:#000}
+.grade .gimg img{width:100%;height:100%;object-fit:cover;display:block}
+.grade .gname{padding:7px 9px;font-size:13px;font-weight:700}
+@keyframes shim{to{background-position:-200% 0}}
+.linkbtn{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;min-height:32px}
+.linkbtn:hover{color:var(--text)}
+.slider{display:grid;grid-template-columns:72px 1fr 64px;align-items:center;gap:10px;font-size:13px;color:var(--muted);min-height:36px}
+.slider input{width:100%;accent-color:var(--accent)}
+.slider b{text-align:right;font-size:12px;color:var(--text)}
+.applybar{position:sticky;bottom:0;z-index:3;margin:-8px -6px 0;padding:22px 6px 14px;background:linear-gradient(to bottom,transparent,var(--bg) 22px)}
+.applybar .btn:disabled{opacity:1;color:var(--muted);background:var(--panel2);border-color:var(--line2)}
+html[data-look="neon"] .slider input{accent-color:var(--g3)}
+html[data-look="neon"] .grade{border:1px solid var(--line2);position:relative;isolation:isolate;overflow:visible}
+html[data-look="neon"] .grade .gimg{border-radius:9px 9px 0 0;overflow:hidden}
+html[data-look="neon"] .grade[aria-pressed=true]::before{content:"";position:absolute;inset:-5px;border-radius:15px;padding:2.5px;background:var(--grad);pointer-events:none;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+html[data-look="neon"] .refine .ed h3{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+html[data-look="neon"] .fixpanel{background:var(--panel2);border-color:var(--line2);box-shadow:inset 3px 0 0 var(--g3)}
+html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -812,98 +850,117 @@ async function viewResult(run){
   const sing = r.shots.filter(s => s.kind === "sing").length;
   const P = { list: store.get(pickKey(run), []), sel: null, mode: "take", note: "" };
   const shooting = r.pickup && r.pickup.state === "running";
+  const F0 = Object.assign({fx: r.fx_now || "subtle"}, r.finish || {});
+  const E = Object.assign({}, F0);
   app.innerHTML = `
-  <div class="head"><div><h1>${esc(r.world.headline || "Your video")}</h1><p class="sub">${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · FX ${esc(r.brief.fx)} · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
-    <div class="row"><a class="btn" href="#/">New video</a><a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(r.run)}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
+  <div class="head"><div><h1>${esc(r.world.headline || "Your video")}</h1><p class="sub">${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
+    <div class="row"><a class="btn" href="#/">New video</a>
+      <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(r.run)}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
+      <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(r.run)}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
   <div id="pkbanner"></div>
   <div class="cols">
     <div class="colmain" style="gap:16px">
       <div class="seg" role="group" aria-label="Versions" id="vers"></div>
       <div class="player"><video id="vid" src="${esc(r.video)}" controls playsinline preload="metadata"></video></div>
-      <section class="card" style="padding:16px 18px 18px" aria-labelledby="tlh">
-        <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 class="label" id="tlh">Shots</h2>
-          <span class="row" style="gap:10px"><span class="tiny">Click a shot to fix it, or pause on it</span><button class="btn sm" id="fixnow" type="button">Fix the shot at <span id="nowt">0:00</span></button></span></div>
-        <div class="strip" id="strip">${r.shots.map(s => `<button type="button" data-n="${s.n}" data-t="${s.t0}" aria-label="Shot ${s.n}, ${esc(s.time)}, ${esc(s.role)}" style="border-top:3px solid ${LEVEL_COL[s.energy]||'var(--mid)'}">${s.still ? `<img src="${esc(s.still)}" alt="" loading="lazy">` : `<span style="display:block;height:56px"></span>`}${s.pickup ? `<span class="pk" aria-hidden="true">new</span>` : ""}</button>`).join("")}</div>
-      </section>
-    </div>
-    <aside class="colside">
-      <section class="card" aria-labelledby="fxh" id="fixcard">
-        <h2 style="margin:0 0 10px;font-size:18px;font-weight:800" id="fxh">Fix a shot</h2>
+      <section class="card shotscard" aria-labelledby="tlh">
+        <div class="row" style="justify-content:space-between;margin-bottom:12px;gap:10px">
+          <div><h2 class="label" id="tlh">Shots</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Something off in a shot? <b style="color:var(--text)">Click it to re-shoot it</b>, with a note on what to change.</p></div>
+          <button class="btn sm" id="fixnow" type="button"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.5 2.5a3 3 0 0 0-3.8 3.8L2.5 10.5a1.4 1.4 0 0 0 2 2l4.2-4.2a3 3 0 0 0 3.8-3.8l-1.8 1.8-1.6-.4-.4-1.6z"/></svg>Fix the shot at <span id="nowt">0:00</span></button></div>
+        <div class="strip big" id="strip">${r.shots.map(s => `<button type="button" data-n="${s.n}" data-t="${s.t0}" aria-label="Shot ${s.n} at ${esc(clock(s.t0))}, ${esc(s.role)}: re-shoot" style="border-top:3px solid ${LEVEL_COL[s.energy]||'var(--mid)'}">${s.still ? `<img src="${esc(s.still)}" alt="" loading="lazy">` : `<span class="noimg"></span>`}<span class="sn" aria-hidden="true">${s.n}</span>${s.pickup ? `<span class="pk" aria-hidden="true">new</span>` : ""}<span class="fixhint" aria-hidden="true">Re-shoot</span></button>`).join("")}</div>
         <div id="fixbody"></div>
+        <div id="pkbox" class="hide">
+          <div class="row" style="justify-content:space-between;margin-top:18px"><h3 class="label">Pickups</h3><span class="tiny" id="pkcount"></span></div>
+          <ul class="notes" id="pklist" style="margin-top:10px"></ul>
+          <div class="row" style="margin-top:14px;gap:12px"><button class="btn" id="shoot" type="button" style="flex:1"></button></div>
+          <p class="tiny" style="margin:8px 0 0">They shoot together, so each model loads once; then the video is cut again. This cut is kept as a version.</p>
+        </div>
       </section>
-      <section class="card ${P.list.length ? "" : "hide"}" aria-labelledby="pkh" id="pkcard">
-        <div class="row" style="justify-content:space-between"><h2 class="label" id="pkh">Pickups</h2><span class="tiny" id="pkcount"></span></div>
-        <ul class="notes" id="pklist" style="margin-top:12px"></ul>
-        <button class="btn primary" id="shoot" type="button" style="width:100%;margin-top:14px"></button>
-        <p class="tiny" style="margin:10px 0 0">They shoot together, so each model loads once; then the video is cut again. This cut is kept as a version.</p>
-      </section>
-      <section class="card" aria-labelledby="rch">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0;font-size:18px;font-weight:800" id="rch">Re-edit</h2><span style="font-size:12px;color:var(--ok);font-weight:600">free · nothing re-renders</span></div>
-        <div class="field" style="margin-top:14px">Audio FX on the drums<div class="seg" role="group" aria-label="Audio FX" id="rfx"></div></div>
-        <button class="btn" id="recut" type="button" style="width:100%;margin-top:14px;border-color:var(--accent)">Re-edit · about a minute</button>
-        <p class="tiny" style="margin:10px 0 0">The new cut replaces this one. The cut per energy level is set in The Brief.</p>
-      </section>
-      <section class="card exports" aria-labelledby="exh"><h2 class="label" id="exh" style="margin-bottom:10px">Also export</h2>
-        ${r.edl ? `<a href="${esc(r.edl)}" download="${esc(r.run)}.edl">Edit list for Resolve or Premiere<span class="mono dim" style="font-size:12px">.edl</span></a>` : ""}
-        <a href="#" id="showplan">The plan, shot by shot<span class="mono dim" style="font-size:12px">view</span></a>
-      </section>
-      <section class="card" aria-labelledby="wh2"><h2 class="label" id="wh2" style="margin-bottom:10px">The World</h2><p style="margin:0;font-size:14px;color:var(--muted)">${esc(r.world.line ? r.world.line.slice(0, 420) + (r.world.line.length > 420 ? "…" : "") : "The house look.")}</p></section>
+      <section class="card" aria-labelledby="wh2"><h2 class="label" id="wh2" style="margin-bottom:10px">The World</h2>
+        <p style="margin:0;font-size:14px;color:var(--muted);line-height:1.55">${esc(r.world.line || "The house look.")}</p>
+        ${r.world.camera ? `<p class="tiny" style="margin:10px 0 0">Camera: ${esc(r.world.camera)}</p>` : ""}
+        <p style="margin:12px 0 0"><a href="#" id="showplan" style="font-size:13px;font-weight:600">The plan, shot by shot</a></p></section>
+    </div>
+    <aside class="colside refine" aria-label="Edit and refine">
+      <h2 class="label" style="margin:2px 4px 0">Edit and refine</h2>
+      <section class="card ed" aria-labelledby="eh1"><h3 id="eh1">Audio-reactive FX</h3><p class="tiny">Flash, zoom punch, glow and color split on the drums.</p>
+        <div class="seg" role="group" aria-label="Audio-reactive FX" id="efx"></div></section>
+      <section class="card ed" aria-labelledby="eh2"><div class="row" style="justify-content:space-between"><h3 id="eh2">Color grade</h3><button type="button" class="linkbtn" id="asmade">As made</button></div>
+        <p class="tiny">On top of the World's own grade. A still from your video shows each one.</p>
+        <div class="grades" role="group" aria-label="Color grade" id="grades"></div></section>
+      <section class="card ed" aria-labelledby="eh3"><h3 id="eh3">Grain</h3>
+        <label class="slider"><span>Intensity</span><input type="range" id="gi" min="0" max="100" step="1"><b class="mono" id="giv"></b></label>
+        <label class="slider"><span>Size</span><input type="range" id="gs" min="1" max="4" step="0.5"><b class="mono" id="gsv"></b></label></section>
+      <section class="card ed" aria-labelledby="eh4"><h3 id="eh4">Vignette</h3>
+        <label class="slider"><span>Intensity</span><input type="range" id="vg" min="0" max="95" step="1"><b class="mono" id="vgv"></b></label></section>
+      <div class="applybar"><button class="btn" id="apply" type="button" disabled style="width:100%">No changes yet</button>
+        <p class="tiny center" style="margin:8px 0 0">A new cut with these settings; nothing re-renders. The cut before is replaced.</p></div>
     </aside>
   </div>`;
   const vid = $("#vid");
   // versions
-  const vers = [{name: "Current", url: r.video}].concat((r.versions || []).slice().reverse().map(v => ({name: v.name.toUpperCase() === v.name ? v.name : v.name, url: v.url, label: `${v.name} · before pickups`})));
+  const vers = [{url: r.video, label: "Current cut"}].concat((r.versions || []).slice().reverse().map(v => ({url: v.url, label: `${v.name} · before pickups`})));
   let curV = 0;
-  const drawVers = () => { $("#vers").innerHTML = vers.length > 1 ? vers.map((v,i) => `<button type="button" class="opt" data-i="${i}" aria-pressed="${i===curV}">${esc(v.label || "Current cut")}</button>`).join("") : "";
+  const drawVers = () => { $("#vers").innerHTML = vers.length > 1 ? vers.map((v,i) => `<button type="button" class="opt" data-i="${i}" aria-pressed="${i===curV}">${esc(v.label)}</button>`).join("") : "";
     $("#vers").querySelectorAll(".opt").forEach(el => el.onclick = () => { curV = +el.dataset.i; const t = vid.currentTime; vid.src = vers[curV].url; vid.currentTime = t; $("#dl").href = vers[curV].url; drawVers(); }); };
   drawVers();
-  // the shot under the playhead
+  // shots: the one under the playhead, picking one to fix
   const shotAt = t => r.shots.find(s => t >= s.t0 && t < s.t1) || r.shots[r.shots.length - 1];
   const strip = $("#strip");
+  // keep a shot in view inside the strip (scrolls the strip sideways, never the page)
+  const reveal = n => { const b = strip.querySelector(`button[data-n="${n}"]`); if (!b) return;
+    if (b.offsetLeft < strip.scrollLeft || b.offsetLeft + b.offsetWidth > strip.scrollLeft + strip.clientWidth)
+      strip.scrollTo({left: b.offsetLeft - strip.clientWidth / 2 + b.offsetWidth / 2, behavior: "smooth"}); };
+  let nowN = null;
   vid.ontimeupdate = () => { const s = shotAt(vid.currentTime); if (!s) return; $("#nowt").textContent = clock(vid.currentTime);
-    strip.querySelectorAll("button").forEach(b => b.classList.toggle("now", +b.dataset.n === s.n)); };
+    if (s.n === nowN) return; nowN = s.n;
+    strip.querySelectorAll("button").forEach(b => b.classList.toggle("now", +b.dataset.n === s.n)); if (P.sel == null) reveal(s.n); };
   strip.querySelectorAll("button").forEach(el => el.onclick = () => { vid.currentTime = +el.dataset.t + 0.05; selectShot(+el.dataset.n); });
   $("#fixnow").onclick = () => { vid.pause(); const s = shotAt(vid.currentTime); if (s) selectShot(s.n); };
-  function selectShot(n){ P.sel = n; P.mode = "take"; P.note = ""; strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.n === n)); drawFix(); $("#fixcard").scrollIntoView({behavior:"smooth", block:"nearest"}); }
+  function selectShot(n){ P.sel = n; const q = P.list.find(x => x.n === n); P.mode = q ? q.mode : "take"; P.note = q ? q.note : ""; strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.n === n)); reveal(n); drawFix(); $("#fixbody").scrollIntoView({behavior:"smooth", block:"nearest"}); }
   function drawFix(){
     const body = $("#fixbody");
-    if (shooting){ body.innerHTML = `<p class="muted" style="margin:0;font-size:14px">Pickups are shooting. You can pick more shots when they're done.</p>`; return; }
+    if (shooting){ body.innerHTML = `<p class="muted" style="margin:14px 0 0;font-size:14px">Pickups are shooting. You can pick more shots when they're done.</p>`; return; }
     const s = r.shots.find(x => x.n === P.sel);
-    if (!s){ body.innerHTML = `<p class="muted" style="margin:0;font-size:14px">Pick a shot in the strip, or pause the video on it and click <b>Fix the shot at…</b>. Then choose a new take of the same person, or a new person, and say what to change.</p>`; return; }
+    if (!s){ body.innerHTML = ""; return; }
     const queued = P.list.find(x => x.n === s.n);
-    body.innerHTML = `
-      <div class="row" style="gap:12px;align-items:flex-start">
-        ${s.still ? `<img src="${esc(s.still)}" alt="" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;display:block">` : ""}
-        <div style="flex:1;min-width:0"><div style="font-weight:800">Shot ${s.n} · ${esc(clock(s.t0))}</div><div class="tiny mono">${esc(s.kind === "broll" ? "cutaway" : s.size)} · ${esc(s.energy)}${s.pickup ? " · re-shot" : ""}</div>
+    body.innerHTML = `<div class="fixpanel">
+      <div class="fixhead">
+        ${s.still ? `<img src="${esc(s.still)}" alt="">` : ""}
+        <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px">Shot ${s.n} · ${esc(clock(s.t0))}</div><div class="tiny mono">${esc(s.kind === "broll" ? "cutaway" : s.size)} · ${esc(s.energy)}${s.pickup ? " · re-shot" : ""}</div>
           <div style="font-size:14px;margin-top:4px"><b>${esc(s.role || "?")}</b>${s.age ? `, ${esc(s.gender)} ${esc(s.age)}` : ""}</div>
-          <div class="tiny" style="margin-top:2px">${esc([s.wear, s.place].filter(Boolean).join(" · ").slice(0, 160))}</div></div></div>
-      <div class="field" style="margin-top:14px">What to re-shoot
-        <div class="stack" role="group" aria-label="Re-shoot" id="modes" style="gap:8px">
-          <button type="button" class="tier" data-m="take" aria-pressed="${P.mode==="take"}"><span class="t"><b>New take</b><span class="eta">about 1 min</span></span><small>The same person and still, a new performance: for mouths, motion and the camera.</small></button>
-          <button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>New person</b><span class="eta">about 1.5 min</span></span><small>A new still and a new take: for the wrong look, age, clothes, place or light.</small></button>
-        </div></div>
-      <label class="field" style="margin-top:12px">Notes for the re-shoot (optional)<textarea id="pnote" rows="2" placeholder="${P.mode==="recast" ? "Like “a woman in her seventies, in bright midday sun”" : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
-      <button class="btn" id="addpk" type="button" style="width:100%;margin-top:12px">${queued ? "Update this pickup" : "Add to pickups"}</button>`;
-    const ta = $("#pnote"); ta.value = queued ? queued.note : P.note; ta.oninput = () => { P.note = ta.value; };
-    if (queued) P.mode = queued.mode;
+          <div class="tiny" style="margin-top:2px">${esc([s.wear, s.place].filter(Boolean).join(" · ").slice(0, 200))}</div></div>
+        <button type="button" class="btn sm ghost" id="fxclose" aria-label="Close">✕</button></div>
+      <div class="fixgrid">
+        <div class="stack" role="group" aria-label="What to re-shoot" id="modes" style="gap:8px">
+          <button type="button" class="tier" data-m="take" aria-pressed="${P.mode==="take"}"><span class="t"><b>New take</b><span class="eta">about 1 min</span></span><small>Same person and still, a new performance: mouths, motion, the camera.</small></button>
+          <button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>New person</b><span class="eta">about 1.5 min</span></span><small>A new still and take: the wrong look, age, clothes, place or light.</small></button>
+        </div>
+        <div class="stack" style="gap:10px"><label class="field">Notes for the re-shoot (optional)<textarea id="pnote" rows="3" placeholder="${P.mode==="recast" ? "Like “a woman in her seventies, in bright midday sun”" : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
+          <button class="btn" id="addpk" type="button">${queued ? "Update this pickup" : "Add to pickups"}</button></div>
+      </div></div>`;
+    const ta = $("#pnote"); ta.value = P.note; ta.oninput = () => { P.note = ta.value; };
+    $("#fxclose").onclick = () => { P.sel = null; strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); drawFix(); };
     $("#modes").querySelectorAll(".tier").forEach(el => el.onclick = () => { P.mode = el.dataset.m; P.note = ta.value; drawFix(); });
     $("#addpk").onclick = () => { const item = {n: s.n, mode: P.mode, note: ta.value.trim(), still: s.still, role: s.role, t: clock(s.t0)};
-      P.list = P.list.filter(x => x.n !== s.n).concat([item]).sort((a,b) => a.n - b.n); store.set(pickKey(run), P.list); drawPk(); toast(`Shot ${s.n} added to the pickups.`); };
+      P.list = P.list.filter(x => x.n !== s.n).concat([item]).sort((a,b) => a.n - b.n); store.set(pickKey(run), P.list); P.sel = null;
+      strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); drawFix(); drawPk(); toast(`Shot ${s.n} added to the pickups.`); };
   }
   function pkEstimate(){ const nr = P.list.filter(x => x.mode === "recast").length, n = P.list.length;
     return (nr ? 3 + 0.5 * nr : 0) + 2 + 1.2 * n + 1 + 0.035 * (+r.brief.seconds || 30); }
   function drawPk(){
-    const card = $("#pkcard");
-    card.classList.toggle("hide", !P.list.length || shooting);
+    $("#pkbox").classList.toggle("hide", !P.list.length || shooting);
     $("#pkcount").textContent = P.list.length ? `${P.list.length} shot${P.list.length > 1 ? "s" : ""}` : "";
-    $("#pklist").innerHTML = P.list.map(x => `<li style="align-items:center">${x.still ? `<img src="${esc(x.still)}" alt="" style="width:56px;aspect-ratio:16/9;object-fit:cover;border-radius:6px">` : ""}
+    $("#pklist").innerHTML = P.list.map(x => `<li style="align-items:center">${x.still ? `<img src="${esc(x.still)}" alt="" style="width:64px;aspect-ratio:16/9;object-fit:cover;border-radius:6px">` : ""}
       <span style="flex:1;min-width:0"><b>Shot ${x.n}</b> <span class="tiny mono">${esc(x.t)} · ${x.mode === "recast" ? "new person" : "new take"}</span><span class="tiny" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.note || x.role || "")}</span></span>
-      <button type="button" class="btn sm ghost" data-rm="${x.n}" aria-label="Remove shot ${x.n}">✕</button></li>`).join("");
-    $("#pklist").querySelectorAll("[data-rm]").forEach(el => el.onclick = () => { P.list = P.list.filter(x => x.n !== +el.dataset.rm); store.set(pickKey(run), P.list); drawPk(); drawFix(); });
+      <button type="button" class="btn sm ghost" data-ed="${x.n}">Edit</button><button type="button" class="btn sm ghost" data-rm="${x.n}" aria-label="Remove shot ${x.n}">✕</button></li>`).join("");
+    $("#pklist").querySelectorAll("[data-rm]").forEach(el => el.onclick = () => { P.list = P.list.filter(x => x.n !== +el.dataset.rm); store.set(pickKey(run), P.list); drawPk(); });
+    $("#pklist").querySelectorAll("[data-ed]").forEach(el => el.onclick = () => selectShot(+el.dataset.ed));
     $("#shoot").innerHTML = `Shoot ${P.list.length} pickup${P.list.length > 1 ? "s" : ""} <span class="mono eta-b">about ${mins(pkEstimate())}</span>`;
-    // one gradient button per view: the pickups take it while there are some
-    $("#dl").classList.toggle("primary", !P.list.length || shooting); $("#shoot").classList.toggle("primary", !!P.list.length);
+    primary();
   }
+  // one gradient button per view: pickups to shoot, else changes to apply, else the download
+  function primary(){ const pk = !!P.list.length && !shooting, ch = dirty() && !shooting;
+    $("#shoot").classList.toggle("primary", pk); $("#apply").classList.toggle("primary", !pk && ch); $("#dl").classList.toggle("primary", !pk && !ch); }
   $("#shoot").onclick = async () => {
     if (!P.list.length) return;
     try{
@@ -911,6 +968,34 @@ async function viewResult(run){
       await api("pickups", {run: r.run, items: P.list.map(x => ({n: x.n, mode: x.mode, note: x.note}))});
       store.set(pickKey(run), []); overlay(); viewResult(run);
     }catch(e){ overlay(); toast("Pickups didn't start: " + e.message, 9000); }
+  };
+  // edit and refine: FX, grade, grain, vignette; one Apply re-cuts with all of them
+  const dirty = () => ["fx","look","grain","grain_size","vignette"].some(k => String(E[k]) !== String(F0[k]));
+  const drawFxSeg = () => { $("#efx").innerHTML = ["none","subtle","intense"].map(f => `<button type="button" class="opt" data-x="${f}" aria-pressed="${E.fx===f}">${f}${f === "subtle" ? " (default)" : ""}</button>`).join("");
+    $("#efx").querySelectorAll(".opt").forEach(el => el.onclick = () => { E.fx = el.dataset.x; drawFxSeg(); drawApply(); }); };
+  const grades = (r.looks || []).filter(l => l.id !== "none");
+  const drawGrades = () => {
+    $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
+    $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); });
+    $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
+  };
+  $("#asmade").onclick = () => { E.look = "none"; drawGrades(); drawApply(); };
+  const gi = $("#gi"), gs = $("#gs"), vg = $("#vg");
+  const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%"; };
+  gi.oninput = () => { E.grain = Math.round(+gi.value * 0.2 * 10) / 1000; drawSliders(); drawApply(); };
+  gs.oninput = () => { E.grain_size = +gs.value; drawSliders(); drawApply(); };
+  vg.oninput = () => { E.vignette = +vg.value / 100; drawSliders(); drawApply(); };
+  const drawApply = () => { const a = $("#apply"), d = dirty(); a.disabled = !d || shooting; a.textContent = d ? "Apply changes · about 2 min" : "No changes yet"; primary(); };
+  drawFxSeg(); drawGrades(); drawSliders(); drawApply();
+  $("#apply").onclick = async () => {
+    try{
+      overlay("Making the new cut", "The same shots with the new FX, grade, grain and vignette. Nothing re-renders.");
+      const {prompt_id} = await api("recut", {run: r.run, fx: E.fx, look: E.look, grain: E.grain, grain_size: E.grain_size, vignette: E.vignette});
+      const t0 = Date.now();
+      for (;;){ await new Promise(res => setTimeout(res, 2000)); const j = await api("job/" + prompt_id); if (j.state === "error") throw new Error(j.error); if (j.state === "done") break;
+        $("#ovs").textContent = `${j.state === "queued" ? "Waiting in the queue" : "Cutting"} · ${clock((Date.now() - t0) / 1000)}`; }
+      overlay(); viewResult(r.run); toast("New cut ready.");
+    }catch(e){ overlay(); toast("The new cut failed: " + e.message, 8000); }
   };
   drawFix(); drawPk();
   // pickups shooting: a progress banner, then the new version
@@ -932,19 +1017,7 @@ async function viewResult(run){
       }, 5000);
     }
   }
-  let fx = r.brief.fx || "subtle";
-  const drawRfx = () => { $("#rfx").innerHTML = ["none","subtle","intense"].map(f => `<button type="button" class="opt" data-x="${f}" aria-pressed="${fx===f}">${f}</button>`).join("");
-    $("#rfx").querySelectorAll(".opt").forEach(el => el.onclick = () => { fx = el.dataset.x; drawRfx(); }); };
-  drawRfx();
   $("#showplan").onclick = e => { e.preventDefault(); showPlanTable(r); };
-  $("#recut").onclick = async () => {
-    try{
-      overlay("Re-editing", "A new cut with " + fx + " FX. Nothing re-renders.");
-      const {prompt_id} = await api("recut", {run: r.run, fx});
-      for (;;){ await new Promise(res => setTimeout(res, 2000)); const j = await api("job/" + prompt_id); if (j.state === "error") throw new Error(j.error); if (j.state === "done") break; }
-      overlay(); viewResult(r.run); toast("New cut ready.");
-    }catch(e){ overlay(); toast("Re-edit failed: " + e.message, 8000); }
-  };
 }
 function showPlanTable(r){
   const box = document.createElement("section"); box.className = "card"; box.style.marginTop = "24px";

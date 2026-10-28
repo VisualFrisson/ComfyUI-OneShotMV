@@ -46,6 +46,88 @@ def lab_stats(frames):
     return allv.mean(0), allv.std(0) + 1e-3
 
 
+# ------------------------------------------------------------------ colour grades (the Studio's
+# "Colour grade" choice, applied after the World's own grade and tone, before vignette and grain)
+LOOKS = {
+    "none": "As made",
+    "teal_orange": "Teal & Orange",
+    "print_2383": "Print Film",
+    "eterna": "Soft Eterna",
+    "bleach": "Bleach Bypass",
+    "golden": "Golden Hour",
+    "moonlit": "Moonlit Blue",
+    "faded70s": "Faded 70s",
+    "silver": "Silver Mono",
+}
+
+
+def apply_look(x, name: str, amount: float = 1.0):
+    """x: (H, W, 3) in 0..1. Each look is lift/gain, split toning, saturation and a contrast curve."""
+    import torch
+    if not name or name == "none" or amount <= 0:
+        return x
+    dev, dt = x.device, x.dtype
+
+    def v(*c):
+        return torch.tensor(c, dtype=dt, device=dev)
+
+    def lum(y):
+        return (y * v(0.2126, 0.7152, 0.0722)).sum(-1, keepdim=True)
+
+    def split(y, sh, hi, bal=0.45):
+        lm = lum(y)
+        ws = (1 - lm / bal).clamp(0, 1) ** 1.4
+        wh = ((lm - bal) / (1 - bal)).clamp(0, 1) ** 1.4
+        return y + ws * v(*sh) + wh * v(*hi)
+
+    def sat(y, k):
+        lm = lum(y)
+        return lm + (y - lm) * k
+
+    def con(y, k, pivot=0.45):
+        y = pivot + (y - pivot) * k
+        return y.clamp(0, 1)
+
+    def lift(y, b, tint=(0, 0, 0)):
+        return v(*tint) + b + y * (1 - b)
+
+    y = x
+    if name == "teal_orange":
+        y = split(y, (-0.035, 0.012, 0.045), (0.055, 0.018, -0.045))
+        y = con(sat(y, 1.06), 1.10)
+    elif name == "print_2383":
+        y = y.clamp(0, 1) ** 1.06
+        y = split(y, (-0.012, 0.012, 0.02), (0.04, 0.018, -0.022))
+        y = (1 - torch.exp(-y.clamp(0, 1) * 2.2)) / (1 - torch.exp(v(-2.2)))  # highlights roll off like print
+        y = con(sat(y, 0.94), 1.12, 0.42)
+    elif name == "eterna":
+        y = y * v(0.98, 1.0, 1.02)
+        g = y[..., 1:2]
+        y = torch.cat([y[..., 0:1], g * 0.97 + y[..., 2:3] * 0.03, y[..., 2:3]], -1)
+        y = split(y, (-0.01, 0.008, 0.02), (0.01, 0.01, 0.0))
+        y = lift(con(sat(y, 0.80), 0.86), 0.025)
+    elif name == "bleach":
+        lm = lum(y)
+        y = y * 0.45 + lm * 0.55
+        y = con(y * v(0.98, 1.0, 1.02), 1.32, 0.42)
+    elif name == "golden":
+        y = y * v(1.08, 1.0, 0.86)
+        y = split(y, (0.02, 0.008, -0.01), (0.04, 0.02, -0.03))
+        y = lift(con(sat(y, 1.06), 1.04), 0.02, (0.012, 0.004, 0.0))
+    elif name == "moonlit":
+        y = y * v(0.84, 0.95, 1.12) * 0.9
+        y = split(y, (-0.01, 0.0, 0.03), (-0.01, 0.01, 0.03))
+        y = con(sat(y, 0.72), 1.06, 0.38)
+    elif name == "faded70s":
+        y = split(y, (0.01, 0.02, 0.0), (0.035, 0.02, -0.035))
+        y = lift(con(sat(y, 0.84), 0.9), 0.06, (0.008, 0.012, 0.0))
+    elif name == "silver":
+        lm = lum(y).expand_as(y)
+        y = con(lm, 1.16, 0.45) + v(0.0, 0.004, 0.014) * (1 - lm)
+    y = y.clamp(0, 1)
+    return x + (y - x) * min(1.0, float(amount))
+
+
 class Finisher:
     def __init__(self, cfg: dict, src_stats=None, seed: int = 3):
         self.cfg, self.src = cfg, src_stats
@@ -98,14 +180,22 @@ class Finisher:
         x = (l + (x - l) * c.get("saturation", 1.15)).clamp(0, 1)
         lift = c.get("lift", 0.035)
         x = (lift + x * (1 - lift * 1.4)).clamp(0, 1) ** 1.08
+        # 3b) the Studio's colour grade on top of the World's
+        if c.get("look") and c["look"] != "none":
+            x = apply_look(x, c["look"], c.get("look_amount", 1.0))
         # 4) gate vignette
         x = x * self._vignette(H, W, x.device, x.dtype)
         # 5) coloured grain, strongest in the mids
         gamt = c.get("grain", 0.05)
         if gamt > 0:
             gen = torch.Generator(device=x.device).manual_seed(self.seed * 100003 + frame_index)
-            g = torch.randn((1, 3, H, W), generator=gen, device=x.device, dtype=x.dtype)
-            g = F.avg_pool2d(F.pad(g, (1, 1, 1, 1), mode="replicate"), 3, stride=1)[0].permute(1, 2, 0) * 2.2
+            size = max(1.0, float(c.get("grain_size", 1.0)))  # 1 = fine, 4 = coarse
+            gh, gw = max(8, int(H / size)), max(8, int(W / size))
+            g = torch.randn((1, 3, gh, gw), generator=gen, device=x.device, dtype=x.dtype)
+            g = F.avg_pool2d(F.pad(g, (1, 1, 1, 1), mode="replicate"), 3, stride=1)
+            if (gh, gw) != (H, W):
+                g = F.interpolate(g, size=(H, W), mode="bilinear", align_corners=False) * (1 + 0.18 * (size - 1))
+            g = g[0].permute(1, 2, 0) * 2.2
             g = g.mean(-1, keepdim=True) * 0.7 + g * 0.3
             x = x + g * gamt * (0.4 + 0.6 * 4 * lum * (1 - lum))
         return x.clamp(0, 1)

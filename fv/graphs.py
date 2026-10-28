@@ -264,8 +264,11 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
         if extra:
             cr = g.add("LTXVCropGuides", positive=spos, negative=sneg, latent=vlat)
             vlat, cpos, cneg = O(cr, 2), O(cr, 0), O(cr, 1)
+    # the whole clip in one temporal tile: 64-frame tiles left a soft frame at every seam
+    # (frames 56, 112... of a 50 fps clip, Oct 28); spatial tiles keep the memory in check
+    t_size = min(512, (frames + 7) // 8 * 8 + 8)
     dec = g.add("VAEDecodeTiled", samples=vlat, vae=m["vae"], tile_size=512, overlap=64,
-                temporal_size=64, temporal_overlap=8)
+                temporal_size=t_size, temporal_overlap=8)
     _save_video(g, O(dec), fps, prefix, audio=au)
     return g
 
