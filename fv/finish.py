@@ -193,12 +193,15 @@ def apply_look(x, name: str, amount: float = 1.0):
     elif name == "lowkey":
         x0 = y.clamp(0, 1)
         y = x0 ** 1.45  # deep shadows
-        # the highs and whites come back up (Oct 28: the faces and lights were too dim)
-        w = ((lum(x0) - 0.4) / 0.6).clamp(0, 1) ** 1.3
-        y = y + (x0 * 1.06 - y) * w * 0.85
-        y = y * v(1.08, 0.99, 0.8)
-        y = split(y, (0.008, 0.002, -0.012), (0.035, 0.016, -0.03), bal=0.35)
+        # the highs and whites come well back up (Oct 28, twice: faces and lights were too dim)
+        w = ((lum(x0) - 0.3) / 0.7).clamp(0, 1) ** 1.2
+        y = y + (x0 * 1.12 - y) * w
+        # amber everywhere, but whites keep more of their blue, so they read white, not tan
+        y = y * (v(1.08, 0.99, 0.8) + v(-0.04, 0.005, 0.12) * w)
+        y = split(y, (0.008, 0.002, -0.012), (0.03, 0.016, -0.02), bal=0.35)
         y = con(sat(y, 0.9), 1.08, 0.3)
+        wh = ((lum(y) - 0.6) / 0.4).clamp(0, 1)
+        y = y + wh * wh * 0.07  # a last push on the whites
     elif name == "tobacco":
         r, g, b = y[..., 0:1], y[..., 1:2], y[..., 2:3]
         r = r + 0.35 * (g - r).clamp(min=0)  # greens to straw
