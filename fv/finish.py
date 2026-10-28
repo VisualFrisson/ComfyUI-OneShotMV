@@ -77,7 +77,7 @@ BASE_LOOK = "natural"  # under every grade, "As made" included; not offered as a
 
 # the reference and what each look is after (the grade rating page shows these)
 LOOK_NOTES = {
-    "teal_orange": ("Transformers, Bad Boys II", "Cool shadows, warm skin and highlights: complementary colours make faces jump out."),
+    "teal_orange": ("Transformers, Mad Max: Fury Road", "Teal shadows, warm skin and highlights, pushed halfway to Fury Road: complementary colours make faces jump out."),
     "print_2383": ("Kodak 2383 print stock", "Denser colour, highlights that roll off softly, slightly warm."),
     "eterna": ("Fujifilm Eterna", "Soft, low-saturation film stock with quiet greens and gentle contrast."),
     "bleach": ("Saving Private Ryan", "Silver retention: muted colour, deeper blacks, harder contrast; textures jump out."),
@@ -128,6 +128,10 @@ def apply_look(x, name: str, amount: float = 1.0):
     def lift(y, b, tint=(0, 0, 0)):
         return v(*tint) + b + y * (1 - b)
 
+    def scurve(y, k):  # film-style S-curve: more midtone contrast, blacks and whites stay put
+        t = y.clamp(0, 1)
+        return t + k * (t * t * (3 - 2 * t) - t)
+
     def mist(y, k):  # soft glow from the highlights (a diffusion filter)
         import torch.nn.functional as F
         H, W = y.shape[:2]
@@ -138,9 +142,10 @@ def apply_look(x, name: str, amount: float = 1.0):
         return 1 - (1 - y) * (1 - hl)
 
     y = x
-    if name == "teal_orange":
-        y = split(y, (-0.035, 0.012, 0.045), (0.055, 0.018, -0.045))
-        y = con(sat(y, 1.06), 1.10)
+    if name == "teal_orange":  # halfway between the classic and the Fury Road push (Oct 28)
+        y = split(y, (-0.0475, 0.016, 0.06), (0.07, 0.02, -0.06), bal=0.435)
+        y = y * v(1.03, 0.995, 0.95)
+        y = con(sat(y, 1.19), 1.15, 0.435)
     elif name == "print_2383":
         y = y.clamp(0, 1) ** 1.06
         y = split(y, (-0.012, 0.012, 0.02), (0.04, 0.018, -0.022))
@@ -152,6 +157,7 @@ def apply_look(x, name: str, amount: float = 1.0):
         y = torch.cat([y[..., 0:1], g * 0.97 + y[..., 2:3] * 0.03, y[..., 2:3]], -1)
         y = split(y, (-0.01, 0.008, 0.02), (0.01, 0.01, 0.0))
         y = lift(con(sat(y, 0.80), 0.86), 0.025)
+        y = scurve(y, 0.45)
     elif name == "bleach":
         lm = lum(y)
         y = y * 0.45 + lm * 0.55
@@ -160,6 +166,7 @@ def apply_look(x, name: str, amount: float = 1.0):
         y = y * v(1.08, 1.0, 0.86)
         y = split(y, (0.02, 0.008, -0.01), (0.04, 0.02, -0.03))
         y = lift(con(sat(y, 1.06), 1.04), 0.02, (0.012, 0.004, 0.0))
+        y = scurve(y, 0.3)
     elif name == "moonlit":
         y = y * v(0.84, 0.95, 1.12) * 0.9
         y = split(y, (-0.01, 0.0, 0.03), (-0.01, 0.01, 0.03))
@@ -198,6 +205,7 @@ def apply_look(x, name: str, amount: float = 1.0):
         y = y * v(1.05, 0.99, 0.86)
         y = split(y, (0.03, 0.004, -0.008), (0.035, 0.018, -0.002))
         y = lift(con(sat(y, 0.96), 0.92), 0.03, (0.016, 0.006, 0.0))
+        y = scurve(y, 0.35)
         y = mist(y, 0.35)
     elif name == "technicolor":
         y = y.clamp(0, 1) ** 1.06

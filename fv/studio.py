@@ -975,8 +975,8 @@ def _fv(name: str):
 
 
 # the 3x3 grid on the Result screen, in this order (from the user's ratings, Oct 28)
-SHOWN_LOOKS = ["neon", "technicolor", "pushed_to",      # vivid
-               "golden", "romantic", "faded70s",        # warm and soft
+SHOWN_LOOKS = ["neon", "technicolor", "teal_orange",    # vivid
+               "golden", "romantic", "eterna",          # warm and soft
                "lowkey", "matrix", "silver"]            # moody
 
 
