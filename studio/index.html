@@ -975,7 +975,7 @@ async function viewResult(run){
     $("#efx").querySelectorAll(".opt").forEach(el => el.onclick = () => { E.fx = el.dataset.x; drawFxSeg(); drawApply(); }); };
   const grades = (r.looks || []).filter(l => l.id !== "none");
   const drawGrades = () => {
-    $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
+    $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
     $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); });
     $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
   };
