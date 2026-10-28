@@ -169,7 +169,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 1. **The Brief:** drop a song; its waveform shows the low, medium and high parts and the stretch the video will use. Pick a length, a World (or write one) and a format.
 2. **The plan:** the World the tool wrote and every shot (who, wearing what, where, at what energy) before anything renders.
 3. **Rendering:** the stages and a storyboard that fills in as stills and clips are made, with the vision check's and take check's notes. You can close the tab and come back.
-4. **Result:** the video, a download, a free re-edit at another FX level and the EDL.
+4. **Result:** the video, a download, a free re-edit at another FX level and the EDL. **Fix a shot:** pick a shot that came out wrong (or pause on it), choose a new take of the same person or a new person, add a note ("a woman in her seventies, in bright sun"), and shoot the pickups together; the video is cut again and the cut before is kept as a version.
 
 **Your videos** lists every run.
 

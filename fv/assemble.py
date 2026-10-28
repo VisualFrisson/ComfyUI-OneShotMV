@@ -196,7 +196,17 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
 
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}
-    readers = {rid: ClipReader(r.get("path", ""), (rw, rh), trim_bars=r.get("role") == "R")
+
+    def clip_path(r):
+        # a pickup (Studio re-shoot) whose new take didn't render falls back to the take it replaced
+        pth = r.get("path", "")
+        if r.get("path_before") and not os.path.exists(pth) and os.path.exists(r["path_before"]):
+            print(f"[OneShotMV] r{r['id']:03d}: the pickup take is missing, using the take before it")
+            if "sync_delay_before" in r:
+                r["sync_delay"] = r["sync_delay_before"]
+            return r["path_before"]
+        return pth
+    readers = {rid: ClipReader(clip_path(r), (rw, rh), trim_bars=r.get("role") == "R")
                for rid, r in renders.items()}
     missing = [rid for rid, rd in readers.items() if not rd.ok]
 

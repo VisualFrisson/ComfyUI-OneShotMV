@@ -550,7 +550,7 @@ def _run(name: str) -> dict:
                       "energy": s.get("energy", ""), "size": s.get("size", ""), "kind": info["kind"],
                       "role": info["role"], "gender": info["gender"], "age": info["age"], "wear": info["wear"],
                       "place": info["place"], "still": _view(still) if still else "", "clip": _view(clip) if clip else "",
-                      "takes": takes, "state": state})
+                      "takes": takes, "state": state, "render": r.get("id"), "pickup": int(r.get("pickup") or 0)})
     # where the run is
     queued_jobs = 0
     try:
@@ -627,7 +627,238 @@ def _run(name: str) -> dict:
         "edl": _view(done.get("edl", "")) if done and done.get("edl") and os.path.isfile(done["edl"]) else "",
         "finished_at": (done or {}).get("at", ""),
         "song": _view(os.path.join(d, "song.wav")) if os.path.isfile(os.path.join(d, "song.wav")) else "",
+        "versions": _versions(d, p), "pickup": _pickup_state(d, p, done),
     }
+
+
+# ------------------------------------------------------------------ pickups: re-shoot chosen shots
+# The Result screen's "fix a shot": a new take of the same singer (same still, new seed), or a
+# new person (a new still from the portrait job with a new seed, then its clip), each with the
+# user's note added to the prompt. They shoot together (stills first, then clips, so each model
+# loads once), then the run is cut again. The cut before is kept as a version.
+def _find_job(d: str, stem: str) -> str | None:
+    """The job file that made <stem>_00001_.* (by its name, else by its save prefix)."""
+    from . import director
+    jf = director._job_file(d, stem)
+    if jf:
+        return jf
+    jd = os.path.join(d, "jobs")
+    for f in sorted(os.listdir(jd)) if os.path.isdir(jd) else []:
+        g = _load(os.path.join(jd, f), {}) or {}
+        for n in g.values() if isinstance(g, dict) else []:
+            if isinstance(n, dict) and n.get("class_type") in ("SaveVideo", "SaveImage") and \
+                    str((n.get("inputs") or {}).get("filename_prefix", "")).endswith("/" + stem):
+                return os.path.join(jd, f)
+    return None
+
+
+def _stem(path: str) -> str:
+    b = os.path.basename(str(path).replace("\\", "/"))
+    b = b.rsplit("_00001_", 1)[0]
+    return b[:-4] if b.endswith("_fit") else b
+
+
+def _positive(g: dict) -> list[str]:
+    """Ids of the text-encode nodes that feed a sampler's positive input."""
+    ids = set()
+    for n in g.values():
+        ins = n.get("inputs") or {}
+        for k in ("positive", "conditioning"):
+            v = ins.get(k)
+            if isinstance(v, list) and v and str(v[0]) in g and g[str(v[0])].get("class_type") == "CLIPTextEncode":
+                ids.add(str(v[0]))
+    if not ids:  # no wiring found: the longest prompt
+        texts = [(len(str((n.get("inputs") or {}).get("text", ""))), k) for k, n in g.items()
+                 if n.get("class_type") == "CLIPTextEncode"]
+        if texts:
+            ids.add(max(texts)[1])
+    return sorted(ids)
+
+
+DECADES = {"twenties": 25, "thirties": 35, "forties": 45, "fifties": 55, "sixties": 65, "seventies": 75,
+           "eighties": 83, "nineties": 92}
+
+
+def _note_age(note: str) -> int | None:
+    m = re.search(r"\b(twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b", note, re.I)
+    if m:
+        return DECADES[m.group(1).lower()]
+    m = re.search(r"\b(?:aged?|age)\s*(\d{2})\b|\b(\d{2})\s*(?:-?\s*years?[ -]old|s\b)", note, re.I)
+    if m:
+        return int(m.group(1) or m.group(2))
+    return None
+
+
+def _with_note(g: dict, note: str) -> None:
+    """The user's note right after the prompt's first sentence; an age in it replaces the
+    prompt's own age (a note asking for a woman in her seventies beats "a woman aged 45")."""
+    from . import director
+    note = re.sub(r"\s+", " ", note or "").strip()
+    if not note:
+        return
+    if not note.endswith((".", "!", "?")):
+        note += "."
+    age = _note_age(note)
+    for k in _positive(g):
+        ins = g[k]["inputs"]
+        if isinstance(ins.get("text"), str):
+            t = ins["text"]
+            if age:
+                t = re.sub(r"\baged \d{2}\b", f"aged {age}", t)
+                dec = next((w for w, v in DECADES.items() if abs(v - age) <= 5), None)
+                if dec:
+                    t = re.sub(r"\b(in (?:his|her|their)) (?:twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b",
+                               lambda m: f"{m.group(1)} {dec}", t)
+            ins["text"] = director._insert_fix(t, note[0].upper() + note[1:])
+
+
+def _set_prefix(g: dict, cls: str, prefix: str) -> None:
+    for n in g.values():
+        if n.get("class_type") == cls:
+            n["inputs"]["filename_prefix"] = prefix
+
+
+def _versions(d: str, p: dict) -> list[dict]:
+    vd = os.path.join(d, "versions")
+    out = []
+    for f in sorted(glob.glob(os.path.join(vd, "v*_*.mp4")), key=os.path.getmtime):
+        out.append({"name": os.path.basename(f).split("_")[0], "url": _view(f),
+                    "when": _dt.datetime.fromtimestamp(os.path.getmtime(f)).isoformat(timespec="minutes")})
+    return out
+
+
+def _pickup_state(d: str, p: dict, done: dict | None) -> dict:
+    pk = (p.get("pickups") or [])
+    if not pk:
+        return {}
+    last = pk[-1]
+    try:
+        running, pending = _queue_lists()
+        ids = set(last.get("prompt_ids") or [])
+        left = sum(1 for x in list(running) + list(pending) if x[1] in ids)
+    except Exception:
+        left = 0
+    finished = bool(done) and str((done or {}).get("at", "")) >= str(last.get("at", ""))
+    state = "done" if finished else ("running" if left else "stopped")
+    total = len(last.get("prompt_ids") or [])
+    import time
+    el = (time.time() - float(last.get("t", time.time()))) / 60
+    est = float(last.get("estimate_min") or 0)
+    return {"n": last["n"], "state": state, "jobs": total, "jobs_left": left, "items": last.get("items", []),
+            "elapsed_min": round(el, 1), "left_min": 0 if finished else round(max(0.5, est - el), 1)}
+
+
+def _pickups(name: str, items: list, dry: bool = False) -> dict:
+    import shutil
+    import time
+    from . import director, formats, graphs
+    d = _run_dir(name)
+    pj = os.path.join(d, "plan.json")
+    p = _load(pj, {}) or {}
+    if not items:
+        raise ValueError("pick at least one shot")
+    st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
+    if st.get("state") == "running":
+        raise ValueError("the last pickups are still shooting")
+    if _run_jobs(os.path.basename(d))[1]:
+        raise ValueError("this run still has jobs in the queue")
+    rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
+    k = len(p.get("pickups") or []) + 1
+    shots = {s["index"]: s for s in p.get("shots", [])}
+    stills, clips, changes = [], [], []
+    delay0 = float(formats.PRESETS.get(p.get("preset", "quality"), {}).get("sync_delay", 0.0))
+    for i, it in enumerate(items):
+        idx = int(it.get("n", 0)) - 1
+        mode = "recast" if it.get("mode") == "recast" else "take"
+        note = str(it.get("note") or "")[:400]
+        if idx not in shots:
+            raise ValueError(f"no shot {idx + 1}")
+        rs = [r for r in p["renders"] if r.get("shot") == idx and not r.get("unused")]
+        r = next((x for x in rs if x.get("role") == "R"), None) or next((x for x in rs if x.get("role") == "A"), None)
+        if r is None:
+            raise ValueError(f"shot {idx + 1} has no clip to re-shoot")
+        tagbase = f"r{r['id']:03d}{r['role']}"
+        jf = _find_job(d, _stem(r.get("path", ""))) or _find_job(d, tagbase)
+        if not jf:
+            raise ValueError(f"shot {idx + 1}: its clip job is missing")
+        g = director._bump(_load(jf, {}), 211 + 17 * k + i)
+        tag = f"{tagbase}_u{k}"
+        _set_prefix(g, "SaveVideo", f"{rel}/{tag}")
+        change = {"shot": idx + 1, "render": r["id"], "mode": mode, "note": note,
+                  "before": {"path": r.get("path"), "portrait": r.get("portrait"), "key": r.get("key")}}
+        if mode == "recast":
+            cur = r.get("key") if r["role"] == "R" else r.get("portrait")
+            if not cur:  # the still the clip job reads
+                cur = next((n["inputs"].get("path") for n in g.values() if n.get("class_type") == "FVLoadImagePath"), "")
+            sj = _find_job(d, _stem(cur)) if cur else None
+            if not sj:
+                raise ValueError(f"shot {idx + 1}: its still's job is missing")
+            gs = director._bump(_load(sj, {}), 307 + 17 * k + i)
+            sbase = _stem(cur).split("_")[0]
+            stag = f"{sbase}_u{k}"
+            _set_prefix(gs, "SaveImage", f"{rel}/{stag}")
+            _with_note(gs, note)
+            new_still = os.path.join(d, f"{stag}_00001_.png")
+            for n in g.values():
+                if n.get("class_type") == "FVLoadImagePath":
+                    n["inputs"]["path"] = new_still
+            stills.append(gs)
+            if not dry:
+                json.dump(gs, open(os.path.join(d, "jobs", f"pickup{k}_{stag}.json"), "w", encoding="utf-8"), indent=1)
+            if r["role"] == "R":
+                r["key"] = new_still
+            else:
+                r["portrait"] = new_still
+            change["still"] = new_still
+        _with_note(g, note)
+        if not dry:
+            json.dump(g, open(os.path.join(d, "jobs", f"pickup{k}_{tag}.json"), "w", encoding="utf-8"), indent=1)
+        clips.append(g)
+        new_clip = os.path.join(d, f"{tag}_00001_.mp4")
+        if "path_before" not in r or os.path.exists(r.get("path", "")):
+            r["path_before"] = r.get("path")
+            if "sync_delay" in r:
+                r["sync_delay_before"] = r["sync_delay"]
+        r["path"] = new_clip
+        r["sync_delay"] = r.get("sync_delay_before", delay0) if mode == "take" else delay0
+        r["pickup"] = k
+        change["clip"] = new_clip
+        changes.append(change)
+    if dry:  # what would be queued, for checking (nothing is written or queued)
+        def show(g):
+            out = {}
+            for n in g.values():
+                c, ins = n.get("class_type"), n.get("inputs") or {}
+                if c in ("SaveVideo", "SaveImage"):
+                    out["save"] = ins.get("filename_prefix")
+                if c == "FVLoadImagePath":
+                    out["image"] = ins.get("path")
+                    out["image_exists"] = os.path.exists(ins.get("path", ""))
+            out["positive"] = [str(g[k]["inputs"].get("text", ""))[:260] for k in _positive(g)]
+            return out
+        return {"dry": True, "pickup": k, "stills": [show(g) for g in stills], "clips": [show(g) for g in clips],
+                "changes": changes}
+    # keep the cut as it is now
+    done = _load(os.path.join(d, "done.json")) or {}
+    if done.get("video") and os.path.isfile(done["video"]):
+        os.makedirs(os.path.join(d, "versions"), exist_ok=True)
+        nv = len(glob.glob(os.path.join(d, "versions", "v*_*.mp4"))) + 1
+        shutil.copy2(done["video"], os.path.join(d, "versions", f"v{nv}_{os.path.basename(done['video'])}"))
+    chain = []
+    if stills:
+        chain += [graphs.free_memory("before pickup stills").nodes] + stills
+    chain += [graphs.free_memory("before pickup clips").nodes] + clips
+    chain += [graphs.free_memory("before assembly").nodes,
+              graphs.assemble(run_dir=d, prefix=rel).nodes]
+    est = (3.0 + 0.5 * len(stills) if stills else 0.0) + 2.0 + 1.2 * len(clips) + \
+        1.0 + 0.035 * float(p.get("duration") or 30)
+    p.setdefault("pickups", []).append({"n": k, "at": _dt.datetime.now().isoformat(timespec="seconds"),
+                                        "t": time.time(), "items": changes, "estimate_min": round(est, 1)})
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    ids = director.queue_chain_front(chain)
+    p["pickups"][-1]["prompt_ids"] = ids
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    return {"pickup": k, "jobs": len(chain), "estimate_min": round(est, 1)}
 
 
 def _runs() -> list[dict]:
@@ -707,6 +938,12 @@ async def _api(request: web.Request, route: str) -> web.Response:
                                                             "fx_intensity": 1.0, "finish": True, "audio_fx": fx}}}
             pid = await _blocking(_queue_graph, g)
             return web.json_response({"prompt_id": pid})
+        if route == "pickups":
+            try:
+                res = await _blocking(_pickups, body.get("run", ""), body.get("items") or [], bool(body.get("dry")))
+            except ValueError as e:
+                return web.json_response({"error": str(e)}, status=400)
+            return web.json_response(res)
         if route == "cancel":
             d = _run_dir(body.get("run", ""))
             return web.json_response(await _blocking(_cancel, os.path.basename(d)))
