@@ -165,6 +165,14 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
 ## Use it
 
+**OneShot MV Studio (the easiest way).** With ComfyUI running, open `http://127.0.0.1:8188/oneshot-mv/`, or click **OneShot MV** in ComfyUI's top bar. The Studio is a page that ComfyUI serves itself, so there's nothing else to install. It has four screens:
+1. **The Brief:** drop a song; its waveform shows the low, medium and high parts and the stretch the video will use. Pick a length, a World (or write one) and a format.
+2. **The plan:** the World the tool wrote and every shot (who, wearing what, where, at what energy) before anything renders.
+3. **Rendering:** the stages and a storyboard that fills in as stills and clips are made, with the vision check's and take check's notes. You can close the tab and come back.
+4. **Result:** the video, a download, a free re-edit at another FX level and the EDL.
+
+**Your videos** lists every run.
+
 **In ComfyUI.** Open one of the example workflows: **Templates** in the left sidebar, then **Extensions → ComfyUI-OneShotMV** (or drag a file from `example_workflows/` onto the page):
 - `OneShotMV_App.json`: the simplest way in. It opens as an **app** (ComfyUI's App mode): a song, a World line and a few settings on the right, **Run**, and the results in the middle. **App / Graph** at the top left shows the node graph behind it.
 - `OneShotMV_Voice.json`: the same run as a node graph with every setting. For the artist pack, un-bypass the Load Image node.
