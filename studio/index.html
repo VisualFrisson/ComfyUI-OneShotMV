@@ -336,7 +336,7 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .fixhead img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;display:block}
 .fixgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
 @media (max-width:700px){.fixgrid{grid-template-columns:1fr}.fixhead img{width:110px}}
-.refine .ed h3{margin:0;font-size:24px;line-height:1.1;font-weight:800}
+.refine .ed h3{margin:0;font-size:24px;line-height:1;font-weight:800}
 .refine .ed .tiny{margin:4px 0 12px}
 .grades{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .grade{padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid var(--line);text-align:left;display:flex;flex-direction:column}
@@ -353,10 +353,14 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .slider b{text-align:right;font-size:12px;color:var(--text)}
 .grainprev{margin-top:10px;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:16/9}
 .grainprev img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
-.refine{gap:16px}
-.refine-h{position:relative;margin:0;min-height:40px;display:flex;align-items:center;justify-content:center;text-align:center;
-  font-size:22px;line-height:1;font-weight:800;letter-spacing:-.01em;border:2px solid var(--accent);border-radius:12px;padding:0 12px}
-.acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:44px}
+/* the Post Processing stack: one outlined box around the title, the panels and Apply */
+.refine{gap:10px;position:relative;padding:10px 10px 12px;border:2px solid var(--accent);border-radius:18px}
+.refine-h{margin:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:24px;line-height:1;font-weight:800;letter-spacing:-.01em}
+.refine .acc{padding:8px 14px}
+.refine .acc.open{padding:12px 16px 16px}
+#dl{font-size:17px;padding:0 20px}
+#dl svg{width:18px;height:18px}
+.acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:34px}
 .acc-h h3{flex:none}
 .acc-sum{margin-left:auto;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acc.open .acc-sum{visibility:hidden}
@@ -380,8 +384,9 @@ html[data-look="neon"] .grade[aria-pressed=true]::before{content:"";position:abs
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 html[data-look="neon"] .refine .ed h3{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
   background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-html[data-look="neon"] .refine-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;border-color:transparent}
-html[data-look="neon"] .refine-h::before{content:"";position:absolute;inset:-2px;border-radius:12px;padding:2px;background:var(--grad);pointer-events:none;
+html[data-look="neon"] .refine-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+html[data-look="neon"] .refine{border-color:transparent}
+html[data-look="neon"] .refine::before{content:"";position:absolute;inset:-2px;border-radius:18px;padding:2px;background:var(--grad);pointer-events:none;
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 html[data-look="neon"] .applybar .btn{font-size:18px;letter-spacing:.05em}
 html[data-look="neon"] .fixpanel{background:var(--panel2);border-color:var(--line2);box-shadow:inset 3px 0 0 var(--g3)}
@@ -1050,13 +1055,14 @@ async function viewResult(run){
     }catch(e){ overlay(); toast("The new cut failed: " + e.message, 8000); }
   };
   drawFix(); drawPk();
-  // the Post Processing box is as tall as the versions row, so the first panel lines up with the video
+  // the Post Processing title takes the room left above the first panel, so that panel's top
+  // lines up with the video's top
   const alignPP = () => { const pp = $("#pph"), pl = $(".player"); if (!pp || !pl) return;
-    pp.style.height = pp.style.minHeight = pp.style.fontSize = "";
+    pp.style.height = "";
     const side = pp.getBoundingClientRect(), main = pl.getBoundingClientRect();
     if (side.left < main.right) return;  // stacked on a narrow screen
-    const gap = parseFloat(getComputedStyle(pp.parentNode).rowGap) || 16, h = Math.round(main.top - side.top - gap);
-    if (h >= 28){ pp.style.height = pp.style.minHeight = h + "px"; pp.style.fontSize = Math.max(16, Math.min(30, Math.round(h * 0.55))) + "px"; } };
+    const gap = parseFloat(getComputedStyle(pp.parentNode).rowGap) || 10, h = Math.round(main.top - side.top - gap);
+    if (h >= 24) pp.style.height = h + "px"; };
   alignPP(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignPP);
   window.onresize = alignPP;
   // pickups shooting: a progress banner, then the new version
