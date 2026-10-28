@@ -338,13 +338,13 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 @media (max-width:700px){.fixgrid{grid-template-columns:1fr}.fixhead img{width:110px}}
 .refine .ed h3{margin:0;font-size:20px;line-height:1;font-weight:800}
 .refine .ed .tiny{margin:4px 0 12px}
-.grades{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grades{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .grade{padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid var(--line);text-align:left;display:flex;flex-direction:column}
 .grade[aria-pressed=true]{border-color:var(--accent)}
 .grade .gimg{display:block;aspect-ratio:16/9;background:linear-gradient(90deg,var(--panel2),var(--line2),var(--panel2));background-size:200% 100%;animation:shim 1.4s linear infinite}
 .grade .gimg.ok{animation:none;background:#000}
 .grade .gimg img{width:100%;height:100%;object-fit:cover;display:block}
-.grade .gname{padding:5px 6px 6px;font-size:11.5px;font-weight:700;line-height:1.2}
+.grade .gname{padding:6px 8px 7px;font-size:13px;font-weight:700;line-height:1.2}
 @keyframes shim{to{background-position:-200% 0}}
 .linkbtn{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;min-height:32px}
 .linkbtn:hover{color:var(--text)}
@@ -361,7 +361,7 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .refine .acc.open{border-color:var(--accent)}
 .refine .acc.open h3{color:var(--accent)}
 .refine .acc{padding:8px 14px}
-.refine .acc.open{padding:12px 16px 16px}
+.refine .acc.open{padding:8px 14px 16px}  /* same top and sides as closed: the title stays put */
 #dl{font-size:17px;padding:0 20px}
 #dl svg{width:18px;height:18px}
 .acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:34px}
@@ -922,7 +922,7 @@ async function viewResult(run){
         <div class="acc-b" id="acc-fx" hidden><p class="tiny">Flash, zoom punch, glow and color split on the drums, set for each energy in the song.</p>
           <div class="fxrows" id="efx"></div></div></section>
       <section class="card ed acc" data-acc="grade"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grade"><h3>Color grade</h3><span class="acc-sum" id="sum-grade"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
-        <div class="acc-b" id="acc-grade" hidden><div class="row" style="justify-content:space-between;gap:10px"><p class="tiny" style="margin:0">On top of the default look. A still from your video shows each one.</p><button type="button" class="linkbtn" id="asmade">As made</button></div>
+        <div class="acc-b" id="acc-grade" hidden><p class="tiny">None keeps the default look; the rest go on top of it. A still from your video shows each one.</p>
           <div class="grades" role="group" aria-label="Color grade" id="grades"></div></div></section>
       <section class="card ed acc" data-acc="grain"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grain"><h3>Grain</h3><span class="acc-sum" id="sum-grain"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
         <div class="acc-b" id="acc-grain" hidden>
@@ -1011,7 +1011,7 @@ async function viewResult(run){
     }catch(e){ overlay(); toast("Pickups didn't start: " + e.message, 9000); }
   };
   // post processing: FX, grade, grain, vignette; one Apply re-cuts with all of them
-  const ENERGIES = [["low", "Low energy"], ["medium", "Medium energy"], ["high", "High energy"]];
+  const ENERGIES = [["low", "Low energy sections"], ["medium", "Medium energy sections"], ["high", "High energy sections"]];
   const dirty = () => JSON.stringify(E.fx) !== JSON.stringify(F0.fx) || ["look","grain","grain_size","vignette"].some(k => String(E[k]) !== String(F0[k]));
   const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
   const drawFxSeg = () => {
@@ -1021,14 +1021,12 @@ async function viewResult(run){
     const v = ENERGIES.map(([k]) => E.fx[k]);
     $("#sum-fx").textContent = v.every(x => x === v[0]) ? cap(v[0]) : `${cap(v[0])} · ${cap(v[1])} · ${cap(v[2])}`;
   };
-  const grades = (r.looks || []).filter(l => l.id !== "none");
+  const grades = r.looks || [{id: "none", name: "None"}];  // None first: the default
   const drawGrades = () => {
     $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
     $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); drawGrain(); });
-    $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
-    const lk = grades.find(l => l.id === E.look); $("#sum-grade").textContent = lk ? lk.name : "As made";
+    const lk = grades.find(l => l.id === E.look); $("#sum-grade").textContent = lk ? lk.name : "None";
   };
-  $("#asmade").onclick = () => { E.look = "none"; drawGrades(); drawApply(); drawGrain(); };
   const gi = $("#gi"), gs = $("#gs"), vg = $("#vg");
   const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({0.5:"finest",1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%";
     $("#sum-grain").textContent = +E.grain > 0 ? `${gi.value}% · ${$("#gsv").textContent}` : "Off"; $("#sum-vig").textContent = +E.vignette > 0 ? vg.value + "%" : "Off"; };

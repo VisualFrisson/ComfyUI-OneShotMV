@@ -631,7 +631,7 @@ def _run(name: str) -> dict:
         "soft_clips": len(_soft_clips(d, p)) if done else 0,
         "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
         "fx_levels": (done or {}).get("fx_levels") or _fv("assemble").fx_levels(p),
-        "looks": [{"id": "none", "name": "As made"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
+        "looks": [{"id": "none", "name": "None"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
         "looks_sig": _file_sig(_fv("finish").__file__),  # in the preview URLs, so browsers drop old tiles
     }
 
@@ -991,6 +991,7 @@ def _finish_cfg(p: dict) -> dict:
     cfg = dict(casting.load_pack(p.get("pack", "crowd")).get("finish") or {})
     if p.get("finish"):
         cfg = dict(p["finish"])
+    cfg.update(_fv("finish").STUDIO_DEFAULTS)  # the Studio's starting settings
     cfg.update(p.get("finish_user") or {})
     return cfg
 
@@ -998,7 +999,7 @@ def _finish_cfg(p: dict) -> dict:
 def _finish_settings(p: dict) -> dict:
     c = _finish_cfg(p)
     return {"look": c.get("look", "none"), "grain": round(float(c.get("grain", 0.05)), 3),
-            "grain_size": round(float(c.get("grain_size", 1.0)), 2), "vignette": round(float(c.get("vignette", 0.55)), 3)}
+            "grain_size": round(float(c.get("grain_size", 0.5)), 2), "vignette": round(float(c.get("vignette", 0.0)), 3)}
 
 
 def _preview_frame(d: str, p: dict, shot: int | None):

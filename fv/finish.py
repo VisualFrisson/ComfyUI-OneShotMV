@@ -73,7 +73,11 @@ LOOKS = {
     "hardmono": "Hard Mono",
 }
 
-BASE_LOOK = "natural"  # under every grade, "As made" included; not offered as a grade itself
+BASE_LOOK = "natural"  # under every grade, "None" included; not offered as a grade itself
+
+# the Studio's starting settings for every run (the user, Oct 28): no grade on top of the base,
+# 25% grain at the finest size, no vignette (audio-reactive FX start at subtle, in fx.py)
+STUDIO_DEFAULTS = {"look": "none", "grain": 0.05, "grain_size": 0.5, "vignette": 0.0}
 
 # the reference and what each look is after (the grade rating page shows these)
 LOOK_NOTES = {

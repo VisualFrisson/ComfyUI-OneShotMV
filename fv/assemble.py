@@ -11,7 +11,7 @@ import subprocess
 import numpy as np
 
 from . import audiofx, casting, export, formats, fx, stems
-from .finish import Finisher, lab_stats
+from .finish import STUDIO_DEFAULTS, Finisher, lab_stats
 
 PRIORITY = {"insert": 3, "ghost": 2, "switch": 1, "main": 0}
 
@@ -142,6 +142,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     pack = casting.load_pack(plan["pack"])
     if plan.get("finish"):  # a theme's grade (fv/theme.py)
         pack["finish"] = plan["finish"]
+    pack["finish"] = dict(pack["finish"], **STUDIO_DEFAULTS)  # the Studio's starting settings
     if plan.get("finish_user"):  # the Studio's colour grade, grain and vignette for this run
         pack["finish"] = dict(pack["finish"], **plan["finish_user"])
     fps = plan["out_fps"]
