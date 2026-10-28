@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OneShot MV Studio</title>
+<script>
+// the Studio's look: "neon" (blue-grey with the neon gradient, Oct 28) or "classic" (black with lime, Oct 24).
+// ?look=classic or the Look button switches; the choice is remembered in this browser.
+(function(){ var l = "neon"; try{ var q = new URLSearchParams(location.search).get("look"); if (q === "neon" || q === "classic") localStorage.setItem("osmv.look", q); l = localStorage.getItem("osmv.look") || "neon"; }catch(e){} document.documentElement.setAttribute("data-look", l); })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -11,6 +16,7 @@
   --bg:#0A0A0A;--panel:#141414;--panel2:#1C1C1C;--line:#2A2A2A;--line2:#383838;--line3:#4A4A4A;
   --text:#F2F2F2;--muted:#A6A6A6;--dim:#8C8C8C;--accent:#C8FF3D;--accent-bg:#1B2309;--accent-bg2:#1E260F;
   --accent-text:#E2FFA0;--warn:#FFB547;--bad:#FF6B5B;--low:#4F4F4F;--mid:#9C9C9C;--high:#C8FF3D;
+  --ok:#C8FF3D;--ready:#F2F2F2;--idle:#A6A6A6;
   --sans:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;--mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
 }
 *{box-sizing:border-box}
@@ -50,6 +56,13 @@ h1{margin:0;font-size:40px;line-height:1.05;font-weight:800;font-stretch:112%;le
 .btn.primary:hover{background:#D6FF63;color:#0A0A0A}
 .btn.big{min-height:56px;font-size:17px;font-stretch:110%;border-radius:14px;padding:0 24px}
 .btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:none}
+.eta-b{font-size:12px;font-weight:600;opacity:.75;white-space:nowrap}
+.btn.two{flex-direction:column;gap:2px;padding-top:6px;padding-bottom:6px;line-height:1.1}
+.btn.two .lbl{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn.two .eta-b{font-size:11px;letter-spacing:.06em;opacity:.8}
+.btn.two .eta-b:empty{display:none}
+.ovbar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:18px 0 10px}
+.ovbar div{height:6px;width:0;background:var(--accent);transition:width .8s}
 .btn.ghost{background:none}
 .btn.danger{border-color:#5A2A24;color:#FFB0A6}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
@@ -80,6 +93,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .wave .win::before,.wave .win::after{content:"";position:absolute;top:50%;margin-top:-14px;width:8px;height:28px;border-radius:4px;background:var(--text)}
 .wave .win::before{left:-5px}.wave .win::after{right:-5px}
 .wave .wl{position:absolute;top:-28px;font-family:var(--mono);font-size:12px;font-weight:600;white-space:nowrap}
+.wave .win .ring{display:none}
 .wave .ph{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--accent);box-shadow:0 0 6px rgba(200,255,61,.8);display:none}
 .ticks{position:relative;height:18px;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)}
 .ticks span{position:absolute}
@@ -173,6 +187,136 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
   nav.steps{margin-left:0}
 }
 @media (max-width:600px){nav.steps{display:none}.topright .toplink:last-child{display:none}}
+
+/* ================================================================ the "neon" look (Oct 28 brief:
+   "Neon on blue-grey"). Everything above is the classic look; this block only overrides it. */
+html[data-look="neon"]{
+  --bg:#0d1015;--chrome:#0a0d11;--panel:#12161c;--panel2:#181d24;--panel3:#212731;--line:#222832;--line2:#323a46;--line3:#3c4552;
+  --text:#eef0f4;--muted:#a3acb8;--dim:#7a8491;
+  --g1:#d7ff3d;--g2:#19e6b0;--g3:#3a86ff;--g4:#b44dff;
+  --grad:linear-gradient(90deg in oklch,var(--g1),var(--g2) 36%,var(--g3) 68%,var(--g4));
+  --grad-v:linear-gradient(180deg in oklch,var(--g1),var(--g2) 36%,var(--g3) 68%,var(--g4));
+  --grad-soft:linear-gradient(90deg in oklch,color-mix(in srgb,var(--g2) 13%,transparent),color-mix(in srgb,var(--g3) 15%,transparent),color-mix(in srgb,var(--g4) 18%,transparent));
+  --ink:#0b0d10;
+  --accent:#d7ff3d;--accent-bg:#181d24;--accent-bg2:#181d24;--accent-text:#eef0f4;
+  --warn:#eaa63e;--bad:#f04a43;--ok:#3dc580;--ready:#4f8eff;--idle:#8d96a4;
+  /* energy levels are groups, so they take slices of the gradient */
+  --low:color-mix(in oklch,var(--g3),var(--g4) 60%);--mid:var(--g2);--high:var(--g1);
+  --sans:Bahnschrift,'DIN Alternate','Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Cascadia Mono','Cascadia Code',Consolas,ui-monospace,monospace;
+}
+html[data-look="neon"] ::selection{background:color-mix(in srgb,var(--g3) 45%,transparent)}
+html[data-look="neon"] body{font-size:14px;letter-spacing:.005em;background-color:var(--bg);
+  background-image:radial-gradient(rgba(255,255,255,.045) 1px,transparent 1.3px);background-size:24px 24px}
+html[data-look="neon"] body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:80;opacity:.06;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+html[data-look="neon"] :focus-visible{outline:2px solid #fff;outline-offset:2px}
+html[data-look="neon"] textarea:focus,html[data-look="neon"] select:focus,html[data-look="neon"] input:focus{outline:2px solid #fff;outline-offset:2px;border-color:var(--line2)}
+html[data-look="neon"] a{color:var(--text)}
+html[data-look="neon"] a:hover{color:#fff}
+/* the condensed headline voice */
+html[data-look="neon"] h1,html[data-look="neon"] h2,html[data-look="neon"] .label,html[data-look="neon"] .btn,html[data-look="neon"] .step,
+html[data-look="neon"] .logo b,html[data-look="neon"] .tile b,html[data-look="neon"] .tier b,html[data-look="neon"] .opt,html[data-look="neon"] .fmt,
+html[data-look="neon"] .toplink,html[data-look="neon"] .rail li .t,html[data-look="neon"] .shotlist th,html[data-look="neon"] .kv,html[data-look="neon"] .lvl,
+html[data-look="neon"] .badge,html[data-look="neon"] .adv summary,html[data-look="neon"] .field{
+  font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase}
+html[data-look="neon"] .field select,html[data-look="neon"] .field input{text-transform:none;font-stretch:normal;font-variation-settings:normal}
+html[data-look="neon"] h1{font-size:46px;line-height:.9;font-weight:700;letter-spacing:.02em}
+html[data-look="neon"] h1::after{content:"";display:block;width:88px;height:3px;border-radius:2px;background:var(--grad);margin-top:14px}
+html[data-look="neon"] .sub{font-size:14px;margin-top:12px}
+html[data-look="neon"] .label{font-size:12px;letter-spacing:.12em;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
+html[data-look="neon"] .kv{letter-spacing:.1em}
+html[data-look="neon"] .toplink{font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+html[data-look="neon"] .toplink:hover{color:var(--text)}
+/* chrome */
+html[data-look="neon"] header.top{background:rgba(10,13,17,.94);border-bottom-color:var(--line)}
+html[data-look="neon"] .logo .dot{width:26px;height:26px;border-radius:6px;background:var(--grad);box-shadow:none;display:flex;align-items:center;justify-content:center}
+html[data-look="neon"] .logo .dot::after{content:"1";color:var(--ink);font:700 17px/1 var(--sans);font-stretch:condensed;font-variation-settings:'wdth' 75}
+html[data-look="neon"] .logo b{font-size:17px;letter-spacing:.06em;font-weight:700}
+html[data-look="neon"] .step{position:relative;border-radius:0;padding:8px 10px;font-size:14px;letter-spacing:.06em;font-weight:700;background:none}
+html[data-look="neon"] .step .n{border-radius:6px;font-family:var(--mono);font-size:11px;border-color:var(--line2)}
+html[data-look="neon"] .step.done .n{background:var(--panel3);border-color:var(--panel3)}
+html[data-look="neon"] .step.now{background:none;color:var(--text)}
+html[data-look="neon"] .step.now::after{content:"";position:absolute;left:8px;right:8px;bottom:-2px;height:2px;background:var(--grad)}
+html[data-look="neon"] .step.now .n{background:var(--grad);border-color:transparent;color:var(--ink)}
+html[data-look="neon"] .chip{border-radius:7px;border-color:var(--line2);background:var(--panel2);text-transform:uppercase;letter-spacing:.06em;font-size:11px;font-weight:600}
+html[data-look="neon"] .chip .led{background:var(--ok)}
+/* surfaces */
+html[data-look="neon"] .card{border-radius:18px;background:var(--panel);border-color:var(--line);box-shadow:0 1px 2px rgba(0,0,0,.45),0 14px 30px -14px rgba(0,0,0,.7)}
+html[data-look="neon"] .card.cta{position:relative;overflow:hidden}
+html[data-look="neon"] .card.cta::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--grad)}
+html[data-look="neon"] .bar{border-radius:12px;background:rgba(16,20,26,.92);border-color:#232a34;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.045)}
+html[data-look="neon"] .overlay .box{border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.045)}
+html[data-look="neon"] .spin{border-top-color:var(--g3);animation-duration:1.6s}
+/* buttons and controls */
+html[data-look="neon"] .btn{border-radius:8px;background:var(--panel2);border-color:var(--line2);font-size:14px;letter-spacing:.06em;font-weight:700;min-height:40px;transition:background .12s,border-color .12s}
+html[data-look="neon"] .btn:hover{background:var(--panel3);border-color:var(--line3)}
+html[data-look="neon"] .btn.sm{min-height:32px;border-radius:7px;font-size:13px}
+html[data-look="neon"] .btn.big{min-height:52px;font-size:17px;border-radius:8px;letter-spacing:.05em}
+html[data-look="neon"] .btn.primary{background:var(--grad);color:var(--ink);border:none;box-shadow:none}
+html[data-look="neon"] .btn.primary:hover{background:var(--grad);color:var(--ink);filter:brightness(1.08) saturate(1.05)}
+html[data-look="neon"] .btn.primary[disabled]{opacity:.35;filter:none}
+html[data-look="neon"] .btn.danger{border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:#ffb3ae;background:color-mix(in srgb,var(--bad) 9%,var(--panel2))}
+html[data-look="neon"] #recut{border-color:var(--line2)!important}
+html[data-look="neon"] textarea,html[data-look="neon"] select,html[data-look="neon"] input[type=number],html[data-look="neon"] input[type=text]{border-radius:8px;background:#0b0e12;border-color:var(--line2)}
+html[data-look="neon"] .opt{border-radius:99px;background:var(--panel2);color:var(--muted);border-color:var(--line2);letter-spacing:.06em;font-weight:700;font-size:13px}
+html[data-look="neon"] .opt:hover{background:var(--panel3);color:var(--text)}
+html[data-look="neon"] .fmt,html[data-look="neon"] .tier{border-radius:10px;background:var(--panel2);border-color:var(--line2);color:var(--muted)}
+html[data-look="neon"] .tile{border-radius:10px;background:var(--panel2);border:1px solid var(--line2);overflow:visible}
+html[data-look="neon"] .tile .ims,html[data-look="neon"] .tile .sw,html[data-look="neon"] .tile .ic{border-radius:9px 9px 0 0;overflow:hidden}
+/* selection: a gradient ring 5px outside, with a soft glow; never a flat neon */
+html[data-look="neon"] .opt,html[data-look="neon"] .fmt,html[data-look="neon"] .tier,html[data-look="neon"] .tile,html[data-look="neon"] .strip button{position:relative;isolation:isolate}
+html[data-look="neon"] [aria-pressed=true].opt,html[data-look="neon"] [aria-pressed=true].fmt,html[data-look="neon"] [aria-pressed=true].tier,html[data-look="neon"] [aria-pressed=true].tile{
+  background:var(--panel2);color:var(--text);border-color:var(--line2)}
+html[data-look="neon"] [aria-pressed=true].opt::before,html[data-look="neon"] [aria-pressed=true].fmt::before,html[data-look="neon"] [aria-pressed=true].tier::before,html[data-look="neon"] [aria-pressed=true].tile::before{
+  content:"";position:absolute;inset:-5px;border-radius:15px;padding:2.5px;background:var(--grad);pointer-events:none;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+html[data-look="neon"] [aria-pressed=true].opt::before{border-radius:99px;inset:-4px}
+html[data-look="neon"] [aria-pressed=true].tile::after{
+  content:"";position:absolute;inset:8px 6px -2px;border-radius:10px;background:var(--grad);filter:blur(18px);opacity:.3;z-index:-1;pointer-events:none}
+html[data-look="neon"] [aria-pressed=true].tier .eta{color:var(--text)}
+html[data-look="neon"] .tile[aria-pressed=true] .ic{color:var(--text)}
+/* the song */
+html[data-look="neon"] .drop{border-radius:12px;border-color:var(--line3)}
+html[data-look="neon"] .drop.over{border:1.5px solid transparent;background:linear-gradient(var(--panel2),var(--panel2)) padding-box,var(--grad) border-box}
+html[data-look="neon"] .wave .win{border:none;border-radius:10px;background:rgba(255,255,255,.05)}
+html[data-look="neon"] .wave .win .ring{display:block;position:absolute;inset:0;border-radius:10px;padding:2.5px;background:var(--grad);pointer-events:none;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+html[data-look="neon"] .wave .wl{color:var(--text)}
+html[data-look="neon"] .wave .ph{background:var(--grad-v);box-shadow:none}
+/* progress and stages */
+html[data-look="neon"] .progress div,html[data-look="neon"] .ovbar div{background:var(--grad);box-shadow:none}
+html[data-look="neon"] .rail li{border-radius:10px;background:var(--panel);position:relative;overflow:hidden}
+html[data-look="neon"] .rail li.now{background:var(--grad-soft),var(--panel);border-color:var(--line2)}
+html[data-look="neon"] .rail li.now::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--grad-v)}
+html[data-look="neon"] .rail li .t i{border-radius:6px;font-family:var(--mono)}
+html[data-look="neon"] .rail li.done .t i{background:var(--ok);border-color:var(--ok);color:var(--ink)}
+html[data-look="neon"] .rail li.now .t i{background:var(--grad);border-color:transparent;color:var(--ink)}
+/* media */
+html[data-look="neon"] .shot{border-radius:10px;background:#000;box-shadow:0 1px 2px rgba(0,0,0,.45),0 14px 30px -14px rgba(0,0,0,.7)}
+html[data-look="neon"] .shot .ft{background:var(--panel2)}
+html[data-look="neon"] .shot .tag{background:rgba(8,10,13,.6);backdrop-filter:blur(8px);color:#fff;border-radius:6px}
+html[data-look="neon"] .shot .tag.r{color:#fff}
+html[data-look="neon"] .shot .ph{border-color:var(--line2);color:var(--dim);background:var(--panel)}
+html[data-look="neon"] .player{border-radius:10px;border-color:var(--line)}
+html[data-look="neon"] .strip button{border-radius:6px}
+html[data-look="neon"] .strip button:hover{box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+html[data-look="neon"] .vcard{border-radius:10px;background:var(--panel)}
+html[data-look="neon"] .vcard:hover{box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+/* statuses: always flat, with a word or a glyph */
+html[data-look="neon"] .badge{border-radius:4px;font-size:11px;letter-spacing:.06em}
+html[data-look="neon"] .badge.ok{background:var(--ok);color:#0a0c10}
+html[data-look="neon"] .badge.run{background:#a37dff;color:#0a0c10}
+html[data-look="neon"] .badge.pre{background:var(--idle);color:#0a0c10}
+html[data-look="neon"] .banner{border-radius:12px;background:color-mix(in srgb,var(--warn) 9%,transparent);border-color:color-mix(in srgb,var(--warn) 40%,transparent);color:#f6d6a3}
+html[data-look="neon"] .toast{border-radius:12px;background:var(--panel2);border-color:var(--line2);box-shadow:0 18px 50px rgba(0,0,0,.6)}
+html[data-look="neon"] .shotlist tr:hover td{background:var(--panel2)}
+html[data-look="neon"] .emap{border-radius:3px;height:12px;gap:3px}
+html[data-look="neon"] .lvl{font-size:12px;letter-spacing:.08em}
+html[data-look="neon"] .lvl i{border-radius:2px}
+html[data-look="neon"] .looksw{font-family:var(--mono)}
 </style>
 </head>
 <body>
@@ -183,10 +327,12 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
     <span class="chip" id="sys"><span class="led" aria-hidden="true"></span>ComfyUI</span>
     <a class="toplink" href="#/videos">Your videos</a>
     <a class="toplink" href="/" target="_blank" rel="noopener">Open ComfyUI</a>
+    <button type="button" class="chip looksw" id="look" title="Switch the Studio's look">Look: Neon</button>
   </div>
 </header>
 <main id="app" aria-live="polite"></main>
-<div class="overlay hide" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovt"><div class="box"><div class="spin" aria-hidden="true"></div><h2 id="ovt" style="margin:0 0 8px;font-size:22px"></h2><p class="muted" id="ovs" style="margin:0"></p></div></div>
+<div class="overlay hide" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovt"><div class="box"><div class="spin" aria-hidden="true"></div><h2 id="ovt" style="margin:0 0 8px;font-size:22px"></h2><p class="muted" id="ovs" style="margin:0"></p>
+  <div class="ovbar hide" id="ovbar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100"><div id="ovfill"></div></div><p class="mono hide" id="ovt2" style="margin:0;font-size:13px"></p></div></div>
 <div class="toast hide" id="toast" role="status"></div>
 
 <script>
@@ -227,7 +373,14 @@ async function api(path, body){
   return j;
 }
 function toast(msg, ms=4200){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(t._h); t._h = setTimeout(()=>t.classList.add("hide"), ms); }
-function overlay(title, sub){ const o = $("#overlay"); if (!title){ o.classList.add("hide"); return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; o.classList.remove("hide"); }
+function overlay(title, sub){ const o = $("#overlay"); if (!title){ o.classList.add("hide"); return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide"); o.classList.remove("hide"); }
+function overlayProgress(elapsed, left){
+  const tot = Math.max(1, elapsed + left), pct = Math.min(98, Math.round(100 * elapsed / tot));
+  $("#ovbar").classList.remove("hide"); $("#ovt2").classList.remove("hide");
+  $("#ovfill").style.width = pct + "%"; $("#ovbar").setAttribute("aria-valuenow", pct);
+  $("#ovt2").textContent = `${clock(elapsed)} in · ` + (left > 20 ? `about ${dur(left)} left` : "almost done");
+}
+const dur = s => { s = Math.max(0, Math.round(s)); if (s < 90) return s + " s"; const m = Math.round(s / 60); return mins(m); };
 function estimate(b){ const sec = +b.seconds > 0 ? +b.seconds : (S.analysis ? S.analysis.duration : 30); return 6 + (b.preset === "quality" ? 2 : 1) * sec; }
 function saveBrief(){ store.set("brief", S.brief); }
 function stopTimer(){ if (S.timer){ clearInterval(S.timer); S.timer = null; } }
@@ -279,7 +432,7 @@ async function viewBrief(){
         <span style="margin-left:auto" class="row"><button class="btn sm hide" id="playbtn" type="button">Play this part</button><button class="btn sm hide" id="replace" type="button">Replace</button></span></div>
       <div id="songpick"></div>
       <div id="songwave" class="hide">
-        <div class="wave" id="wave" title="Click to start the video there"><div class="bars" id="bars" aria-hidden="true"></div><div class="win" id="win" role="img"></div><div class="wl" id="wl"></div><div class="ph" id="ph"></div></div>
+        <div class="wave" id="wave" title="Click to start the video there"><div class="bars" id="bars" aria-hidden="true"></div><div class="win" id="win" role="img"><i class="ring" aria-hidden="true"></i></div><div class="wl" id="wl"></div><div class="ph" id="ph"></div></div>
         <div class="ticks" id="ticks" aria-hidden="true"></div>
         <div class="row" style="margin-top:14px">
           <div class="legend"><span><i style="background:var(--low)"></i>Low: intro, quiet bridges</span><span><i style="background:var(--mid)"></i>Medium: verses, builds</span><span><i style="background:var(--high)"></i>High: choruses, drops</span></div>
@@ -320,10 +473,10 @@ async function viewBrief(){
         </div>
       </details>
     </section>
-    <section class="card stack">
-      <button class="btn primary big" id="go-preview" type="button">Preview the plan <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9h10M10 5l4 4-4 4"/></svg></button>
-      <p class="center muted" style="margin:0;font-size:13px">A minute or two. See the World the tool writes and every shot before the long render.</p>
-      <button class="btn" id="go-render" type="button">Skip the preview, make the video</button>
+    <section class="card stack cta">
+      <button class="btn primary big two" id="go-preview" type="button"><span class="lbl">Preview the plan <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9h10M10 5l4 4-4 4"/></svg></span><span class="mono eta-b" id="eta-prev"></span></button>
+      <p class="center muted" style="margin:0;font-size:13px" id="eta-why">See the World the tool writes and every shot before the long render.</p>
+      <button class="btn two" id="go-render" type="button"><span class="lbl">Skip the preview, make the video</span><span class="mono eta-b" id="eta-all"></span></button>
     </section>
     <p class="tiny" style="margin:0 4px">Use music you have the rights to. Every face is invented.</p>
    </aside>
@@ -369,6 +522,12 @@ async function viewBrief(){
   };
   drawFx();
 
+  // how long the preview takes (on the buttons), refreshed when the brief changes
+  ta.addEventListener("input", refreshEstimate);
+  for (const k of ["cuts_low","cuts_medium","cuts_high","crowd"]) $("#"+k).addEventListener("change", refreshEstimate);
+  seed.addEventListener("change", refreshEstimate); br.addEventListener("change", refreshEstimate);
+  $("#tiles").addEventListener("click", refreshEstimate);
+  $("#tiers").addEventListener("click", refreshEstimate);
   // song
   $("#replace").onclick = () => { b.song = ""; S.analysis = null; saveBrief(); drawSong(); };
   $("#go-preview").onclick = () => start(false);
@@ -413,7 +572,7 @@ async function drawSong(){
   try{
     const a = S.analysis = await api(`analyze?song=${encodeURIComponent(b.song)}&seconds=${b.seconds}&start=${b.start}`);
     $("#songmeta").textContent = `${clock(a.duration)} · ${Math.round(a.tempo)} BPM${a.drop != null ? " · drop at " + clock(a.drop) : ""}`;
-    drawWave();
+    drawWave(); refreshEstimate();
   }catch(e){
     $("#songmeta").textContent = "";
     pick.innerHTML = `<p class="banner" style="margin:14px 0 0">Couldn't read this song: ${esc(e.message)}</p>`;
@@ -458,6 +617,29 @@ function viewBriefTiersRefresh(){ const b = S.brief; const tiers = $("#tiers"); 
   tiers.querySelectorAll(".tier").forEach(el => { const e = estimate(Object.assign({}, b, {preset: el.dataset.q})); el.querySelector(".eta").textContent = "≈ " + mins(e); });
   const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song"; const n = $("#etanote"); if (n) n.textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + S.sys.gpu : ""}.`; }
 
+let _estT = null, _estN = 0;
+function refreshEstimate(){
+  clearTimeout(_estT);
+  _estT = setTimeout(async () => {
+    const b = S.brief, ep = $("#eta-prev"), ea = $("#eta-all"), why = $("#eta-why");
+    if (!ep) return;
+    if (!b.song){ ep.textContent = ""; ea.textContent = ""; why.textContent = "See the World the tool writes and every shot before the long render."; return; }
+    const n = ++_estN;
+    const qs = ["song","seconds","start","theme","seed","broll","format","preset","cuts_low","cuts_medium","cuts_high","crowd"].map(k => k + "=" + encodeURIComponent(b[k] ?? "")).join("&");
+    try{
+      const e = await api("estimate?" + qs);
+      if (n !== _estN) return;
+      S.est = e;
+      ep.textContent = "about " + dur(e.total_s);
+      ea.textContent = "about " + mins(e.total_s / 60 + e.render_min) + " in all";
+      const chars = e.parts.find(x => x.id === "cast");
+      why.textContent = !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
+        : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analysed.`
+        : `About ${dur(e.total_s)}: Gemma writes the World and a character for each of the ${e.shots} shots${chars ? ", 8 at a time" : ""}. A second preview with the same line and seed is quick.`;
+    }catch(err){ if (n === _estN){ ep.textContent = ""; ea.textContent = ""; } }
+  }, 500);
+}
+
 async function upload(file){
   overlay("Uploading the song", file.name);
   try{
@@ -484,7 +666,10 @@ async function start(render, briefOverride){
       const j = await api("job/" + prompt_id);
       const el = Math.round((Date.now() - t0) / 1000);
       if (j.state === "queued") $("#ovs").textContent = `Waiting in ComfyUI's queue (${j.ahead} ahead) · ${el} s`;
-      else if (j.state === "running") $("#ovs").textContent = (render ? "Analysing the song, writing the World and queueing every shot" : "Analysing the song, writing the World and planning every shot") + ` · ${el} s`;
+      else if (j.state === "running"){
+        $("#ovs").textContent = j.step ? j.step + "…" : (render ? "Analysing the song, writing the World and queueing every shot" : "Analysing the song, writing the World and planning every shot");
+        if (j.elapsed_s != null && j.left_s != null) overlayProgress(j.elapsed_s, j.left_s);
+      }
       else if (j.state === "error") throw new Error(j.error);
       else if (j.state === "done"){
         if (!j.run) throw new Error("the Director finished without a run folder");
@@ -596,8 +781,8 @@ function renderUpdate(r){
   const cls = shotClass(r.brief.format);
   $("#board").innerHTML = r.shots.map(s => {
     const img = s.still ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">` : `<div class="ph">${s.kind==="broll" ? "Cutaway, chosen after the take check" : "Waiting for its still"}</div>`;
-    const st = s.state === "clip" ? (s.kind==="broll" ? "✓ cutaway" : (s.takes > 1 ? `✓ take ${s.takes}` : "✓ sung")) : (s.state === "still" ? (s.kind==="broll" ? "still ready" : "still ready") : "planned");
-    const col = s.state === "clip" ? "var(--accent)" : (s.state === "still" ? "var(--text)" : "var(--muted)");
+    const st = s.state === "clip" ? (s.kind==="broll" ? "✓ cutaway" : (s.takes > 1 ? `✓ take ${s.takes}` : "✓ sung")) : (s.state === "still" ? "◐ still ready" : "○ planned");
+    const col = s.state === "clip" ? "var(--ok)" : (s.state === "still" ? "var(--ready)" : "var(--idle)");
     return `<div class="shot ${cls} ${s.state==="still" ? "still" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}"><div class="im">${img}<span class="tag">${esc(s.time)}</span>${s.kind==="broll" ? '<span class="tag r">cutaway</span>' : ""}</div>
       <div class="ft"><span class="who" title="${esc(s.role)}">${esc(s.role || s.size)}</span><b style="color:${col}">${st}</b></div></div>`;
   }).join("");
@@ -605,7 +790,7 @@ function renderUpdate(r){
     const cur = $("#latest video");
     if (!cur || cur.dataset.src !== r.latest) $("#latest").innerHTML = `<video src="${esc(r.latest)}" data-src="${esc(r.latest)}" autoplay muted loop playsinline style="width:100%;border-radius:10px;display:block"></video>`;
   }
-  const icon = {fix:['↻','var(--warn)'], redo:['↻','var(--warn)'], ok:['✓','var(--accent)']};
+  const icon = {fix:['↻','var(--warn)'], redo:['↻','var(--warn)'], ok:['✓','var(--ok)']};
   $("#notes").innerHTML = r.notes.length ? r.notes.map(n => `<li><i aria-hidden="true" style="color:${(icon[n.kind]||['·','var(--muted)'])[1]}">${(icon[n.kind]||['·'])[0]}</i><span>${esc(n.text)}</span></li>`).join("")
     : `<li><i aria-hidden="true" class="muted">·</i><span class="muted">The vision check looks at every still before any clip is made; the take check scores every clip's lip sync.</span></li>`;
 }
@@ -629,7 +814,7 @@ async function viewResult(run){
     </div>
     <aside class="colside">
       <section class="card" aria-labelledby="rch">
-        <div class="row" style="justify-content:space-between"><h2 style="margin:0;font-size:18px;font-weight:800" id="rch">Re-edit</h2><span style="font-size:12px;color:var(--accent);font-weight:600">free · nothing re-renders</span></div>
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0;font-size:18px;font-weight:800" id="rch">Re-edit</h2><span style="font-size:12px;color:var(--ok);font-weight:600">free · nothing re-renders</span></div>
         <div class="field" style="margin-top:14px">Audio FX on the drums<div class="seg" role="group" aria-label="Audio FX" id="rfx"></div></div>
         <button class="btn" id="recut" type="button" style="width:100%;margin-top:14px;border-color:var(--accent)">Re-edit · about a minute</button>
         <p class="tiny" style="margin:10px 0 0">The new cut replaces this one. The cut per energy level is set in The Brief.</p>
@@ -679,6 +864,9 @@ async function viewVideos(){
   }catch(e){ $("#vg").innerHTML = `<p class="banner">${esc(e.message)}</p>`; }
 }
 
+function drawLook(){ const l = document.documentElement.getAttribute("data-look") || "neon"; const b = $("#look"); if (b) b.textContent = "Look: " + (l === "neon" ? "Neon" : "Classic"); }
+$("#look").onclick = () => { const l = document.documentElement.getAttribute("data-look") === "neon" ? "classic" : "neon"; document.documentElement.setAttribute("data-look", l); store.set("look", l); try{ localStorage.setItem("osmv.look", l); }catch(e){} drawLook(); };
+drawLook();
 loadSystem();
 setInterval(loadSystem, 30000);
 route();

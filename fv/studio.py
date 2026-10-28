@@ -188,7 +188,7 @@ def _decode(path: str) -> tuple[np.ndarray, int]:
 def _analysis(path: str) -> dict:
     """The song's timeline (cached per file), plus a 160-bar waveform."""
     st = os.stat(path)
-    key = hashlib.sha1(f"{path}|{st.st_size}|{int(st.st_mtime)}|v1".encode()).hexdigest()[:16]
+    key = hashlib.sha1(f"{path}|{st.st_size}|{int(st.st_mtime)}|v2".encode()).hexdigest()[:16]
     cdir = os.path.join(_out(), "oneshot-mv", "studio_cache")
     cp = os.path.join(cdir, key + ".json")
     hit = _load(cp)
@@ -202,8 +202,7 @@ def _analysis(path: str) -> dict:
     edges = np.linspace(0, len(mono), n + 1).astype(int)
     env = np.array([float(np.sqrt(np.mean(mono[a:b] ** 2))) if b > a else 0.0 for a, b in zip(edges[:-1], edges[1:])])
     env = (env / max(1e-9, float(env.max()))).round(3).tolist()
-    keep = {k: tl[k] for k in ("duration", "tempo", "beats_per_bar", "sections", "drop", "downbeats", "beats") if k in tl}
-    out = {"tl": keep, "env": env}
+    out = {"tl": tl, "env": env}
     os.makedirs(cdir, exist_ok=True)
     with open(cp, "w", encoding="utf-8") as f:
         json.dump(out, f)
@@ -229,6 +228,138 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
             "window": [round(t0, 2), round(t1, 2)], "url": _view(path)}
 
 
+# ------------------------------------------------------------------ how long a preview takes
+# Seconds per step of the Director's preview, measured on the RTX PRO 6000 (Oct 28: a new World
+# for a 111 s window took 16 min, most of it writing 53 extra characters 8 at a time). A World
+# already written for the same line and seed is reused, so a second preview is quick.
+T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
+     "gender": 55, "stems": 5, "stems_per_s": 0.25, "lyrics": 10, "lyrics_per_s": 0.05, "crowd": 45, "finish": 5}
+
+
+def _bible(theme: str, seed: int) -> dict | None:
+    if not theme.strip():
+        return None
+    from . import theme as themes
+    return _load(os.path.join(themes.cache_dir(_out()), themes._key(theme, seed) + ".json"))
+
+
+def _estimate(b: dict) -> dict:
+    """The preview's steps and their expected seconds, from the song, the length and whether the
+    World is already written for this line and seed."""
+    import math
+    from . import broll, casting, plan as planner
+    path = _song_path(b["song"])
+    tl = _analysis(path)["tl"]
+    pk = casting.load_pack("crowd")
+    cuts = {k[5:]: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)}
+    if cuts:
+        pk["edit"] = dict(pk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items()})
+    p = planner.plan_voice(tl, pk, fmt=b.get("format", "16:9"), preset=b.get("preset", "quality"),
+                           seconds=float(b.get("seconds", 30)), start=float(b.get("start", -1)),
+                           seed=int(b.get("seed", 1)), framing="mixed")
+    win = float(p["song_t1"] - p["song_t0"])
+    theme = (b.get("theme") or "").strip()
+    share = float(b.get("broll", 0.125))
+    need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme else 0
+    bible = _bible(theme, int(b.get("seed", 1))) if theme else None
+    have = len((bible or {}).get("characters") or [])
+    parts = [{"id": "listen", "name": "Listening to the song", "s": T["listen"]}]
+    if theme:
+        batches = 0
+        if not bible:
+            have = T["first_chars"]
+        if have < need:
+            batches = min(T["max_batches"], math.ceil((need - have) / 8))
+        llm = (not bible) or batches > 0 or not (bible or {}).get("genders_checked")
+        if llm:
+            parts.append({"id": "load", "name": "Loading the language model", "s": T["load"]})
+        if not bible:
+            parts.append({"id": "world", "name": "Writing the World", "s": T["world"]})
+        if batches:
+            parts.append({"id": "roles", "name": "Finding more characters", "s": T["roles"]})
+            parts.append({"id": "cast", "name": f"Writing {min(need - have, 8 * batches)} more characters",
+                          "s": T["batch"] * batches, "batches": batches})
+        if llm:
+            parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
+    parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
+    try:
+        from . import lyrics
+        if share > 0 and lyrics.available():
+            parts.append({"id": "lyrics", "name": "Reading the lyrics", "s": round(T["lyrics"] + T["lyrics_per_s"] * win)})
+    except Exception:
+        pass
+    if theme and b.get("crowd", "auto") != "off":
+        from . import theme as themes
+        if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
+            parts.append({"id": "crowd", "name": "Dressing the crowd", "s": T["crowd"]})
+    parts.append({"id": "finish", "name": "Planning every shot", "s": T["finish"]})
+    total = sum(x["s"] for x in parts)
+    return {"total_s": int(total), "parts": parts, "shots": len(p["shots"]), "need": need,
+            "world_cached": bool(bible) and have >= need, "window": [round(p["song_t0"], 2), round(p["song_t1"], 2)],
+            "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win)}
+
+
+def _jobs_dir() -> str:
+    d = os.path.join(_out(), "oneshot-mv", "studio_jobs")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _progress(pid: str, rec: dict) -> dict:
+    """Where a running Director is, read from its log lines, and the seconds left."""
+    import time
+    parts = (rec.get("estimate") or {}).get("parts") or []
+    t_start = float(rec.get("t_run") or rec.get("t", time.time()))
+    lines = []
+    try:
+        from app.logger import get_logs
+        for e in list(get_logs() or []):
+            t = e.get("t")
+            try:
+                ts = _dt.datetime.fromisoformat(t).timestamp() if isinstance(t, str) else float(t)
+            except (TypeError, ValueError):
+                continue
+            if ts >= t_start - 1:
+                lines.append((ts, str(e.get("m", ""))))
+    except Exception:
+        pass
+    done, last_t, cast_n, batches_done = set(), t_start, 0, 0
+    for ts, m in lines:
+        if "Requested to load LTXAVTEModel" in m and "load" not in done:
+            done.add("listen"); done.add("load"); last_t = ts
+        if "[OneShotMV] Theme:" in m:
+            done.update({"listen", "load", "world"}); last_t = ts
+        if "new roles:" in m:
+            done.update({"listen", "load", "world", "roles"}); last_t = ts
+        mm = re.search(r"theme: cast (\d+) characters", m)
+        if mm:
+            batches_done += 1; cast_n = int(mm.group(1)); last_t = ts
+        if "every role has its real gender" in m:
+            done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
+        if "voice plan:" in m:
+            done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
+        if "lyrics:" in m or "lyrics skipped" in m:
+            done.update({"listen", "load", "world", "roles", "cast", "gender", "stems", "lyrics"}); last_t = ts
+    now = time.time()
+    left, cur = 0.0, None
+    for x in parts:
+        if x["id"] in done:
+            continue
+        if x["id"] == "cast" and batches_done:
+            left_b = max(0, int(x.get("batches", 1)) - batches_done)
+            if left_b == 0:
+                continue
+            x = dict(x, s=left_b * T["batch"], name=f"Writing more characters ({cast_n} so far)")
+        if cur is None:
+            cur = x
+            left += max(5.0, x["s"] - (now - last_t))
+        else:
+            left += x["s"]
+    elapsed = now - t_start
+    return {"elapsed_s": int(elapsed), "left_s": int(left), "step": (cur or {}).get("name", "Finishing the plan"),
+            "total_s": int((rec.get("estimate") or {}).get("total_s") or 0)}
+
+
 # ------------------------------------------------------------------ start, job, recut, cancel
 def _director_graph(b: dict) -> dict:
     cuts = {k: b.get(k) for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)}
@@ -248,8 +379,20 @@ def _job(pid: str) -> dict:
     from server import PromptServer
     q = PromptServer.instance.prompt_queue
     running, pending = q.get_current_queue()
+    rec = _load(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), {}) or {}
     if any(x[1] == pid for x in running):
-        return {"state": "running"}
+        if not rec.get("t_run"):
+            import time
+            rec["t_run"] = time.time()
+            try:
+                with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
+                    json.dump(rec, f)
+            except OSError:
+                pass
+        out = {"state": "running"}
+        if rec.get("estimate"):
+            out.update(_progress(pid, rec))
+        return out
     for i, x in enumerate(sorted(pending, key=lambda x: x[0])):
         if x[1] == pid:
             return {"state": "queued", "ahead": i + len(running)}
@@ -521,6 +664,11 @@ async def _api(request: web.Request, route: str) -> web.Response:
     if route == "analyze":
         res = await _blocking(_analyze, q.get("song", ""), float(q.get("seconds", 30) or 30), float(q.get("start", -1) or -1))
         return web.json_response(res)
+    if route == "estimate":
+        b = {k: q.get(k) for k in q}
+        if not b.get("song"):
+            return web.json_response({"error": "pick a song first"}, status=400)
+        return web.json_response(await _blocking(_estimate, b))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
     if route.startswith("run/"):
@@ -533,8 +681,15 @@ async def _api(request: web.Request, route: str) -> web.Response:
             if not body.get("song"):
                 return web.json_response({"error": "pick a song first"}, status=400)
             _song_path(body["song"])
+            try:
+                est = await _blocking(_estimate, body)
+            except Exception as e:
+                est = {"error": str(e)}
             pid = await _blocking(_queue_graph, _director_graph(body))
-            return web.json_response({"prompt_id": pid})
+            import time
+            with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
+                json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render"))}, f)
+            return web.json_response({"prompt_id": pid, "estimate": est})
         if route == "recut":
             d = _run_dir(body.get("run", ""))
             fx = body.get("fx", "subtle")
