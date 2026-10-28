@@ -628,6 +628,7 @@ def _run(name: str) -> dict:
         "finished_at": (done or {}).get("at", ""),
         "song": _view(os.path.join(d, "song.wav")) if os.path.isfile(os.path.join(d, "song.wav")) else "",
         "versions": _versions(d, p), "pickup": _pickup_state(d, p, done),
+        "soft_clips": len(_soft_clips(d, p)) if done else 0,
         "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
         "looks": [{"id": "none", "name": "As made"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
     }
@@ -746,7 +747,7 @@ def _pickup_state(d: str, p: dict, done: dict | None) -> dict:
     import time
     el = (time.time() - float(last.get("t", time.time()))) / 60
     est = float(last.get("estimate_min") or 0)
-    return {"n": last["n"], "state": state, "jobs": total, "jobs_left": left, "items": last.get("items", []),
+    return {"n": last["n"], "kind": last.get("kind", "pickups"), "state": state, "jobs": total, "jobs_left": left, "items": last.get("items", []),
             "elapsed_min": round(el, 1), "left_min": 0 if finished else round(max(0.5, est - el), 1)}
 
 
@@ -864,6 +865,98 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
     return {"pickup": k, "jobs": len(chain), "estimate_min": round(est, 1)}
 
 
+# ------------------------------------------------------------------ soft frames: re-decode older clips
+def _decode_fix(g: dict) -> int:
+    """Set every tiled decode in a clip job to one temporal tile (graphs.ltx_render since Oct 28).
+    Returns how many decodes changed; 0 means the job already decodes in one tile."""
+    frames = 0
+    for n in g.values():
+        if n.get("class_type") == "EmptyLTXVLatentVideo" and isinstance(n["inputs"].get("length"), int):
+            frames = n["inputs"]["length"]
+    want = min(512, (frames + 7) // 8 * 8 + 8) if frames else 512
+    k = 0
+    for n in g.values():
+        if n.get("class_type") == "VAEDecodeTiled":
+            ins = n["inputs"]
+            if isinstance(ins.get("temporal_size", 64), int) and ins.get("temporal_size", 64) < want:
+                ins["temporal_size"] = want
+                k += 1
+    return k
+
+
+def _soft_clips(d: str, p: dict) -> list:
+    """The clips in the cut that were decoded in 64-frame tiles: each has a soft frame where two
+    tiles meet (frames 56, 112... of a 50 fps clip). [(render, job file)]"""
+    used = {e["render"] for e in p.get("edl", [])}
+    out = []
+    for r in p.get("renders", []):
+        if r["id"] not in used or not r.get("path") or _stem(r["path"]).endswith("_sd"):
+            continue
+        jf = _find_job(d, _stem(r["path"]))
+        g = _load(jf, {}) if jf else None
+        if g and _decode_fix(g):
+            out.append((r, jf))
+    return out
+
+
+def _sharpen(name: str, dry: bool = False) -> dict:
+    """Re-run each soft clip's own job (same seed, so the same take) with the clip decoded in one
+    temporal tile, then cut again. Nothing else in the plan changes."""
+    import shutil
+    import time
+    from . import director, graphs
+    d = _run_dir(name)
+    pj = os.path.join(d, "plan.json")
+    p = _load(pj, {}) or {}
+    st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
+    if st.get("state") == "running":
+        raise ValueError("the last pickups are still shooting")
+    if _run_jobs(os.path.basename(d))[1]:
+        raise ValueError("this run still has jobs in the queue")
+    soft = _soft_clips(d, p)
+    if not soft:
+        raise ValueError("every clip in this cut is already sharp")
+    rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
+    k = len(p.get("pickups") or []) + 1
+    byid = {r["id"]: r for r in p["renders"]}
+    clips, changes = [], []
+    for r0, jf in soft:
+        r = byid[r0["id"]]
+        g = _load(jf, {})
+        _decode_fix(g)
+        tag = _stem(r["path"]) + "_sd"
+        _set_prefix(g, "SaveVideo", f"{rel}/{tag}")
+        clips.append(g)
+        new_clip = os.path.join(d, f"{tag}_00001_.mp4")
+        changes.append({"shot": r.get("shot", 0) + 1, "render": r["id"], "mode": "sharpen", "clip": new_clip,
+                        "before": {"path": r.get("path")}})
+        if dry:
+            continue
+        json.dump(g, open(os.path.join(d, "jobs", f"sharpen{k}_{tag}.json"), "w", encoding="utf-8"), indent=1)
+        if "path_before" not in r or os.path.exists(r.get("path", "")):
+            r["path_before"] = r.get("path")
+            if "sync_delay" in r:
+                r["sync_delay_before"] = r["sync_delay"]
+        r["path"] = new_clip  # the same take: its sync_delay stays
+    est = 3.0 + 1.1 * len(clips) + 1.0 + 0.035 * float(p.get("duration") or 30)
+    if dry:
+        return {"dry": True, "clips": len(clips), "estimate_min": round(est, 1),
+                "prefixes": [c["clip"] for c in changes][:5]}
+    done = _load(os.path.join(d, "done.json")) or {}
+    if done.get("video") and os.path.isfile(done["video"]):
+        os.makedirs(os.path.join(d, "versions"), exist_ok=True)
+        nv = len(glob.glob(os.path.join(d, "versions", "v*_*.mp4"))) + 1
+        shutil.copy2(done["video"], os.path.join(d, "versions", f"v{nv}_{os.path.basename(done['video'])}"))
+    chain = [graphs.free_memory("before re-decoding").nodes] + clips + \
+        [graphs.free_memory("before assembly").nodes, graphs.assemble(run_dir=d, prefix=rel).nodes]
+    p.setdefault("pickups", []).append({"n": k, "kind": "sharpen", "at": _dt.datetime.now().isoformat(timespec="seconds"),
+                                        "t": time.time(), "items": changes, "estimate_min": round(est, 1)})
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    ids = [director.queue_prompt(g) for g in chain]
+    json.dump({"prompt_ids": ids}, open(os.path.join(d, f"pickup{k}_jobs.json"), "w", encoding="utf-8"))
+    return {"pickup": k, "jobs": len(chain), "clips": len(clips), "estimate_min": round(est, 1)}
+
+
 # ------------------------------------------------------------------ the finish: grade, grain, vignette
 def _fv(name: str):
     """A core module, reloaded when its file changed: edits show up here without a restart
@@ -951,7 +1044,7 @@ def _lab_cache(d: str, p: dict):
     return m, sd
 
 
-def _graded(d: str, p: dict, frame, look: str, overrides: dict | None = None):
+def _graded(d: str, p: dict, frame, look: str, overrides: dict | None = None, w: int = 560):
     import torch
     import torch.nn.functional as F
     from . import formats
@@ -964,26 +1057,28 @@ def _graded(d: str, p: dict, frame, look: str, overrides: dict | None = None):
     cx, cy, cw, ch = formats.deliver_crop(p["format"], p["preset"])
     if (cw, ch) != (rw, rh):
         y = y[cy:cy + ch, cx:cx + cw]
-    w = 560
+    w = min(w, y.shape[1])
     h = int(round(w * y.shape[0] / y.shape[1]))
     y = F.interpolate(y.permute(2, 0, 1)[None], size=(h, w), mode="bilinear", align_corners=False, antialias=True)[0]
     return (y.permute(1, 2, 0).clamp(0, 1) * 255 + 0.5).byte().numpy()
 
 
-def _look_preview(name: str, look: str, shot: int | None) -> str:
+def _look_preview(name: str, look: str, shot: int | None, w: int = 560) -> str:
     from PIL import Image
     if look not in _look_names():
         look = "none"
     d = _run_dir(name)
     p = _load(os.path.join(d, "plan.json"), {}) or {}
-    st = _finish_settings(p)
-    key = hashlib.sha1(json.dumps([look, shot, st["grain"], st["grain_size"], st["vignette"],
-                                   (p.get("finish") or {}).get("grade_mean")]).encode()).hexdigest()[:12]
+    w = max(240, min(1600, int(w)))
+    # the grade alone: grain and vignette come after it, with their own sliders
+    key = hashlib.sha1(json.dumps([look, shot, w, "grade-only",
+                                   (p.get("finish") or {}).get("grade_mean"),
+                                   int(os.path.getmtime(_fv("finish").__file__))]).encode()).hexdigest()[:12]
     out = os.path.join(d, "studio_previews", f"{look}_{key}.jpg")
     if not os.path.exists(out):
         frame, _ = _preview_frame(d, p, shot)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        Image.fromarray(_graded(d, p, frame, look)).save(out, quality=86)
+        Image.fromarray(_graded(d, p, frame, look, {"grain": 0, "vignette": 0}, w=w)).save(out, quality=88)
     return out
 
 
@@ -997,7 +1092,7 @@ def _look_sheet(name: str) -> str:
     pick = [shots[len(shots) // 6]["index"], shots[len(shots) // 2]["index"], shots[(5 * len(shots)) // 6]["index"]]
     frames = [_preview_frame(d, p, i)[0] for i in pick]
     looks = list(LOOKS)
-    tiles = [[_graded(d, p, f, lk) for f in frames] for lk in looks]
+    tiles = [[_graded(d, p, f, lk, {"grain": 0, "vignette": 0}) for f in frames] for lk in looks]
     th, tw = tiles[0][0].shape[:2]
     lab = 34
     sheet = Image.new("RGB", (tw * 3, (th + lab) * len(looks)), (13, 16, 21))
@@ -1075,7 +1170,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
                                                 "Cache-Control": "no-store"})
     if route.startswith("look/"):
         shot = q.get("shot")
-        path = await _blocking(_look_preview, route[5:], q.get("look", "none"), int(shot) if shot not in (None, "") else None)
+        path = await _blocking(_look_preview, route[5:], q.get("look", "none"), int(shot) if shot not in (None, "") else None,
+                               int(q.get("w") or 560))
         return web.FileResponse(path, headers={"Cache-Control": "max-age=3600"})
     if route.startswith("looksheet/"):
         path = await _blocking(_look_sheet, route[10:])
@@ -1122,6 +1218,12 @@ async def _api(request: web.Request, route: str) -> web.Response:
                                                             "fx_intensity": 1.0, "finish": True, "audio_fx": fx}}}
             pid = await _blocking(_queue_graph, g)
             return web.json_response({"prompt_id": pid})
+        if route == "sharpen":
+            try:
+                res = await _blocking(_sharpen, body.get("run", ""), bool(body.get("dry")))
+            except ValueError as e:
+                return web.json_response({"error": str(e)}, status=400)
+            return web.json_response(res)
         if route == "pickups":
             try:
                 res = await _blocking(_pickups, body.get("run", ""), body.get("items") or [], bool(body.get("dry")))

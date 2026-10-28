@@ -997,18 +997,37 @@ async function viewResult(run){
       overlay(); viewResult(r.run); toast("New cut ready.");
     }catch(e){ overlay(); toast("The new cut failed: " + e.message, 8000); }
   };
+  // clips decoded before the Oct 28 fix: one soft frame where two 64-frame decode tiles meet
+  function softCard(){
+    const n = r.soft_clips || 0;
+    if (!n || shooting) return;
+    const est = 3 + 1.1 * n + 1 + 0.035 * (+r.brief.seconds || 30);
+    const el = document.createElement("section");
+    el.className = "card"; el.style.marginBottom = "20px";
+    el.innerHTML = `<div class="row" style="justify-content:space-between;gap:14px;flex-wrap:wrap"><div style="flex:1 1 420px;min-width:0"><b>Soft frames in ${n} clip${n > 1 ? "s" : ""}</b>
+      <p class="tiny" style="margin:6px 0 0">These clips were decoded before the Oct 28 fix, so each has a soft, smeared frame about 1.1 s in, and again at 2.2 s in longer clips. Re-decoding re-runs each clip's own job with the same seed: the same takes, sharp. This cut is kept as a version.</p></div>
+      <button class="btn" id="sharpen" type="button">Re-decode ${n} clips <span class="mono eta-b">about ${mins(est)}</span></button></div>`;
+    $("#pkbanner").appendChild(el);
+    $("#sharpen").onclick = async () => {
+      try{ overlay("Queueing the re-decode", `${n} clips, then a new cut.`); await api("sharpen", {run: r.run}); overlay(); viewResult(run); }
+      catch(e){ overlay(); toast("The re-decode didn't start: " + e.message, 9000); }
+    };
+  }
   drawFix(); drawPk();
+  if (!(r.pickup && r.pickup.n)) softCard();
   // pickups shooting: a progress banner, then the new version
   if (r.pickup && r.pickup.n){
     const pb = $("#pkbanner");
     const drawBanner = st => {
       if (st.state === "running"){
         const done = Math.max(0, st.jobs - st.jobs_left), pct = Math.round(100 * done / Math.max(1, st.jobs));
-        pb.innerHTML = `<section class="card" style="margin-bottom:20px"><div class="row" style="justify-content:space-between"><b>Shooting pickups: ${st.items.map(x => "shot " + x.shot).join(", ")}</b><span class="mono tiny">${done} of ${st.jobs} jobs · about ${mins(st.left_min)} left</span></div>
+        const what = st.kind === "sharpen" ? `Re-decoding ${st.items.length} clips` : `Shooting pickups: ${st.items.map(x => "shot " + x.shot).join(", ")}`;
+        pb.innerHTML = `<section class="card" style="margin-bottom:20px"><div class="row" style="justify-content:space-between"><b>${what}</b><span class="mono tiny">${done} of ${st.jobs} jobs · about ${mins(st.left_min)} left</span></div>
           <div class="progress" style="margin:12px 0 0"><div style="width:${pct}%"></div></div><p class="tiny" style="margin:10px 0 0">The video below is the cut before. It's kept as a version when the new cut is ready.</p></section>`;
       } else if (st.state === "stopped"){
-        pb.innerHTML = `<div class="banner">The last pickups stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before them.</div>`;
+        pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "pickups"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;
       } else pb.innerHTML = "";
+      if (st.state !== "running") softCard();
     };
     drawBanner(r.pickup);
     if (r.pickup.state === "running"){

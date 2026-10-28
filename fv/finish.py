@@ -1,5 +1,6 @@
 """The finish: a grade learned from a reference edit (Lab mean/std), diffusion + warm halation,
-S-curve contrast, saturation, lifted blacks, a rounded gate vignette and coloured film grain.
+S-curve contrast, saturation, lifted blacks, the Studio's colour grade, coloured film grain, then
+a rounded gate vignette (the audio-reactive FX come before all of it, in assemble).
 torch, works on (H, W, 3) float frames in 0..1."""
 from __future__ import annotations
 
@@ -58,6 +59,39 @@ LOOKS = {
     "moonlit": "Moonlit Blue",
     "faded70s": "Faded 70s",
     "silver": "Silver Mono",
+    # the looks from Mark Bone's "Breaking Down Every Major Color Grade in Film" (Oct 2026)
+    "neon": "Neon Saturated",
+    "natural": "Naturalistic",
+    "lowcon": "Low Contrast",
+    "lowkey": "Low Key",
+    "tobacco": "Earthy Tobacco",
+    "romantic": "Warm Romantic",
+    "technicolor": "Technicolor",
+    "pushed_to": "Pushed Teal & Orange",
+    "matrix": "Industrial Green",
+    "hardmono": "Hard Mono",
+}
+
+# the reference and what each look is after (the grade rating page shows these)
+LOOK_NOTES = {
+    "teal_orange": ("Transformers, Bad Boys II", "Cool shadows, warm skin and highlights: complementary colours make faces jump out."),
+    "print_2383": ("Kodak 2383 print stock", "Denser colour, highlights that roll off softly, slightly warm."),
+    "eterna": ("Fujifilm Eterna", "Soft, low-saturation film stock with quiet greens and gentle contrast."),
+    "bleach": ("Saving Private Ryan", "Silver retention: muted colour, deeper blacks, harder contrast; textures jump out."),
+    "golden": ("Late-afternoon sun", "Warm amber across the frame, gentle lift in the blacks."),
+    "moonlit": ("Day for night", "Darker, cool blue, low saturation."),
+    "faded70s": ("1970s prints", "Faded blacks, warm highlights, muted colour."),
+    "silver": ("Soft black and white", "Gentle mono with a slight cool tint in the shadows."),
+    "neon": ("Good Time, The Neon Demon, Mandy", "Punchy, saturated colour: magenta in the shadows, cool highlights."),
+    "natural": ("No Country for Old Men", "Believable daylight and skin, restrained saturation, warm tungsten."),
+    "lowcon": ("Arrival, Nomadland", "Blacks never reach black, soft highlights, gentle tonal steps, a little murky."),
+    "lowkey": ("The Godfather", "Most of the frame falls into deep amber shadow; the light picks out faces."),
+    "tobacco": ("O Brother, Where Art Thou?", "Dusty yellow-brown over everything; greens turned to straw."),
+    "romantic": ("Her", "Peach, coral, cream and warm neutrals; blue held back; a soft mist on the highlights."),
+    "technicolor": ("La La Land, The Wizard of Oz", "Rich, saturated primaries across the full rainbow."),
+    "pushed_to": ("Mad Max: Fury Road", "Teal and orange pushed hard: burning orange, deep teal shadows."),
+    "matrix": ("The Matrix", "A green, contaminated, industrial cast."),
+    "hardmono": ("The Lighthouse", "Harsh, high-contrast black and white with an orthochromatic look: darker skin, more texture."),
 }
 
 
@@ -90,6 +124,15 @@ def apply_look(x, name: str, amount: float = 1.0):
 
     def lift(y, b, tint=(0, 0, 0)):
         return v(*tint) + b + y * (1 - b)
+
+    def mist(y, k):  # soft glow from the highlights (a diffusion filter)
+        import torch.nn.functional as F
+        H, W = y.shape[:2]
+        t = y.permute(2, 0, 1)[None]
+        b = F.interpolate(F.avg_pool2d(t, 12, ceil_mode=True), size=(H, W), mode="bilinear", align_corners=False)
+        b = F.interpolate(F.avg_pool2d(b, 5, 1, 2), size=(H, W), mode="bilinear", align_corners=False)[0].permute(1, 2, 0)
+        hl = ((b - 0.5) / 0.5).clamp(0, 1) * k
+        return 1 - (1 - y) * (1 - hl)
 
     y = x
     if name == "teal_orange":
@@ -124,6 +167,50 @@ def apply_look(x, name: str, amount: float = 1.0):
     elif name == "silver":
         lm = lum(y).expand_as(y)
         y = con(lm, 1.16, 0.45) + v(0.0, 0.004, 0.014) * (1 - lm)
+    elif name == "neon":
+        y = sat(y, 1.5)
+        y = split(y, (0.045, -0.02, 0.065), (-0.01, 0.015, 0.04))
+        y = con(y, 1.14, 0.42)
+    elif name == "natural":
+        y = y * v(1.03, 1.0, 0.95)
+        y = split(y, (0.0, 0.004, 0.008), (0.012, 0.006, -0.012))
+        y = con(sat(y, 0.88), 1.06)
+    elif name == "lowcon":
+        y = y * v(0.97, 1.0, 1.03) * 0.93
+        y = (1 - torch.exp(-y.clamp(0, 1) * 1.6)) / (1 - torch.exp(v(-1.6)))
+        y = lift(con(sat(y, 0.76), 0.76, 0.42), 0.075, (0.0, 0.004, 0.01))
+        y = y * 0.93
+    elif name == "lowkey":
+        y = y.clamp(0, 1) ** 1.45
+        y = y * v(1.08, 0.99, 0.8)
+        y = split(y, (0.008, 0.002, -0.012), (0.035, 0.016, -0.03), bal=0.35)
+        y = con(sat(y, 0.9), 1.08, 0.3)
+    elif name == "tobacco":
+        r, g, b = y[..., 0:1], y[..., 1:2], y[..., 2:3]
+        r = r + 0.35 * (g - r).clamp(min=0)  # greens to straw
+        y = torch.cat([r, g, b * 0.92], -1)
+        y = sat(y, 0.72) * v(1.07, 1.0, 0.74)
+        y = lift(con(y, 1.05), 0.025, (0.02, 0.012, 0.0))
+    elif name == "romantic":
+        y = y * v(1.05, 0.99, 0.86)
+        y = split(y, (0.03, 0.004, -0.008), (0.035, 0.018, -0.002))
+        y = lift(con(sat(y, 0.96), 0.92), 0.03, (0.016, 0.006, 0.0))
+        y = mist(y, 0.35)
+    elif name == "technicolor":
+        y = y.clamp(0, 1) ** 1.06
+        y = con(sat(y, 1.42), 1.1, 0.43)
+        y = split(y, (0.0, 0.0, 0.01), (0.02, 0.01, -0.01))
+    elif name == "pushed_to":
+        y = split(y, (-0.06, 0.02, 0.075), (0.085, 0.022, -0.075), bal=0.42)
+        y = y * v(1.06, 0.99, 0.9)
+        y = con(sat(y, 1.32), 1.2, 0.42)
+    elif name == "matrix":
+        y = y * v(0.9, 1.05, 0.84)
+        y = split(y, (-0.01, 0.03, 0.004), (0.0, 0.028, -0.02))
+        y = con(sat(y, 0.78), 1.12, 0.42)
+    elif name == "hardmono":
+        lm = (y * v(0.05, 0.55, 0.40)).sum(-1, keepdim=True).expand_as(y)  # orthochromatic: red reads dark
+        y = con(lm.clamp(0, 1) ** 1.1, 1.45, 0.46)
     y = y.clamp(0, 1)
     return x + (y - x) * min(1.0, float(amount))
 
@@ -183,11 +270,10 @@ class Finisher:
         # 3b) the Studio's colour grade on top of the World's
         if c.get("look") and c["look"] != "none":
             x = apply_look(x, c["look"], c.get("look_amount", 1.0))
-        # 4) gate vignette
-        x = x * self._vignette(H, W, x.device, x.dtype)
-        # 5) coloured grain, strongest in the mids
+        # 4) coloured grain, strongest in the mids (after the grade: the grade never tints the grain)
         gamt = c.get("grain", 0.05)
         if gamt > 0:
+            lum = x.clamp(0, 1).mean(-1, keepdim=True)
             gen = torch.Generator(device=x.device).manual_seed(self.seed * 100003 + frame_index)
             size = max(1.0, float(c.get("grain_size", 1.0)))  # 1 = fine, 4 = coarse
             gh, gw = max(8, int(H / size)), max(8, int(W / size))
@@ -198,4 +284,7 @@ class Finisher:
             g = g[0].permute(1, 2, 0) * 2.2
             g = g.mean(-1, keepdim=True) * 0.7 + g * 0.3
             x = x + g * gamt * (0.4 + 0.6 * 4 * lum * (1 - lum))
+        # 5) gate vignette, last: it darkens the grain with the picture
+        if c.get("vignette", 0.55) > 0:
+            x = x * self._vignette(H, W, x.device, x.dtype)
         return x.clamp(0, 1)
