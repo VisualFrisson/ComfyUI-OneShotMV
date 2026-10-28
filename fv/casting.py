@@ -693,7 +693,9 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         attitude = attitude[:1].lower() + attitude[1:]
         own_acts = acts
         if chars and ch.get("doing"):
-            own_acts = {"medium": acts["medium"], "wide": [ch["doing"]]}
+            # in front of a crowd the character's own action for medium shots too: the generic
+            # "leaning in a doorway" put sx05k's champion gladiator in a doorway off the sand
+            own_acts = {"medium": [ch["doing"]] if crowd else acts["medium"], "wide": [ch["doing"]]}
         if scene:
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, own_acts,
                                          attitude=attitude)
