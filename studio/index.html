@@ -336,7 +336,7 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .fixhead img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;display:block}
 .fixgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
 @media (max-width:700px){.fixgrid{grid-template-columns:1fr}.fixhead img{width:110px}}
-.refine .ed h3{margin:0;font-size:16px;font-weight:800}
+.refine .ed h3{margin:0;font-size:24px;line-height:1.1;font-weight:800}
 .refine .ed .tiny{margin:4px 0 12px}
 .grades{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .grade{padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid var(--line);text-align:left;display:flex;flex-direction:column}
@@ -353,8 +353,10 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .slider b{text-align:right;font-size:12px;color:var(--text)}
 .grainprev{margin-top:10px;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:16/9}
 .grainprev img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
-.refine-h{margin:0 2px 2px;font-size:24px;line-height:1.1;font-weight:800;letter-spacing:-.01em}
-.acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:40px}
+.refine{gap:16px}
+.refine-h{position:relative;margin:0;min-height:40px;display:flex;align-items:center;justify-content:center;text-align:center;
+  font-size:22px;line-height:1;font-weight:800;letter-spacing:-.01em;border:2px solid var(--accent);border-radius:12px;padding:0 12px}
+.acc-h{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;cursor:pointer;min-height:44px}
 .acc-h h3{flex:none}
 .acc-sum{margin-left:auto;min-width:0;font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .acc.open .acc-sum{visibility:hidden}
@@ -378,7 +380,9 @@ html[data-look="neon"] .grade[aria-pressed=true]::before{content:"";position:abs
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 html[data-look="neon"] .refine .ed h3{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;font-weight:700;
   background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-html[data-look="neon"] .refine-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.03em;font-size:28px}
+html[data-look="neon"] .refine-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em;border-color:transparent}
+html[data-look="neon"] .refine-h::before{content:"";position:absolute;inset:-2px;border-radius:12px;padding:2px;background:var(--grad);pointer-events:none;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
 html[data-look="neon"] .applybar .btn{font-size:18px;letter-spacing:.05em}
 html[data-look="neon"] .fixpanel{background:var(--panel2);border-color:var(--line2);box-shadow:inset 3px 0 0 var(--g3)}
 html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase}
@@ -862,7 +866,7 @@ function renderUpdate(r){
 
 // ---------------------------------------------------------------- 4. Result
 const pickKey = run => "pickups." + run;
-let REFINE_OPEN = "fx";  // the Result screen's open Edit and refine panel
+let REFINE_OPEN = "fx";  // the open Post Processing panel on the Result screen
 async function viewResult(run){
   setSteps(3);
   const app = $("#app");
@@ -903,8 +907,8 @@ async function viewResult(run){
         ${r.world.camera ? `<p class="tiny" style="margin:10px 0 0">Camera: ${esc(r.world.camera)}</p>` : ""}
         <p style="margin:12px 0 0"><a href="#" id="showplan" style="font-size:13px;font-weight:600">The plan, shot by shot</a></p></section>
     </div>
-    <aside class="colside refine" aria-label="Edit and refine">
-      <h2 class="refine-h">Edit and refine</h2>
+    <aside class="colside refine" aria-label="Post processing">
+      <h2 class="refine-h" id="pph">Post Processing</h2>
       <section class="card ed acc" data-acc="fx"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-fx"><h3>Audio-reactive FX</h3><span class="acc-sum" id="sum-fx"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
         <div class="acc-b" id="acc-fx" hidden><p class="tiny">Flash, zoom punch, glow and color split on the drums, set for each energy in the song.</p>
           <div class="fxrows" id="efx"></div></div></section>
@@ -928,7 +932,7 @@ async function viewResult(run){
   // versions
   const vers = [{url: r.video, label: "Current cut"}].concat((r.versions || []).slice().reverse().map(v => ({url: v.url, label: `${v.name} · before pickups`})));
   let curV = 0;
-  const drawVers = () => { $("#vers").innerHTML = vers.length > 1 ? vers.map((v,i) => `<button type="button" class="opt" data-i="${i}" aria-pressed="${i===curV}">${esc(v.label)}</button>`).join("") : "";
+  const drawVers = () => { $("#vers").innerHTML = vers.map((v,i) => `<button type="button" class="opt" data-i="${i}" aria-pressed="${i===curV}">${esc(v.label)}</button>`).join("");
     $("#vers").querySelectorAll(".opt").forEach(el => el.onclick = () => { curV = +el.dataset.i; const t = vid.currentTime; vid.src = vers[curV].url; vid.currentTime = t; $("#dl").href = vers[curV].url; drawVers(); }); };
   drawVers();
   // shots: the one under the playhead, picking one to fix
@@ -997,7 +1001,7 @@ async function viewResult(run){
       store.set(pickKey(run), []); overlay(); viewResult(run);
     }catch(e){ overlay(); toast("Pickups didn't start: " + e.message, 9000); }
   };
-  // edit and refine: FX, grade, grain, vignette; one Apply re-cuts with all of them
+  // post processing: FX, grade, grain, vignette; one Apply re-cuts with all of them
   const ENERGIES = [["low", "Low energy"], ["medium", "Medium energy"], ["high", "High energy"]];
   const dirty = () => JSON.stringify(E.fx) !== JSON.stringify(F0.fx) || ["look","grain","grain_size","vignette"].some(k => String(E[k]) !== String(F0[k]));
   const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
@@ -1045,24 +1049,16 @@ async function viewResult(run){
       overlay(); viewResult(r.run); toast("New cut ready.");
     }catch(e){ overlay(); toast("The new cut failed: " + e.message, 8000); }
   };
-  // clips decoded before the Oct 28 fix: one soft frame where two 64-frame decode tiles meet
-  function softCard(){
-    const n = r.soft_clips || 0;
-    if (!n || shooting) return;
-    const est = 3 + 1.1 * n + 1 + 0.035 * (+r.brief.seconds || 30);
-    const el = document.createElement("section");
-    el.className = "card"; el.style.marginBottom = "20px";
-    el.innerHTML = `<div class="row" style="justify-content:space-between;gap:14px;flex-wrap:wrap"><div style="flex:1 1 420px;min-width:0"><b>Soft frames in ${n} clip${n > 1 ? "s" : ""}</b>
-      <p class="tiny" style="margin:6px 0 0">These clips were decoded before the Oct 28 fix, so each has a soft, smeared frame about 1.1 s in, and again at 2.2 s in longer clips. Re-decoding re-runs each clip's own job with the same seed: the same takes, sharp. This cut is kept as a version.</p></div>
-      <button class="btn" id="sharpen" type="button">Re-decode ${n} clips <span class="mono eta-b">about ${mins(est)}</span></button></div>`;
-    $("#pkbanner").appendChild(el);
-    $("#sharpen").onclick = async () => {
-      try{ overlay("Queueing the re-decode", `${n} clips, then a new cut.`); await api("sharpen", {run: r.run}); overlay(); viewResult(run); }
-      catch(e){ overlay(); toast("The re-decode didn't start: " + e.message, 9000); }
-    };
-  }
   drawFix(); drawPk();
-  if (!(r.pickup && r.pickup.n)) softCard();
+  // the Post Processing box is as tall as the versions row, so the first panel lines up with the video
+  const alignPP = () => { const pp = $("#pph"), pl = $(".player"); if (!pp || !pl) return;
+    pp.style.height = pp.style.minHeight = pp.style.fontSize = "";
+    const side = pp.getBoundingClientRect(), main = pl.getBoundingClientRect();
+    if (side.left < main.right) return;  // stacked on a narrow screen
+    const gap = parseFloat(getComputedStyle(pp.parentNode).rowGap) || 16, h = Math.round(main.top - side.top - gap);
+    if (h >= 28){ pp.style.height = pp.style.minHeight = h + "px"; pp.style.fontSize = Math.max(16, Math.min(30, Math.round(h * 0.55))) + "px"; } };
+  alignPP(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignPP);
+  window.onresize = alignPP;
   // pickups shooting: a progress banner, then the new version
   if (r.pickup && r.pickup.n){
     const pb = $("#pkbanner");
@@ -1075,7 +1071,6 @@ async function viewResult(run){
       } else if (st.state === "stopped"){
         pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "pickups"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;
       } else pb.innerHTML = "";
-      if (st.state !== "running") softCard();
     };
     drawBanner(r.pickup);
     if (r.pickup.state === "running"){
