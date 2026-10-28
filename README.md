@@ -42,7 +42,7 @@ The cut, the effects and the finish come from the song itself.
 
 **A theme sets the world.** Type a line into the Director's `theme` box ("a retro-futurist 1970s space station, orange and teal light") and it decides who the characters are, what they wear, where every shot happens, the light and the colour grade; the pack still decides the edit. The line is expanded once into a small world bible by Gemma 3, the LTX-2.3 text encoder you already have, through ComfyUI's own Generate Text, and cached. **OneShot MV: Theme Preview** shows that bible before you spend a run on it.
 
-The Director does the whole run from one press of Queue:
+The Director does the whole run from one click of Run:
 
 1. **Listens.**
    - Beats, bars, sections, loudness and the drop (`fv/beat.py`).
@@ -127,7 +127,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 | **OneShot MV: Theme Preview** | Shows what a theme turns into: characters, outfits, places, light, in-scene actions and the grade. |
 | **OneShot MV: Lip Sync Repair** | Re-draws the mouth of any clip to an audio track with LatentSync 1.6. |
 | **OneShot MV: Face Match** | Moves and scales an edited keyframe so its face sits where the reference frame's face is (used for the pose-matched looks). |
-| **OneShot MV: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
+| **OneShot MV: Assemble** | Cuts a run together. Run it again to re-cut with different FX intensity; nothing re-renders. |
 | **OneShot MV: Run Result** | Says where a run is and, once it's finished, returns the final video as a job output (used by `sdk_run.py` and other API clients). |
 | **OneShot MV: Finish** | A pack's finish on any frames. |
 | **OneShot MV: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
@@ -165,18 +165,19 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
 ## Use it
 
-**In ComfyUI.** Open one of the example workflows (Workflow → Browse Templates → OneShot MV, or `example_workflows/`):
-- `OneShotMV_Voice.json`: a song in, the crowd or artist cut out. For the artist pack, un-bypass the Load Image node.
+**In ComfyUI.** Open one of the example workflows: **Templates** in the left sidebar, then **Extensions → ComfyUI-OneShotMV** (or drag a file from `example_workflows/` onto the page):
+- `OneShotMV_App.json`: the simplest way in. It opens as an **app** (ComfyUI's App mode): a song, a World line and a few settings on the right, **Run**, and the results in the middle. **App / Graph** at the top left shows the node graph behind it.
+- `OneShotMV_Voice.json`: the same run as a node graph with every setting. For the artist pack, un-bypass the Load Image node.
 - `OneShotMV_Motion.json`: a song and a dance clip in.
 - `OneShotMV_Recut.json`: re-cut a finished run with different FX intensity.
 
-Press Queue once. The Director queues every job, and the finished video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`. Next to it you'll find:
+Run it once with **Make the video** (`queue_renders`) off to see the plan, then again with it on. The Director queues every job, and the finished video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`. Next to it you'll find:
 - the plan;
 - the QC report;
 - the EDL;
 - every portrait, clip and job.
 
-To re-roll one shot, re-queue its file from `<run>/jobs/`, then re-cut.
+To re-roll one shot, queue its file from `<run>/jobs/` again, then re-cut.
 
 **With the Comfy SDK** (`sdk_run.py`): one command takes a song and a World line to a finished MP4 through the Comfy API v2.
 1. The SDK uploads the song and runs the Director, then prints the shot plan (the same preview the Run summary shows).

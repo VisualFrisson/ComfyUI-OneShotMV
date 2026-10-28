@@ -1,0 +1,710 @@
+{
+ "id": "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01",
+ "revision": 0,
+ "last_node_id": 5,
+ "last_link_id": 3,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "MarkdownNote",
+   "pos": [
+    0,
+    0
+   ],
+   "size": [
+    440,
+    760
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "How it works",
+   "properties": {
+    "Node name for S&R": "MarkdownNote"
+   },
+   "widgets_values": [
+    "## OneShot MV: app\n\nThis workflow opens as an **app**: the settings on the right, the results in the middle. **App / Graph** at the top left switches to this node graph and back. It is the Voice workflow with the main settings shown and friendlier names.\n\n**One performance, many performers.** Load a song, write a World, click **Run**.\n\n**1. Preview first**\nLeave **Make the video** off and click **Run**. The Director:\n- analyses the song,\n- writes the World,\n- plans every shot.\n\n**The plan** lists every shot: time, energy, who, wearing what, and where. Nothing renders yet. Change the World line if you need to, turn **Make the video** on, and click **Run** again. The song analysis and the World are cached, so the second run starts faster.\n\n**2. The World (theme)**\nOne line is enough: *the gladiator games in ancient Rome*. It decides who the characters are, what they wear, the places, the light and the grade.\n\nFor more control, write three parts separated by semicolons: the people in the order you want them, then the places, then the light. For example: *the gladiator games in ancient Rome, all invented adults: a murmillo gladiator in a crested bronze helmet, a retiarius with a net and trident, the emperor in a purple toga ...; the sand of the packed Colosseum, the imperial box; hard midday sun*.\n\nThe characters you name are cast first, in that order (**cast_order** `as written`; `mixed` shuffles them). Every shot is a different person.\n\n**The edit**\nThe song is mapped into three energy levels, each cut its own way (**cuts_low / cuts_medium / cuts_high**):\n- **low** (the intro, quiet bridges): a cut every 2 bars.\n- **medium** (verses, builds): a cut every bar.\n- **high** (choruses, the drop): cuts to the music, each to a new face in the same spot.\n\n**audio_fx**: `subtle` (the default) adds flash, zoom, glow and colour split on the drums. `intense` is stronger and adds a motion-blurred twitch. `none` turns them off.\n\n**crowd**: `auto` puts a soft-focus crowd behind the singers when the World is a packed spectacle (an arena, a stadium, crowded stands); otherwise nobody else is in frame.\n\n**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync. A vision check looks at every picture before any video is made: one person, the right gender, no stray glasses or writing, period-right clothes.\n\n**broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. 0 turns it off.\n\nThe finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.\n\n**Packs**\n- **crowd**: a new face every shot.\n- **eras**: invented archetypes through the decades.\n- **artist**: one singer from a photo. Un-bypass **Load Image**, pick the photo and set the pack to `artist`.\n\n**preset**: `quality` is LTX-2.3 in 3 stages at 50 fps; `fast` uses the same model at 25 fps with fewer steps.\n\n**seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.\n\nUse music you have the rights to."
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 2,
+   "type": "LoadAudio",
+   "pos": [
+    450,
+    0
+   ],
+   "size": [
+    320,
+    180
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "Song",
+     "localized_name": "audio",
+     "name": "audio",
+     "type": "COMBO",
+     "widget": {
+      "name": "audio"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "audioUI",
+     "name": "audioUI",
+     "type": "AUDIO_UI",
+     "widget": {
+      "name": "audioUI"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "AUDIOUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "AUDIO",
+     "name": "AUDIO",
+     "type": "AUDIO",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "title": "Song",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.39.0",
+    "Node name for S&R": "LoadAudio"
+   },
+   "widgets_values": [
+    "song.mp3",
+    null
+   ]
+  },
+  {
+   "id": 3,
+   "type": "LoadImage",
+   "pos": [
+    450,
+    220
+   ],
+   "size": [
+    320,
+    340
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "image",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "IMAGE",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      2
+     ]
+    },
+    {
+     "localized_name": "MASK",
+     "name": "MASK",
+     "type": "MASK",
+     "links": []
+    }
+   ],
+   "title": "Artist photo (artist pack only)",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.39.0",
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "artist.png",
+    "image"
+   ]
+  },
+  {
+   "id": 4,
+   "type": "FVDirector",
+   "pos": [
+    800,
+    0
+   ],
+   "size": [
+    380,
+    830
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "audio",
+     "name": "audio",
+     "type": "AUDIO",
+     "link": 1
+    },
+    {
+     "localized_name": "artist_image",
+     "name": "artist_image",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "localized_name": "dance_video",
+     "name": "dance_video",
+     "shape": 7,
+     "type": "VIDEO",
+     "link": null
+    },
+    {
+     "localized_name": "mode",
+     "name": "mode",
+     "type": "COMBO",
+     "widget": {
+      "name": "mode"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "pack",
+     "name": "pack",
+     "type": "COMBO",
+     "widget": {
+      "name": "pack"
+     },
+     "link": null
+    },
+    {
+     "label": "Format",
+     "localized_name": "format",
+     "name": "format",
+     "type": "COMBO",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "label": "Quality",
+     "localized_name": "preset",
+     "name": "preset",
+     "type": "COMBO",
+     "widget": {
+      "name": "preset"
+     },
+     "link": null
+    },
+    {
+     "label": "Length (seconds)",
+     "localized_name": "seconds",
+     "name": "seconds",
+     "type": "FLOAT",
+     "widget": {
+      "name": "seconds"
+     },
+     "link": null
+    },
+    {
+     "label": "Start at (second)",
+     "localized_name": "start",
+     "name": "start",
+     "type": "FLOAT",
+     "widget": {
+      "name": "start"
+     },
+     "link": null
+    },
+    {
+     "label": "Seed",
+     "localized_name": "seed",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "twins",
+     "name": "twins",
+     "type": "COMBO",
+     "widget": {
+      "name": "twins"
+     },
+     "link": null
+    },
+    {
+     "label": "Make the video",
+     "localized_name": "queue_renders",
+     "name": "queue_renders",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "queue_renders"
+     },
+     "link": null
+    },
+    {
+     "label": "World",
+     "localized_name": "theme",
+     "name": "theme",
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "theme"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "dance_video_path",
+     "name": "dance_video_path",
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "dance_video_path"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "run_name",
+     "name": "run_name",
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "run_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "twin_editor",
+     "name": "twin_editor",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "twin_editor"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "guide_strength",
+     "name": "guide_strength",
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "guide_strength"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "queue_assemble",
+     "name": "queue_assemble",
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "queue_assemble"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "framing",
+     "name": "framing",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "framing"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "artist_image_path",
+     "name": "artist_image_path",
+     "shape": 7,
+     "type": "STRING",
+     "widget": {
+      "name": "artist_image_path"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "broll_share",
+     "name": "broll_share",
+     "shape": 7,
+     "type": "FLOAT",
+     "widget": {
+      "name": "broll_share"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "broll_style",
+     "name": "broll_style",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "broll_style"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "lip_repair",
+     "name": "lip_repair",
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "lip_repair"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "qc_retries",
+     "name": "qc_retries",
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "qc_retries"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "staged",
+     "name": "staged",
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "staged"
+     },
+     "link": null
+    },
+    {
+     "label": "Cuts: quiet parts",
+     "localized_name": "cuts_low",
+     "name": "cuts_low",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "cuts_low"
+     },
+     "link": null
+    },
+    {
+     "label": "Cuts: verses",
+     "localized_name": "cuts_medium",
+     "name": "cuts_medium",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "cuts_medium"
+     },
+     "link": null
+    },
+    {
+     "label": "Cuts: choruses and drops",
+     "localized_name": "cuts_high",
+     "name": "cuts_high",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "cuts_high"
+     },
+     "link": null
+    },
+    {
+     "label": "Audio FX",
+     "localized_name": "audio_fx",
+     "name": "audio_fx",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "audio_fx"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "look_groups",
+     "name": "look_groups",
+     "shape": 7,
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "look_groups"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cast_order",
+     "name": "cast_order",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "cast_order"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "crowd",
+     "name": "crowd",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "crowd"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "summary",
+     "name": "summary",
+     "type": "STRING",
+     "links": [
+      3
+     ]
+    },
+    {
+     "localized_name": "run_dir",
+     "name": "run_dir",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "FVDirector"
+   },
+   "widgets_values": [
+    "voice",
+    "crowd",
+    "16:9",
+    "quality",
+    30,
+    -1,
+    1,
+    "fixed",
+    "auto",
+    false,
+    "the gladiator games in ancient Rome",
+    "",
+    "",
+    "klein",
+    1,
+    true,
+    "mixed",
+    "",
+    0.125,
+    "mix",
+    false,
+    2,
+    true,
+    "every 2 bars",
+    "every bar",
+    "to the music (subtle)",
+    "subtle",
+    false,
+    "as written",
+    "auto"
+   ],
+   "title": "OneShot MV: Director"
+  },
+  {
+   "id": 5,
+   "type": "PreviewAny",
+   "pos": [
+    1210,
+    0
+   ],
+   "size": [
+    420,
+    260
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "source",
+     "name": "source",
+     "type": "*",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "STRING",
+     "name": "STRING",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "title": "The plan",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.39.0",
+    "Node name for S&R": "PreviewAny"
+   },
+   "widgets_values": []
+  }
+ ],
+ "links": [
+  [
+   1,
+   2,
+   0,
+   4,
+   0,
+   "AUDIO"
+  ],
+  [
+   2,
+   3,
+   0,
+   4,
+   1,
+   "IMAGE"
+  ],
+  [
+   3,
+   4,
+   0,
+   5,
+   0,
+   "STRING"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.9,
+   "offset": [
+    40,
+    40
+   ]
+  },
+  "linearData": {
+   "inputs": [
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:2:audio",
+     "audio",
+     {
+      "description": "A song you have the rights to use"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:theme",
+     "theme",
+     {
+      "height": 150,
+      "description": "Who, where, what light. One line is enough."
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:queue_renders",
+     "queue_renders",
+     {
+      "description": "Off: just the shot plan, in about a minute"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:seconds",
+     "seconds",
+     {
+      "description": "0 = the whole song"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:start",
+     "start",
+     {
+      "description": "-1 = the strongest part"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:format",
+     "format",
+     {
+      "description": "9:16 for phones"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:preset",
+     "preset",
+     {
+      "description": "fast = a quicker test"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:audio_fx",
+     "audio_fx",
+     {
+      "description": "Flash, zoom and glow on the drums"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:cuts_low",
+     "cuts_low",
+     {
+      "description": "Intro and quiet bridges"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:cuts_medium",
+     "cuts_medium",
+     {
+      "description": "Verses and builds"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:cuts_high",
+     "cuts_high",
+     {
+      "description": "Choruses and drops"
+     }
+    ],
+    [
+     "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:seed",
+     "seed",
+     {
+      "description": "Change it for a new cast"
+     }
+    ]
+   ],
+   "outputs": [
+    5
+   ]
+  },
+  "linearMode": true
+ },
+ "version": 0.4
+}
