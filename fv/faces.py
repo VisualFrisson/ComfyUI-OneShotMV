@@ -166,7 +166,7 @@ def tracks_for_run(run_dir: str, renders: list[dict], log=None) -> dict:
             with open(cache_p, "w", encoding="utf-8") as fh:
                 fh.write(txt)
         except Exception as e:
-            print(f"[FrissonVision] face cache not saved: {e}")
+            print(f"[OneShotMV] face cache not saved: {e}")
     return out
 
 
@@ -238,7 +238,7 @@ def face_match(image, reference, max_scale: float = 2.2, log=print):
     b = (reference[0].clamp(0, 1) * 255).byte().cpu().numpy()
     fa, fb = detect(a), detect(b)
     if fa is None or fb is None:
-        log(f"[FrissonVision] face match: no face in {'image' if fa is None else 'reference'}; unchanged")
+        log(f"[OneShotMV] face match: no face in {'image' if fa is None else 'reference'}; unchanged")
         return image
     t4 = image.permute(0, 3, 1, 2)
 
@@ -268,5 +268,5 @@ def face_match(image, reference, max_scale: float = 2.2, log=print):
         cur = detect((out[0] * 255).byte().cpu().numpy())
         if cur is None or (abs(cur[0] - fb[0]) + abs(cur[1] - fb[1]) < 0.02 and abs(cur[2] / fb[2] - 1) < 0.05):
             break
-    log(f"[FrissonVision] face match: scale {sc:.2f}, shift {dx:+.2f} {dy:+.2f}")
+    log(f"[OneShotMV] face match: scale {sc:.2f}, shift {dx:+.2f} {dy:+.2f}")
     return out

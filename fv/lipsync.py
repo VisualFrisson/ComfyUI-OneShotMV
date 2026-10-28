@@ -321,7 +321,7 @@ def score_run(run_dir: str, *, leads_only: bool = True, every_take: bool = False
                 res = {"ok": False, "why": f"error: {e}"}
             res.pop("curve", None)
             out[os.path.basename(local)] = dict(res, id=r["id"], role=r["role"], size=r.get("size"))
-            log(f"[FrissonVision] lip sync {os.path.basename(local)}: {res}")
+            log(f"[OneShotMV] lip sync {os.path.basename(local)}: {res}")
     json.dump(out, open(os.path.join(run_dir, "lipsync.json"), "w", encoding="utf-8"), indent=1)
     confs = [v["conf"] for v in out.values() if v.get("ok")]
     msg = (f"{len(confs)} takes scored: SyncNet confidence median {np.median(confs):.2f} "

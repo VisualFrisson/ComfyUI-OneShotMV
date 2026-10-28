@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## Frisson Vision: re-cut\n\nRe-cuts a finished run without re-rendering anything. Paste the run folder (it is printed by the Director) and set **fx_intensity**:\n- 0 = a clean cut;\n- 1 = the house style;\n- 2 to 3 = heavier.\n\nThe cut is re-derived from the pack's edit settings each time."
+    "## OneShot MV: re-cut\n\nRe-cuts a finished run without re-rendering anything. Paste the run folder (it is printed by the Director) and set **fx_intensity**:\n- 0 = a clean cut;\n- 1 = the house style;\n- 2 to 3 = heavier.\n\nThe cut is re-derived from the pack's edit settings each time."
    ],
    "title": "How it works"
   },
@@ -66,7 +66,7 @@
     1.0,
     true
    ],
-   "title": "Frisson Vision: Assemble"
+   "title": "OneShot MV: Assemble"
   },
   {
    "id": 3,

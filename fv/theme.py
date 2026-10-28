@@ -5,7 +5,7 @@ characters are, what they wear, where they are, the light, what they do in wide 
 colour grade, as lists. Casting (casting.apply_theme) then combines those lists per performer
 the way a pack does, so a 60-shot run never repeats a look and every shot stays in the world.
 
-The model is Gemma 3 12B, the LTX-2.3 text encoder every Frisson Vision install already has
+The model is Gemma 3 12B, the LTX-2.3 text encoder every OneShot MV install already has
 (run through ComfyUI's own Generate Text), so a theme costs about a minute and no download.
 Without it the theme falls back to templates built around the theme sentence.
 Results are cached per theme + seed in output/frissonvision/themes/."""
@@ -471,7 +471,7 @@ def llm(prompt: str, seed: int = 1, max_length: int = 1600, log=print) -> str | 
                     thinking=False, use_default_template=True)
         return str(out[0])
     except Exception as e:  # never let the theme stop a run
-        log(f"[FrissonVision] theme: the language model failed ({e}); using templates")
+        log(f"[OneShotMV] theme: the language model failed ({e}); using templates")
         return None
 
 
@@ -767,7 +767,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             break
         d = _parse(text)
         if not d:
-            log("[FrissonVision] theme: could not read the model's answer, trying again")
+            log("[OneShotMV] theme: could not read the model's answer, trying again")
             continue
         lists = {k: _clean_list(d.get(k)) for k in COUNTS}
         for k in ("actions", "places", "poses"):
@@ -791,7 +791,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                 bible["characters"] = chars
                 bible["n_main"] = len(chars)  # the World line's own characters come first in the cast
             break
-        log("[FrissonVision] theme: the model's answer was missing lists, trying again")
+        log("[OneShotMV] theme: the model's answer was missing lists, trying again")
     if bible is None:
         bible = fallback(theme)
     bible["who"] = _people([_adults(w) for w in bible["who"]])
@@ -906,11 +906,11 @@ def _true_genders(chars: list[dict], theme: str, seed: int, dump, log=print) -> 
     wrong = [i for i, c in enumerate(chars)
              if c.get("gender") and held.get((c.get("role") or c["who"].split(",")[0]).lower(), c["gender"]) != c["gender"]]
     if not wrong:
-        log("[FrissonVision] theme: every role has its real gender")
+        log("[OneShotMV] theme: every role has its real gender")
         return 0
     want = [(chars[i].get("role") or chars[i]["who"].split(",")[0], held[(chars[i].get("role") or chars[i]["who"].split(",")[0]).lower()])
             for i in wrong]
-    log("[FrissonVision] theme: wrong gender for " + ", ".join(f"{r} (should be {g})" for r, g in want))
+    log("[OneShotMV] theme: wrong gender for " + ", ".join(f"{r} (should be {g})" for r, g in want))
     redo = {}
     for b in range(0, len(want), EXTRA_BATCH):
         batch = want[b:b + EXTRA_BATCH]
@@ -1031,7 +1031,7 @@ def crowd_dress(bible: dict, seed: int = 1, out_root: str | None = None, log=pri
                 json.dump(bible, f, indent=1, ensure_ascii=False)
         except Exception:
             pass
-    log(f"[FrissonVision] theme: the crowd wears {line}")
+    log(f"[OneShotMV] theme: the crowd wears {line}")
     return line
 
 
@@ -1091,7 +1091,7 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
     # without the emperor, the patrician matron, the young noblewoman and the praetorian guard)
     roles: list = [(r, _gender_of("", r, "", "") or "") for r in _named_roles(theme) if not _has_role(r, taken)]
     if roles:
-        log(f"[FrissonVision] theme: the World line's own characters still to cast: {', '.join(r for r, _ in roles)}")
+        log(f"[OneShotMV] theme: the World line's own characters still to cast: {', '.join(r for r, _ in roles)}")
     for attempt in range(3):
         need = n - len(chars) - len(roles) + 4
         if need <= 4:
@@ -1106,9 +1106,9 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
         got = _role_list(text)
         off = [r for r, _ in got if _offstage(r, theme)]
         if off:
-            log(f"[FrissonVision] theme: left out (behind the scenes): {', '.join(off)}")
+            log(f"[OneShotMV] theme: left out (behind the scenes): {', '.join(off)}")
         roles += [(r, g) for r, g in got if r.lower() not in known and r not in off]
-    log(f"[FrissonVision] theme: {len(roles)} new roles: {', '.join(f'{r} ({g or chr(63)})' for r, g in roles)}")
+    log(f"[OneShotMV] theme: {len(roles)} new roles: {', '.join(f'{r} ({g or chr(63)})' for r, g in roles)}")
     women = sum(1 for c in chars if c.get("gender") == "woman")
     men = sum(1 for c in chars if c.get("gender") == "man")
     queue = []
@@ -1143,7 +1143,7 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
             added += 1
         got = {(c.get("role") or "").lower() for c in new}
         queue += [(r, g) for r, g in batch if r.lower() not in got and _role(r).lower() not in got][:2]  # a dropped one, once more
-        log(f"[FrissonVision] theme: cast {len(chars)} characters (+{added} of {len(batch)} asked)")
+        log(f"[OneShotMV] theme: cast {len(chars)} characters (+{added} of {len(batch)} asked)")
     _true_genders(chars, theme, seed, dump, log)
     bible["genders_checked"] = True
     if chars:  # saved with the gender check done (and any new characters)

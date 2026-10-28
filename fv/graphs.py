@@ -1,4 +1,4 @@
-"""ComfyUI API-format graph builders for every Frisson Vision job.
+"""ComfyUI API-format graph builders for every OneShot MV job.
 
 All file inputs go through the pack's path loaders (FVLoadImagePath / FVLoadVideoPath /
 FVLoadAudioPath), which do not check that the file exists when the job is queued, so the

@@ -354,7 +354,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         made.append(f"shot {s['index']} ({why}, {kind}): {line!r} -> {img[:120]}")
     for i, g in enumerate(keys + clips):
         json.dump(g, open(os.path.join(run_dir, "jobs", f"broll_{i:02d}.json"), "w", encoding="utf-8"), indent=1)
-    log("[FrissonVision] b-roll" + (" candidates" if candidates else "") + ": " + " | ".join(made))
+    log("[OneShotMV] b-roll" + (" candidates" if candidates else "") + ": " + " | ".join(made))
     if candidates:
         return keys, clips
     return (keys + [graphs.free_memory("after b-roll stills").nodes] if keys else []) + clips
@@ -375,7 +375,7 @@ def finalize(p: dict, log=print) -> list[int]:
         share, biggest = qc.path_bars(r["path"])
         r.setdefault("broll", {})["bars"] = round(share, 3)
         if share >= 0.1:
-            log(f"[FrissonVision] b-roll: r{r['id']:03d}R dropped, black bars in {share:.0%} of its frames")
+            log(f"[OneShotMV] b-roll: r{r['id']:03d}R dropped, black bars in {share:.0%} of its frames")
             continue
         clean.append(r)
     ok = clean
@@ -392,5 +392,5 @@ def finalize(p: dict, log=print) -> list[int]:
     for r in cand:
         if r["id"] not in chosen:
             r["unused"] = True
-    log(f"[FrissonVision] b-roll: kept {len(chosen)} of {len(cand)} candidates")
+    log(f"[OneShotMV] b-roll: kept {len(chosen)} of {len(cand)} candidates")
     return chosen

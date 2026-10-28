@@ -3,7 +3,7 @@ the re-rolls (fv/latentsync/). It runs inside the final QC pass on the leads Syn
 scores low; a repaired take replaces the original only when SyncNet scores it clearly higher.
 
 Needs, besides diffusers / kornia / onnxruntime (all in a usual ComfyUI install):
-  custom_nodes/ComfyUI-FrissonVision/weights/latentsync/latentsync_unet.pt   (ByteDance/LatentSync-1.6)
+  custom_nodes/ComfyUI-OneShotMV/weights/latentsync/latentsync_unet.pt   (ByteDance/LatentSync-1.6)
   .../weights/latentsync/whisper/tiny.pt                                      (same repo)
   .../weights/latentsync/sd-vae-ft-mse/{config.json, diffusion_pytorch_model.safetensors}
   ComfyUI/models/insightface/models/buffalo_l/{det_10g.onnx, 2d106det.onnx}"""
@@ -41,7 +41,7 @@ def model(log=print):
             mm.soft_empty_cache()
         except Exception:
             pass
-        log("[FrissonVision] lip-sync repair: loading LatentSync 1.6")
+        log("[OneShotMV] lip-sync repair: loading LatentSync 1.6")
         _MODEL = LatentSync(WEIGHTS, device="cuda" if torch.cuda.is_available() else "cpu")
     return _MODEL
 

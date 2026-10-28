@@ -1,1 +1,1 @@
-"""Frisson Vision core (pure Python / numpy; torch only in fx/finish/assemble)."""
+"""OneShot MV core (pure Python / numpy; torch only in fx/finish/assemble)."""

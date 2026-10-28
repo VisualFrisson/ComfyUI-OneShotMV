@@ -1,4 +1,4 @@
-"""Frisson Vision planners: song timeline + style pack -> renders + edit decision list.
+"""OneShot MV planners: song timeline + style pack -> renders + edit decision list.
 
 Voice mode
   * The song is cut into shots on bar lines: `shot_bars_loud` bars in loud sections,

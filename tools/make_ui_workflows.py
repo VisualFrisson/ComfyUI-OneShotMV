@@ -6,7 +6,7 @@ import uuid
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(HERE, "example_workflows")
 
-VOICE_NOTE = """## Frisson Vision: voice
+VOICE_NOTE = """## OneShot MV: voice
 
 **One performance, many performers.** Drop in a song and press **Queue**. The Director:
 1. finds the beats, bars, sections and the drop;
@@ -48,7 +48,7 @@ The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. 
 
 Use music you have the rights to."""
 
-MOTION_NOTE = """## Frisson Vision: motion
+MOTION_NOTE = """## OneShot MV: motion
 
 **One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then press **Queue**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts are calm in the quiet parts, a bar a character in the build, and fast on the drop, where a second character flickers in doing the same move.
 
@@ -60,7 +60,7 @@ The finished MP4 lands in `output/frissonvision/runs/<run>/final_<format>.mp4`.
 
 Use music and footage you have the rights to."""
 
-RECUT_NOTE = """## Frisson Vision: re-cut
+RECUT_NOTE = """## OneShot MV: re-cut
 
 Re-cuts a finished run without re-rendering anything. Paste the run folder (it is printed by the Director) and set **fx_intensity**:
 - 0 = a clean cut;
@@ -125,14 +125,14 @@ def voice():
                  outputs=[{"name": "IMAGE", "type": "IMAGE"}, {"name": "MASK", "type": "MASK"}],
                  mode=4, title="Artist photo (artist pack only)")
     d = w.node("FVDirector", [800, 0], [380, 560], director_widgets("voice", "crowd"),
-               inputs=DIRECTOR_IN, outputs=DIRECTOR_OUT, title="Frisson Vision: Director")
+               inputs=DIRECTOR_IN, outputs=DIRECTOR_OUT, title="OneShot MV: Director")
     pv = w.node("PreviewAny", [1210, 0], [420, 260], [],
                 inputs=[{"name": "source", "type": "*"}], outputs=[{"name": "STRING", "type": "STRING"}],
                 title="Run summary")
     w.link(song, 0, d, "audio")
     w.link(art, 0, d, "artist_image")
     w.link(d, 0, pv, "source")
-    w.dump("FrissonVision_Voice.json")
+    w.dump("OneShotMV_Voice.json")
 
 
 def motion():
@@ -144,14 +144,14 @@ def motion():
                  outputs=[{"name": "VIDEO", "type": "VIDEO"}], title="Dance clip")
     d = w.node("FVDirector", [800, 0], [380, 560],
                director_widgets("motion", "spotlight", seconds=16.0),
-               inputs=DIRECTOR_IN, outputs=DIRECTOR_OUT, title="Frisson Vision: Director")
+               inputs=DIRECTOR_IN, outputs=DIRECTOR_OUT, title="OneShot MV: Director")
     pv = w.node("PreviewAny", [1210, 0], [420, 260], [],
                 inputs=[{"name": "source", "type": "*"}], outputs=[{"name": "STRING", "type": "STRING"}],
                 title="Run summary")
     w.link(song, 0, d, "audio")
     w.link(vid, 0, d, "dance_video")
     w.link(d, 0, pv, "source")
-    w.dump("FrissonVision_Motion.json")
+    w.dump("OneShotMV_Motion.json")
 
 
 def recut():
@@ -159,14 +159,14 @@ def recut():
     w.node("MarkdownNote", [0, 0], [380, 260], [RECUT_NOTE], title="How it works")
     a = w.node("FVAssemble", [410, 0], [380, 200], ["frissonvision/runs/<run>", "frissonvision/recut", 1.0, True],
                outputs=[{"name": "preview", "type": "IMAGE"}, {"name": "video_path", "type": "STRING"}],
-               title="Frisson Vision: Assemble")
+               title="OneShot MV: Assemble")
     p = w.node("PreviewImage", [820, 0], [420, 420], [], inputs=[{"name": "images", "type": "IMAGE"}])
     w.link(a, 0, p, "images")
-    w.dump("FrissonVision_Recut.json")
+    w.dump("OneShotMV_Recut.json")
 
 
 if __name__ == "__main__":
     voice()
     motion()
     recut()
-    print("wrote", sorted(f for f in os.listdir(OUT) if f.startswith("FrissonVision_")))
+    print("wrote", sorted(f for f in os.listdir(OUT) if f.startswith("OneShotMV_")))

@@ -180,7 +180,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
             fz = importlib.reload(fz)  # nodes.py's hot reload predates this module
             faces = fz.tracks_for_run(run_dir, plan["renders"])
             if not faces:
-                print("[FrissonVision] face tracking unavailable (this OpenCV build has no Haar "
+                print("[OneShotMV] face tracking unavailable (this OpenCV build has no Haar "
                       "cascades, e.g. OpenCV 5): flashes will not be face-aligned. "
                       "pip install \"opencv-python<5\" to enable match cuts.")
         beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
@@ -327,7 +327,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     proc.stdin.close()
     proc.wait()
     if held:
-        print(f"[FrissonVision] {sum(held.values())} lookups held a clip's first/last frame: "
+        print(f"[OneShotMV] {sum(held.values())} lookups held a clip's first/last frame: "
               + ", ".join(f"r{k:03d} x{v}" for k, v in sorted(held.items())))
     edl_path = export.write_edl(plan, os.path.join(run_dir, f"{out_name}.edl"))
     return {"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,

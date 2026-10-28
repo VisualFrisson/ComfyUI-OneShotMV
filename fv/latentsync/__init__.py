@@ -1,4 +1,4 @@
-"""LatentSync 1.6 (ByteDance, Apache-2.0), vendored for Frisson Vision's lip-sync repair pass.
+"""LatentSync 1.6 (ByteDance, Apache-2.0), vendored for OneShot MV's lip-sync repair pass.
 
 Only the inference parts: the 3D UNet (models/), the Whisper-tiny audio encoder (whisper/, from
 openai/whisper via MuseTalk, MIT) and the face alignment (affine_transform.py). The face

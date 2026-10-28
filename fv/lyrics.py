@@ -128,7 +128,7 @@ def transcribe(vocal: np.ndarray, sr: int, log=print, language: str | None = Non
         LAST_TEXT = out["text"]
     except Exception as e:
         LAST_ERROR = f"{type(e).__name__}: {e}"[:300]
-        log(f"[FrissonVision] lyrics: Whisper failed ({LAST_ERROR})")
+        log(f"[OneShotMV] lyrics: Whisper failed ({LAST_ERROR})")
         return []
     finally:
         del asr

@@ -1,4 +1,4 @@
-"""Frisson Vision ComfyUI nodes."""
+"""OneShot MV ComfyUI nodes."""
 from __future__ import annotations
 
 import importlib
@@ -20,7 +20,7 @@ from .fv import lipfix as fv_lipfix
 from .fv import identity as fv_identity
 from .fv import critic as fv_critic
 
-CATEGORY = "Frisson Vision"
+CATEGORY = "OneShot MV"
 _MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_lyrics, fv_broll, fv_lipfix, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
@@ -32,7 +32,7 @@ def _reload():
         try:
             importlib.reload(m)
         except Exception as e:  # keep the old module if an edit is broken
-            print(f"[FrissonVision] reload {m.__name__} failed: {e}")
+            print(f"[OneShotMV] reload {m.__name__} failed: {e}")
 
 
 def _resolve(path: str) -> str:
@@ -203,7 +203,7 @@ class FVLoadAudioPath:
 
 # ------------------------------------------------------------------ the app
 class FVDirector:
-    """Frisson Vision in one press: analyses the song, plans the cut in the chosen style pack,
+    """OneShot MV in one press: analyses the song, plans the cut in the chosen style pack,
     casts the performers and queues every render (grouped by model) plus the final assembly."""
 
     @classmethod
@@ -335,7 +335,7 @@ class FVDirector:
 
 
 class FVAssemble:
-    """Cuts a Frisson Vision run together on the beat, with audio-reactive FX and the finish.
+    """Cuts a OneShot MV run together on the beat, with audio-reactive FX and the finish.
     Queued automatically as the last job of a run; queue it again to re-cut."""
 
     @classmethod
@@ -471,7 +471,7 @@ class FVLipSyncScore:
         _reload()
         if not lipsync.available():
             msg = ("SyncNet weights not found: put syncnet_v2.model and sfd_face.pth in "
-                   "ComfyUI/models/syncnet/ (see the Frisson Vision README)")
+                   "ComfyUI/models/syncnet/ (see the OneShot MV README)")
             return {"ui": {"text": [msg]}, "result": (msg,)}
         res = lipsync.score_run(_resolve(run_dir), leads_only=(which == "lead clips"), every_take=every_take)
         return {"ui": {"text": [res["message"]]}, "result": (res["message"],)}
@@ -497,7 +497,7 @@ class FVFaceMatch:
 
 
 class FVFinish:
-    """The Frisson Vision finish on any frames: learned grade, diffusion, halation, contrast,
+    """The OneShot MV finish on any frames: learned grade, diffusion, halation, contrast,
     gate vignette, grain (settings from a style pack)."""
 
     @classmethod
@@ -563,7 +563,7 @@ class FVLeadPose:
         try:
             from custom_controlnet_aux.dwpose import decode_json_as_poses, draw_poses
         except Exception as e:  # controlnet_aux layout changed: leave the guide as it is
-            print(f"[FrissonVision] lead pose unavailable ({e}); guide unchanged")
+            print(f"[OneShotMV] lead pose unavailable ({e}); guide unchanged")
             return (image,)
         src = pose.pick_lead(frames)
         H_out, W_out = int(image.shape[1]), int(image.shape[2])
@@ -578,7 +578,7 @@ class FVLeadPose:
             canvas = cv2.resize(canvas, (W_out, H_out), interpolation=interp)
             out.append(torch.from_numpy(canvas.astype(np.float32) / 255.0).to(image.device))
         n_multi = sum(1 for f in frames if isinstance(f, dict) and len(f.get("people") or []) > 1)
-        print(f"[FrissonVision] lead pose: {n_multi}/{len(frames)} frames had extra people")
+        print(f"[OneShotMV] lead pose: {n_multi}/{len(frames)} frames had extra people")
         return (torch.stack(out).to(image.dtype),)
 
 
@@ -649,7 +649,7 @@ class FVFreeMemory:
                                          headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=10).read()
         except Exception as e:
-            print(f"[FrissonVision] /free failed: {e}")
+            print(f"[OneShotMV] /free failed: {e}")
         try:
             import comfy.model_management as mm
             mm.unload_all_models()
@@ -742,7 +742,7 @@ class FVLipFix:
         _reload()
         if not fv_lipfix.available():
             msg = ("LatentSync not found: put latentsync_unet.pt, whisper/tiny.pt and sd-vae-ft-mse/ in "
-                   "custom_nodes/ComfyUI-FrissonVision/weights/latentsync/ and insightface buffalo_l in "
+                   "custom_nodes/ComfyUI-OneShotMV/weights/latentsync/ and insightface buffalo_l in "
                    "models/insightface/models/ (see the README)")
             return {"ui": {"text": [msg]}, "result": ("", msg)}
         path = _resolve(video_path)
@@ -782,21 +782,21 @@ NODE_CLASS_MAPPINGS = {
     "FVLoadAudioPath": FVLoadAudioPath,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "FVDirector": "Frisson Vision: Director",
-    "FVFreeMemory": "Frisson Vision: Free Memory",
-    "FVKeep": "Frisson Vision: Keep Models Loaded",
-    "FVOffloadToCPU": "Frisson Vision: Weight Backups to RAM",
-    "FVLeadPose": "Frisson Vision: Lead Dancer Pose",
-    "FVLeadMask": "Frisson Vision: Lead Dancer Only",
-    "FVAssemble": "Frisson Vision: Assemble",
-    "FVFinish": "Frisson Vision: Finish",
-    "FVQC": "Frisson Vision: Take QC",
-    "FVCritic": "Frisson Vision: Vision Check",
-    "FVLoadImagePath": "Frisson Vision: Load Image (path)",
-    "FVLoadVideoPath": "Frisson Vision: Load Video (path)",
-    "FVLoadAudioPath": "Frisson Vision: Load Audio (path)",
-    "FVLipSyncScore": "Frisson Vision: Lip Sync Score",
-    "FVFaceMatch": "Frisson Vision: Face Match",
-    "FVTheme": "Frisson Vision: Theme Preview",
-    "FVLipFix": "Frisson Vision: Lip Sync Repair",
+    "FVDirector": "OneShot MV: Director",
+    "FVFreeMemory": "OneShot MV: Free Memory",
+    "FVKeep": "OneShot MV: Keep Models Loaded",
+    "FVOffloadToCPU": "OneShot MV: Weight Backups to RAM",
+    "FVLeadPose": "OneShot MV: Lead Dancer Pose",
+    "FVLeadMask": "OneShot MV: Lead Dancer Only",
+    "FVAssemble": "OneShot MV: Assemble",
+    "FVFinish": "OneShot MV: Finish",
+    "FVQC": "OneShot MV: Take QC",
+    "FVCritic": "OneShot MV: Vision Check",
+    "FVLoadImagePath": "OneShot MV: Load Image (path)",
+    "FVLoadVideoPath": "OneShot MV: Load Video (path)",
+    "FVLoadAudioPath": "OneShot MV: Load Audio (path)",
+    "FVLipSyncScore": "OneShot MV: Lip Sync Score",
+    "FVFaceMatch": "OneShot MV: Face Match",
+    "FVTheme": "OneShot MV: Theme Preview",
+    "FVLipFix": "OneShot MV: Lip Sync Repair",
 }

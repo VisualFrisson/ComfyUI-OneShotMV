@@ -1,10 +1,10 @@
-# Frisson Vision
+# OneShot MV
 
-**One performance, many performers.** Drop in a song and Frisson Vision makes a music video
-where a different person sings every line. It holds on the verses and cuts on the beat through
-pose-matched looks of the same moment on the drop, drives light and colour from the drums, and
-finishes the picture like film. Drop in a dance clip instead, and a new dancer takes over the
-same choreography.
+**One song, one prompt, one shot: a full music video.** Drop in a song and a one-line World
+("the gladiator games in ancient Rome"), and OneShot MV casts it, plans the cut from the song's
+own energy, and renders a music video where a different invented person sings every line: held
+shots in the intro, a cut every bar in the verses, a new face on the beat in the chorus. Drop in a
+dance clip instead, and a new dancer takes over the same choreography.
 
 Everything runs locally in ComfyUI on open-weights models:
 - **Krea 2** casts the faces.
@@ -40,7 +40,7 @@ The cut, the effects and the finish come from the song itself.
 
 ![Ten frames from a spotlight motion run](media/motion_strip.jpg)
 
-**A theme sets the world.** Type a line into the Director's `theme` box ("a retro-futurist 1970s space station, orange and teal light") and it decides who the characters are, what they wear, where every shot happens, the light and the colour grade; the pack still decides the edit. The line is expanded once into a small world bible by Gemma 3, the LTX-2.3 text encoder you already have, through ComfyUI's own Generate Text, and cached. **Frisson Vision: Theme Preview** shows that bible before you spend a run on it.
+**A theme sets the world.** Type a line into the Director's `theme` box ("a retro-futurist 1970s space station, orange and teal light") and it decides who the characters are, what they wear, where every shot happens, the light and the colour grade; the pack still decides the edit. The line is expanded once into a small world bible by Gemma 3, the LTX-2.3 text encoder you already have, through ComfyUI's own Generate Text, and cached. **OneShot MV: Theme Preview** shows that bible before you spend a run on it.
 
 The Director does the whole run from one press of Queue:
 
@@ -95,7 +95,7 @@ A style pack is one JSON file in `fv/packs/` holding the casting grammar, the ed
 | `spotlight` | motion | One hazy stage under a single spotlight. The dancer's look flickers on the beat between two characters doing the same move, faster as the section builds, with motion trails. |
 | `wardrobe` | motion | A new character and a new world on every switch, with same-move flickers in the loud parts. |
 
-The `crowd` and `spotlight` finishes were measured from reference edits (the Lab mean and standard deviation of their frames). `Frisson Vision: Finish` applies any pack's finish to any frames.
+The `crowd` and `spotlight` finishes were measured from reference edits (the Lab mean and standard deviation of their frames). `OneShot MV: Finish` applies any pack's finish to any frames.
 
 **Framing** (voice):
 - `mixed` (default): wide, medium and close shots in the quiet stretches, medium and close in the build, close-ups on the drop. In the `artist` pack, the wide and medium shots also move the artist somewhere new, doing something: dancing, walking, turning to the camera.
@@ -121,17 +121,17 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
 | Node | Purpose |
 |---|---|
-| **Frisson Vision: Director** | Takes a song, plus an optional artist photo or dance clip. Plans, casts and queues the whole run. |
-| **Frisson Vision: Take QC** | Checks every take, lip sync included, and re-rolls bad ones, then queues the cut (queued by the Director). |
-| **Frisson Vision: Lip Sync Score** | Scores a finished run's lip sync with SyncNet, take by take, into `<run>/lipsync.json`. |
-| **Frisson Vision: Theme Preview** | Shows what a theme turns into: characters, outfits, places, light, in-scene actions and the grade. |
-| **Frisson Vision: Lip Sync Repair** | Re-draws the mouth of any clip to an audio track with LatentSync 1.6. |
-| **Frisson Vision: Face Match** | Moves and scales an edited keyframe so its face sits where the reference frame's face is (used for the pose-matched looks). |
-| **Frisson Vision: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
-| **Frisson Vision: Finish** | A pack's finish on any frames. |
-| **Frisson Vision: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
-| **Frisson Vision: Lead Dancer Pose** | Keeps only the lead dancer in a DWPose guide (queued by the Director for motion runs). |
-| **Frisson Vision: Lead Dancer Only** | Greys out everyone but the lead dancer in a frame before the keyframe edit. |
+| **OneShot MV: Director** | Takes a song, plus an optional artist photo or dance clip. Plans, casts and queues the whole run. |
+| **OneShot MV: Take QC** | Checks every take, lip sync included, and re-rolls bad ones, then queues the cut (queued by the Director). |
+| **OneShot MV: Lip Sync Score** | Scores a finished run's lip sync with SyncNet, take by take, into `<run>/lipsync.json`. |
+| **OneShot MV: Theme Preview** | Shows what a theme turns into: characters, outfits, places, light, in-scene actions and the grade. |
+| **OneShot MV: Lip Sync Repair** | Re-draws the mouth of any clip to an audio track with LatentSync 1.6. |
+| **OneShot MV: Face Match** | Moves and scales an edited keyframe so its face sits where the reference frame's face is (used for the pose-matched looks). |
+| **OneShot MV: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
+| **OneShot MV: Finish** | A pack's finish on any frames. |
+| **OneShot MV: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
+| **OneShot MV: Lead Dancer Pose** | Keeps only the lead dancer in a DWPose guide (queued by the Director for motion runs). |
+| **OneShot MV: Lead Dancer Only** | Greys out everyone but the lead dancer in a frame before the keyframe edit. |
 | Load Image / Video / Audio (path), Free Memory | Helpers the Director's jobs use. |
 
 ## Install
@@ -156,7 +156,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
    They come from the [Oxford VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/), and are also mirrored in [syncnet-python](https://github.com/nawta/SyncNet_py309_313/tree/main/weights). The weights are for research use (Creative Commons Attribution), so they are not shipped here. The model code is vendored in `fv/syncnet/` (MIT and Apache-2.0, see its NOTICE). Without the weights, take QC skips the lip-sync check.
 6. **Lyrics for b-roll (optional).** [openai/whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) (about 1.6 GB, MIT) in `ComfyUI/models/whisper/whisper-large-v3-turbo/` (the folder comfy-mtb's Whisper loader also uses). Without it, b-roll illustrates the theme or pack world instead of the words.
-7. **Lip-sync repair (optional).** In `custom_nodes/ComfyUI-FrissonVision/weights/latentsync/`:
+7. **Lip-sync repair (optional).** In `custom_nodes/ComfyUI-OneShotMV/weights/latentsync/`:
    - `latentsync_unet.pt` and `whisper/tiny.pt` from [ByteDance/LatentSync-1.6](https://huggingface.co/ByteDance/LatentSync-1.6);
    - `sd-vae-ft-mse/` (`config.json` and `diffusion_pytorch_model.safetensors`) from [stabilityai/sd-vae-ft-mse](https://huggingface.co/stabilityai/sd-vae-ft-mse).
 
@@ -164,10 +164,10 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 
 ## Use it
 
-**In ComfyUI.** Open one of the example workflows (Workflow → Browse Templates → Frisson Vision, or `example_workflows/`):
-- `FrissonVision_Voice.json`: a song in, the crowd or artist cut out. For the artist pack, un-bypass the Load Image node.
-- `FrissonVision_Motion.json`: a song and a dance clip in.
-- `FrissonVision_Recut.json`: re-cut a finished run with different FX intensity.
+**In ComfyUI.** Open one of the example workflows (Workflow → Browse Templates → OneShot MV, or `example_workflows/`):
+- `OneShotMV_Voice.json`: a song in, the crowd or artist cut out. For the artist pack, un-bypass the Load Image node.
+- `OneShotMV_Motion.json`: a song and a dance clip in.
+- `OneShotMV_Recut.json`: re-cut a finished run with different FX intensity.
 
 Press Queue once. The Director queues every job, and the finished video lands in `output/frissonvision/runs/<run>/final_<format>.mp4`. Next to it you'll find:
 - the plan;

@@ -34,7 +34,7 @@ def write_edl(plan: dict, path: str) -> str:
             else:
                 cut.append(x)
         flat = sorted(cut + [e], key=lambda x: x["f0"])
-    lines = [f"TITLE: Frisson Vision {plan['pack']} {plan['format']}", "FCM: NON-DROP FRAME", ""]
+    lines = [f"TITLE: OneShot MV {plan['pack']} {plan['format']}", "FCM: NON-DROP FRAME", ""]
     for i, e in enumerate(flat, 1):
         r = renders.get(e["render"], {})
         name = os.path.basename(r.get("path", f"render_{e['render']}"))

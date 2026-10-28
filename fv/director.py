@@ -30,7 +30,7 @@ def server_url() -> str:
     return f"http://127.0.0.1:{port}"
 
 
-def queue_prompt(graph: dict, url: str | None = None, client_id: str = "frissonvision", front: bool = False) -> str:
+def queue_prompt(graph: dict, url: str | None = None, client_id: str = "oneshot-mv", front: bool = False) -> str:
     """front=True jumps the queue. ComfyUI runs the *latest* front-queued prompt first, so queue
     a chain that must run in order with queue_chain_front()."""
     body = {"prompt": graph, "client_id": client_id}
@@ -124,7 +124,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         bible = themes.expand(theme, seed=seed, out_root=out_root, log=log)
         pk = casting.apply_theme(pk, bible)
         pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
-        log("[FrissonVision] " + themes.summary(bible).replace("\n", "\n[FrissonVision] "))
+        log("[OneShotMV] " + themes.summary(bible).replace("\n", "\n[OneShotMV] "))
     if cuts:  # the user's cut per energy level (low / medium / high), over the pack's defaults
         pk["edit"] = dict(pk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items() if m})
     if mode == "voice":
@@ -154,7 +154,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         p = planner.plan_motion(tl, pk, clip_frames=n, clip_fps=cfps, fmt=fmt, preset=preset,
                                 seconds=seconds, start=start, seed=seed)
         p["dance_path"] = dance_path
-    log(f"[FrissonVision] {mode} plan: {len(p['renders'])} renders, window {p['song_t0']:.2f}-{p['song_t1']:.2f}s, "
+    log(f"[OneShotMV] {mode} plan: {len(p['renders'])} renders, window {p['song_t0']:.2f}-{p['song_t1']:.2f}s, "
         f"tempo {p['tempo']}")
 
     # stems for the window (+1 s margins): vocals drive lip sync, drums drive the FX
@@ -186,9 +186,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 p["lyrics"] = {"words": words, "lines": lyrics.lines(words)}
                 if lyrics.LAST_ERROR:
                     p["lyrics_error"] = lyrics.LAST_ERROR
-                log(f"[FrissonVision] lyrics: {len(words)} words, {len(p['lyrics']['lines'])} lines")
+                log(f"[OneShotMV] lyrics: {len(words)} words, {len(p['lyrics']['lines'])} lines")
             except Exception as e:
-                log(f"[FrissonVision] lyrics skipped ({e})")
+                log(f"[OneShotMV] lyrics skipped ({e})")
 
     rsize = formats.render_size(fmt, preset)
     jobs: list[tuple[str, dict]] = []
@@ -216,7 +216,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
                 if dress and isinstance(pk["casting"].get("theme"), dict):
                     pk["casting"]["theme"]["crowd_dress"] = dress
             except Exception as e:  # never let it stop a run
-                log(f"[FrissonVision] crowd dress skipped ({e})")
+                log(f"[OneShotMV] crowd dress skipped ({e})")
         p["cast_order"], p["crowd"] = (cast_order or "as written"), pk["casting"]["crowd_mode"]
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
         s1, s2 = formats.portrait_size(fmt)
@@ -339,7 +339,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             try:
                 stills, clips = broll.plan(p, run_dir, pk, log=log, candidates=True)
             except Exception as e:  # never let b-roll block a run
-                log(f"[FrissonVision] b-roll skipped ({e})")
+                log(f"[OneShotMV] b-roll skipped ({e})")
                 stills, clips = [], []
             jobs[free_idx:free_idx] = [(f"brollk{i:02d}", g) for i, g in enumerate(stills)]
             last_a = max([i for i, (n, _) in enumerate(jobs) if re.match(r"^r\d{3}A$", n)] + [len(jobs) - 1])
@@ -397,7 +397,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         first = [g for name, g in jobs
                  if not (name == "zz_assemble" and (not queue_assemble or use_qc)) and name not in deferred]
         ids = queue_chain_front(first, server_url())
-    summary = (f"Frisson Vision run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
+    summary = (f"OneShot MV run '{run_id}': {mode} / {pack} / {fmt} / {label}\n"
                + (themes.summary(bible) + "\n" if bible else "") + emap +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
@@ -405,7 +405,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     try:
         summary += "\n\n" + plan_preview(p, queued=queue)
     except Exception as e:  # never let the preview stop a run
-        log(f"[FrissonVision] preview skipped ({e})")
+        log(f"[OneShotMV] preview skipped ({e})")
     return {"run_dir": run_dir, "run_id": run_id, "run_rel": rel, "jobs": len(jobs), "prompt_ids": ids,
             "summary": summary, "bundle": os.path.join(run_dir, "jobs.json")}
 
@@ -624,7 +624,7 @@ def _looks_jobs(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict
                   pinned=[b["id"] for b in looks[1:] if not b.get("unusable")],
                   path=os.path.join(run_dir, f"{name}_00001_.mp4"))
         clip_jobs.append(g)
-    log(f"[FrissonVision] looks: {len(key_jobs)} keyframes, {len(clip_jobs)} clips "
+    log(f"[OneShotMV] looks: {len(key_jobs)} keyframes, {len(clip_jobs)} clips "
         f"({len(p.get('look_groups', []))} look groups)")
     return key_jobs, clip_jobs
 
@@ -669,7 +669,7 @@ def _attach_groups(p: dict, run_dir: str, log=print) -> None:
             b.pop("unusable", None)
             notes.append(f"r{b['id']:03d}B {o - tau:+.0f} f")
         gs["attached"], gs["switches"] = True, sw
-        log(f"[FrissonVision] look group g{gs['shot']:03d}: switches {[x['frame'] for x in sw]} "
+        log(f"[OneShotMV] look group g{gs['shot']:03d}: switches {[x['frame'] for x in sw]} "
             f"(pins {gs.get('pins')}); " + ", ".join(notes))
 
 
@@ -720,7 +720,7 @@ def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[
         r.pop("unusable", None)
         ids.append(r["id"])
     if ids:
-        log(f"[FrissonVision] looks: {len(ids)} group looks get their own clip")
+        log(f"[OneShotMV] looks: {len(ids)} group looks get their own clip")
     return keys, clips, set(ids)
 
 
@@ -827,7 +827,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             if identity.available() and os.path.exists(p["artist_path"]):
                 ref = identity.embed_path(p["artist_path"])
         except Exception as e:
-            log(f"[FrissonVision] identity check off ({e})")
+            log(f"[OneShotMV] identity check off ({e})")
 
     def checks(r):  # the face checks a render gets: framing for every sung shot, identity for the artist
         if not voice or r["role"] not in ("A", "B"):
@@ -1119,7 +1119,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     try:
                         res = lipfix.repair(r["path"], vocal, sr, seek, out, log=log)
                     except Exception as e:  # never let the repair block the cut
-                        log(f"[FrissonVision] lip-sync repair of r{r['id']:03d}A failed: {e}")
+                        log(f"[OneShotMV] lip-sync repair of r{r['id']:03d}A failed: {e}")
                         continue
                     if not res:
                         continue
@@ -1139,7 +1139,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     fixed.append(f"r{r['id']:03d}A {before:.1f}->{after:.1f}{' kept' if better else ''}")
                 lipfix.free()
                 if fixed:
-                    log("[FrissonVision] lip-sync repair: " + ", ".join(fixed))
+                    log("[OneShotMV] lip-sync repair: " + ", ".join(fixed))
             p["lipfix_done"] = True
             p["lipfix_report"] = fixed
         shots = {s["index"]: s for s in p.get("shots", []) if "index" in s}
@@ -1161,7 +1161,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 from . import broll
                 post = broll.plan(p, run_dir, casting.load_pack(p["pack"]), log=log)
             except Exception as e:  # never let b-roll block the cut
-                log(f"[FrissonVision] b-roll skipped ({e})")
+                log(f"[OneShotMV] b-roll skipped ({e})")
                 post = []
             p["broll_planned"] = True
         rerolls = list(post)  # SDK clients run these themselves (qc bundle)
@@ -1175,7 +1175,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                     from . import broll
                     broll.finalize(p, log=log)
                 except Exception as e:  # never let b-roll block the cut
-                    log(f"[FrissonVision] b-roll finalize skipped ({e})")
+                    log(f"[OneShotMV] b-roll finalize skipped ({e})")
             key_jobs, clip_jobs = _looks_jobs(p, run_dir, log=log)
             rerolls = key_jobs + clip_jobs
             looks_msg = f"; {len(key_jobs)} look keyframes and {len(clip_jobs)} look clips queued"
@@ -1209,7 +1209,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     bundle = os.path.join(run_dir, f"qc{pass_idx}.json")
     json.dump({"pass": pass_idx, "final": last, "message": msg, "jobs": [{"graph": g} for g in rerolls]},
               open(bundle, "w", encoding="utf-8"))
-    log(f"[FrissonVision] {msg}")
+    log(f"[OneShotMV] {msg}")
     return {"message": msg, "report": report, "queued": queued, "bundle": bundle, "final": last,
             "rerolls": len(rerolls)}
 
@@ -1361,7 +1361,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                         fitted += 1
                 cr["fit_target"] = [round(tw, 4), round(ty, 4)]
             except Exception as e:  # never let the framing stop a run
-                log(f"[FrissonVision] vision check: face fitting skipped ({e})")
+                log(f"[OneShotMV] vision check: face fitting skipped ({e})")
         # point the clip jobs at the kept pictures; a b-roll still that still shows a wrong person
         # (another gender, a beard, glasses, someone else in it) gets no clip
         swaps, dropped = {}, set()
@@ -1416,5 +1416,5 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                  "items": [{"name": it["name"], "role": it["check"].get("role"), "gender": it["check"].get("gender"),
                             "takes": it["takes"]} for it in items]})
     json.dump(allc, open(hist, "w", encoding="utf-8"), indent=1)
-    log(f"[FrissonVision] {msg}")
+    log(f"[OneShotMV] {msg}")
     return {"message": msg, "queued": queued}

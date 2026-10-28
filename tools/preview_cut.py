@@ -1,4 +1,4 @@
-"""CPU preview of a Frisson Vision cut (numpy + OpenCV, no torch / GPU).
+"""CPU preview of a OneShot MV cut (numpy + OpenCV, no torch / GPU).
 
 Mirrors fv/fx.py and fv/finish.py closely enough to judge the edit, the effects and the
 finish while the GPU is busy. Not used by the nodes.

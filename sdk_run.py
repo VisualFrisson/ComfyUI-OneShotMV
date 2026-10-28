@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Frisson Vision, driven end to end by the Comfy SDK.
+"""OneShot MV, driven end to end by the Comfy SDK.
 
 The SDK talks the Comfy API v2. Point it at:
   - your own ComfyUI, through the open-source comfy-api-proxy that runs beside it:
         pip install comfy-sdk comfy-api-proxy
         comfy-api-proxy --max-upload-mb 2000          # serves http://127.0.0.1:8189
         set COMFY_BASE_URL=http://127.0.0.1:8189      # (macOS/Linux: export ...)
-  - or a Comfy API deployment with the Frisson Vision nodes installed (COMFY_BASE_URL + COMFY_API_KEY).
+  - or a Comfy API deployment with the OneShot MV nodes installed (COMFY_BASE_URL + COMFY_API_KEY).
 
     python sdk_run.py --song my_track.mp3 --pack crowd --format 9:16 --seconds 30
     python sdk_run.py --song my_track.mp3 --pack artist --artist me.png --framing mixed
@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DIRECTOR = HERE / "api" / "FrissonVision_director_api.json"
+DIRECTOR = HERE / "api" / "OneShotMV_director_api.json"
 
 
 def node_id(wf, class_type: str) -> str:
@@ -52,7 +52,7 @@ def fetch_json(job, suffix: str) -> dict:
 def run_all(client, graphs: list[dict], label: str, run: str, timeout: float) -> int:
     """Submit graphs in order (the server runs them in order, so models load once per group)
     and wait for all of them. Returns the number that failed."""
-    jobs = [client.submit(client.workflows.from_json(g), metadata={"app": "frissonvision", "run": run})
+    jobs = [client.submit(client.workflows.from_json(g), metadata={"app": "oneshot-mv", "run": run})
             for g in graphs]
     failed = 0
     t0 = time.time()
@@ -85,7 +85,7 @@ def main() -> int:
     ap.add_argument("--retries", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
     ap.add_argument("--fx", type=float, default=1.0, help="FX intensity (0 = clean cut)")
     ap.add_argument("--run-name", default="")
-    ap.add_argument("--out", default="frissonvision_out")
+    ap.add_argument("--out", default="oneshot_mv_out")
     ap.add_argument("--timeout", type=float, default=8 * 3600)
     a = ap.parse_args()
 
@@ -106,7 +106,7 @@ def main() -> int:
                      ("framing", a.framing), ("queue_renders", False), ("queue_assemble", False),
                      ("qc_retries", 0), ("theme", a.theme), ("broll_share", a.broll)):
             wf.set_input(d, k, v)
-        job = client.submit(wf, metadata={"app": "frissonvision", "run": run}).result()
+        job = client.submit(wf, metadata={"app": "oneshot-mv", "run": run}).result()
         bundle = fetch_json(job, "jobs.json")
         run_dir = bundle["run_dir"]
         print(f"run '{bundle['run_id']}': {len(bundle['jobs'])} jobs planned")
@@ -119,7 +119,7 @@ def main() -> int:
             qc = {"1": {"class_type": "FVQC", "inputs": {"run_dir": run_dir, "pass_index": p,
                                                          "max_passes": a.retries, "then_assemble": False,
                                                          "queue_rerolls": False}}}
-            qj = client.submit(client.workflows.from_json(qc), metadata={"app": "frissonvision", "run": run}).result()
+            qj = client.submit(client.workflows.from_json(qc), metadata={"app": "oneshot-mv", "run": run}).result()
             q = fetch_json(qj, f"qc{p}.json")
             print(f"  {q['message']}")
             if q["final"]:  # the last pass returns the b-roll cutaways (stills, then their clips)
@@ -135,7 +135,7 @@ def main() -> int:
         client.submit(client.workflows.from_json(asm)).result()
         asm = {"1": {"class_type": "FVAssemble", "inputs": {"run_dir": run_dir, "filename_prefix": bundle["run_rel"],
                                                             "fx_intensity": a.fx, "finish": True}}}
-        aj = client.submit(client.workflows.from_json(asm), metadata={"app": "frissonvision", "run": run}).result()
+        aj = client.submit(client.workflows.from_json(asm), metadata={"app": "oneshot-mv", "run": run}).result()
         saved = [o.to_file(out / o.name) for o in aj.outputs if o.name.lower().endswith((".mp4", ".mov", ".webm"))]
     print(f"done in {(time.time() - t0) / 60:.1f} min")
     for f in saved:
