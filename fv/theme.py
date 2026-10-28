@@ -552,11 +552,17 @@ _NO_WORDS = re.compile(r"\b(no|without)\b[^,.]*\b(logos?|lettering|slogans?|text
 # brand names the model slips in anyway ("oversized Versace sunglasses", n46): a generic word instead,
 # so the image models don't draw a logo
 BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|fendi|hermes|hermès|burberry|"
-                    r"cartier|rolex|ray-?ban|oakley|nike|adidas|reebok|puma|converse|vans|levi'?s|calvin klein|"
-                    r"tommy hilfiger|ralph lauren|lacoste|fila|champion|supreme|coca-?cola|pepsi|mcdonald'?s|"
+                    r"cartier|rolex|ray-?ban|oakley|nike|adidas|reebok|levi'?s|calvin klein|"
+                    r"tommy hilfiger|ralph lauren|lacoste|fila|coca-?cola|pepsi|mcdonald'?s|"
                     r"cadillac|rolls-?royce|ferrari|lamborghini|porsche|mercedes(-benz)?|bmw|polaroid|walkman|"
                     r"sony|gameboy|game boy|nintendo|casio|swatch|members only|timberlands?|dr\.? martens|doc martens|"
-                    r"skechers|juicy couture|von dutch|fubu|tommy|abercrombie|hollister|ugg|crocs|heelys)\b", re.I)
+                    r"skechers|juicy couture|von dutch|fubu|abercrombie|hollister|ugg|heelys)\b", re.I)
+# brand names that are also plain words (a champion gladiator, a supreme court, a puma, to converse,
+# delivery vans, crocodiles): only before a garment (sx05h/k: "a designer charioteer", "a designer
+# murmillo gladiator" from "champion")
+BRANDS_IN_CONTEXT = re.compile(r"(?i)\b(champion|supreme|puma|converse|vans|crocs|tommy)(?=\s+(?:hoodies?|sweat(?:shirt|er)s?|"
+                               r"t-?shirts?|tees?|sneakers|trainers|shoes|slip-ons|jackets?|caps?|shirts?|logos?|"
+                               r"tracksuits?|clogs|sandals|jeans|bags?)\b)")
 
 
 _SIGNS = "signs?|banners?|posters?|billboards?|marquees?|placards?|menu boards?"
@@ -577,7 +583,7 @@ def _design(s: str) -> str:
 
 
 def _debrand(s: str) -> str:
-    s = _design(BRANDS.sub("designer", s))
+    s = _design(BRANDS_IN_CONTEXT.sub("designer", BRANDS.sub("designer", s)))
     s = re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
     # a brand that was the whole item ("fishnet stockings, Doc Martens" in v4b) leaves a bare word
     return re.sub(r"(?:,\s*|\s+(?:and|with)\s+)designer(?=\s*(?:[,;.]|$))", "", s).strip(" ,")
