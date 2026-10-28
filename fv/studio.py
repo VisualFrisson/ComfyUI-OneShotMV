@@ -482,20 +482,27 @@ def _clip(d: str, r: dict) -> tuple[str, int]:
     return _newest(takes), len(takes)
 
 
-def _notes(d: str, p: dict, label_of: dict) -> list[dict]:
+def _notes(d: str, p: dict, label_of: dict, done: bool = False) -> list[dict]:
     notes = []
     for it in (p.get("critic") or {}).get("items", []):
         takes = it.get("takes") or []
         if len(takes) > 1:
             faults = sorted({f for t in takes[:-1] for f in (t.get("faults") or [])})
-            who = label_of.get(("p", it.get("performer"))) or label_of.get(("r", it.get("render"))) or it.get("name")
+            nm = str(it.get("name") or "")
+            who = label_of.get(("p", it.get("performer"))) or label_of.get(("r", it.get("render"))) or \
+                ("A cutaway" if nm.startswith("k") else "A spare portrait")
             notes.append({"kind": "fix", "text": f"{who}: still re-made ({_why(faults) or 'failed the check'})."})
     qc = _load(os.path.join(d, "qc.json"), []) or []
-    for ps in qc if isinstance(qc, list) else []:
+    passes = [x for x in (qc if isinstance(qc, list) else []) if x.get("report")]
+    for k, ps in enumerate(passes):
         rep = ps.get("report") or []
         bad = [x for x in rep if not x.get("ok")]
         if rep:
-            if bad:
+            if bad and done and k == len(passes) - 1:
+                why = sorted({f for x in bad for f in (x.get("fail") or [])})
+                notes.append({"kind": "redo", "text": f"Take check {ps.get('pass', 0) + 1}: {len(bad)} of {len(rep)} takes still "
+                                                      f"weak ({_why(why[:4])}); kept the best take of each."})
+            elif bad:
                 why = sorted({f for x in bad for f in (x.get("fail") or [])})
                 notes.append({"kind": "redo", "text": f"Take check {ps.get('pass', 0) + 1}: {len(bad)} of {len(rep)} "
                                                       f"takes re-shot ({_why(why[:4])})."})
@@ -607,14 +614,14 @@ def _run(name: str) -> dict:
              "grade": th.get("grade") or {}, "characters": len(chars), "left_out": left[:30]}
     return {
         "run": os.path.basename(d), "stage": stage, "stages": stages, "pct": pct,
-        "elapsed_min": round(elapsed, 1), "estimate_min": round(est), "left_min": round(max(0.0, est - elapsed)),
+        "elapsed_min": round(elapsed, 1), "estimate_min": round(est), "left_min": 0 if done else round(max(0.0, est - elapsed)),
         "queued_jobs": queued_jobs, "stalled": bool(started and not done and queued_jobs == 0),
         "brief": {"format": p.get("format"), "preset": p.get("preset"), "seconds": round(float(p.get("duration") or 0), 1),
                   "from": _clock(p.get("song_t0", 0)), "to": _clock(p.get("song_t1", 0)), "tempo": p.get("tempo"),
                   "fx": p.get("fx_level") or "subtle", "cuts": p.get("cuts") or {}, "seed": p.get("seed"),
                   "crowd": p.get("crowd", "auto"), "cast_order": p.get("cast_order", "as written")},
         "world": world, "energy_map": p.get("energy_map") or [], "shots": shots,
-        "notes": _notes(d, p, label_of),
+        "notes": _notes(d, p, label_of, done=bool(done)),
         "latest": _view(latest) if latest else "",
         "video": _view(done["video"]) if done else "",
         "edl": _view(done.get("edl", "")) if done and done.get("edl") and os.path.isfile(done["edl"]) else "",
