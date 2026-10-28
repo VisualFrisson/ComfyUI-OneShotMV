@@ -92,8 +92,8 @@ def rubric(check: dict, world: str, era: str) -> str:
     if check.get("crowd"):  # a spectacle World: the blurred stands behind are wanted (casting.crowd_behind)
         out = out.replace("how many living people you can see anywhere in the picture, counting small, blurred or "
                           "far-away figures and reflections, but not statues, paintings or carvings",
-                          "how many people in total stand in the foreground, counting the main person and anyone "
-                          "beside or just behind them, but not the spectators seated in the stands far behind")
+                          "how many people are close to the camera and in sharp focus, not counting the blurred "
+                          "crowd far in the background")
     return out
 
 

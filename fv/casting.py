@@ -272,28 +272,28 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
     return " ".join(f"{p} {tail}".split())
 
 
-CROWD_BEHIND = ("The only person in focus, shot on an 85mm lens wide open: the packed, roaring crowd of the stands "
-                "is far behind, melted into a soft, out-of-focus blur of colour and shapes, with an empty stretch of "
-                "ground between the person and the crowd and nobody else near.")
+# sx05j's wording (the user, Oct 27: sx05k's shallow-focus, empty-ground and seated-crowd lines made
+# it "much worse": LTX filled the open ground with extras walking into the shots)
+CROWD_BEHIND = ("The only person in focus, with the packed, roaring crowd of the stands far behind as a soft "
+                "blur of distant faces and colour, nobody else near.")
 _ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in frame\.")
 
 
 def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
     """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
     become one person in focus with the stands behind as a blur; in a period World every spectator
-    in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd)."""
+    in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd). The clip wording is
+    sx05j's (the user preferred it to sx05k's); dress, the World's own crowd costume, goes in the
+    still only: in a clip LTX acts out every person a prompt names (sx05k)."""
     # said as what is there, never naming the unwanted clothes (naming a thing draws it)
     dressed = (f" Every spectator in the crowd is dressed in the clothes of {era}, as in a big-budget "
                "period film.") if era else ""
-    if dress:  # the World's own crowd costume (theme.crowd_dress): concrete garments read, "period" doesn't
+    if dress:
         dressed = f" The crowd is {dress}, as in a big-budget period film." if era else f" The crowd is {dress}."
     p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND + dressed, prompt)
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
-    # in the clip, never name people, clothes or anyone arriving: LTX acts every person a prompt names
-    # (sx05k: "spectators stay in their seats ... a sea of wool tunics" and "anyone who comes into view"
-    # walked crowds of tunic-clad extras onto the sand around every gladiator)
-    p = re.sub(r"(?i)\bNo one else in frame\.", "They stand alone on open ground for the whole shot, with the stands "
-               "far behind as a still, soft blur of colour.", p)
+    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur" +
+               (f", all in the clothes of {era}." if era else "."), p)
     # a moving camera brings new people into the frame, and LTX dresses them in modern clothes (the
     # user, Oct 27): in front of a crowd the camera stays put
     p = re.sub(r"(?i)\bThe (?:handheld )?camera (?:sways|drifts|bobs|tracks|arcs)[^.]*\.",
@@ -302,13 +302,13 @@ def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
 
 
 def period_background(sing: str, era: str) -> str:
-    """Every clip in a period World: the background stays as it is (the user, Oct 27: as the camera
-    moved, LTX brought new people into the background in modern clothes). Said without naming people
-    or clothes: "anyone who comes into view is dressed for the period" made LTX bring people into view
-    (sx05k). Positive words only: the clips run at cfg 1, where a negative prompt does nothing."""
-    if not era or "background stays the same" in sing:
+    """Every clip in a period World: whoever is or comes into the background is dressed for the
+    period (the user, Oct 27: as the camera moves, LTX's new background people were in modern
+    clothes). Positive words only: the clips run at cfg 1, where a negative prompt does nothing.
+    sx05j's wording, which the user preferred to sx05k's."""
+    if not era or "comes into view" in sing:
         return sing
-    return sing.rstrip() + " The background stays the same, still and unchanged, from the first frame to the last."
+    return sing.rstrip() + f" Everyone in the background, including anyone who comes into view, is dressed in the clothes of {era}."
 
 
 def edit_realism(close: bool = True) -> str:
