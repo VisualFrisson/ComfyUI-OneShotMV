@@ -351,6 +351,8 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 .slider{display:grid;grid-template-columns:72px 1fr 64px;align-items:center;gap:10px;font-size:13px;color:var(--muted);min-height:36px}
 .slider input{width:100%;accent-color:var(--accent)}
 .slider b{text-align:right;font-size:12px;color:var(--text)}
+.grainprev{margin-top:10px;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.grainprev img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
 .applybar{position:sticky;bottom:0;z-index:3;margin:-8px -6px 0;padding:22px 6px 14px;background:linear-gradient(to bottom,transparent,var(--bg) 22px)}
 .applybar .btn:disabled{opacity:1;color:var(--muted);background:var(--panel2);border-color:var(--line2)}
 html[data-look="neon"] .slider input{accent-color:var(--g3)}
@@ -885,11 +887,13 @@ async function viewResult(run){
       <section class="card ed" aria-labelledby="eh1"><h3 id="eh1">Audio-reactive FX</h3><p class="tiny">Flash, zoom punch, glow and color split on the drums.</p>
         <div class="seg" role="group" aria-label="Audio-reactive FX" id="efx"></div></section>
       <section class="card ed" aria-labelledby="eh2"><div class="row" style="justify-content:space-between"><h3 id="eh2">Color grade</h3><button type="button" class="linkbtn" id="asmade">As made</button></div>
-        <p class="tiny">On top of the World's own grade. A still from your video shows each one.</p>
+        <p class="tiny">On top of the default look. A still from your video shows each one.</p>
         <div class="grades" role="group" aria-label="Color grade" id="grades"></div></section>
       <section class="card ed" aria-labelledby="eh3"><h3 id="eh3">Grain</h3>
         <label class="slider"><span>Intensity</span><input type="range" id="gi" min="0" max="100" step="1"><b class="mono" id="giv"></b></label>
-        <label class="slider"><span>Size</span><input type="range" id="gs" min="1" max="4" step="0.5"><b class="mono" id="gsv"></b></label></section>
+        <label class="slider"><span>Size</span><input type="range" id="gs" min="0.5" max="4" step="0.5"><b class="mono" id="gsv"></b></label>
+        <div class="grainprev"><img id="grainimg" alt="The middle of a frame at 1080p, pixel for pixel, with this grain"></div>
+        <p class="tiny" style="margin:6px 0 0">Pixel for pixel at 1080p: the grain goes on after the upscale.</p></section>
       <section class="card ed" aria-labelledby="eh4"><h3 id="eh4">Vignette</h3>
         <label class="slider"><span>Intensity</span><input type="range" id="vg" min="0" max="95" step="1"><b class="mono" id="vgv"></b></label></section>
       <div class="applybar"><button class="btn" id="apply" type="button" disabled style="width:100%">No changes yet</button>
@@ -976,17 +980,21 @@ async function viewResult(run){
   const grades = (r.looks || []).filter(l => l.id !== "none");
   const drawGrades = () => {
     $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
-    $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); });
+    $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); drawGrain(); });
     $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
   };
-  $("#asmade").onclick = () => { E.look = "none"; drawGrades(); drawApply(); };
+  $("#asmade").onclick = () => { E.look = "none"; drawGrades(); drawApply(); drawGrain(); };
   const gi = $("#gi"), gs = $("#gs"), vg = $("#vg");
-  const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%"; };
-  gi.oninput = () => { E.grain = Math.round(+gi.value * 0.2 * 10) / 1000; drawSliders(); drawApply(); };
-  gs.oninput = () => { E.grain_size = +gs.value; drawSliders(); drawApply(); };
+  const drawSliders = () => { gi.value = Math.round(E.grain / 0.2 * 100); $("#giv").textContent = gi.value + "%"; gs.value = E.grain_size; $("#gsv").textContent = ({0.5:"finest",1:"fine",1.5:"fine+",2:"medium",2.5:"medium+",3:"coarse",3.5:"coarse+",4:"chunky"})[E.grain_size] || E.grain_size; vg.value = Math.round(E.vignette * 100); $("#vgv").textContent = vg.value + "%"; };
+  let grainT = 0;
+  const drawGrain = () => { clearTimeout(grainT); grainT = setTimeout(() => {
+    const im = $("#grainimg"), px = Math.round((im.parentNode.clientWidth || 300) * (window.devicePixelRatio || 1) / 16) * 16;
+    im.src = `/oneshot-mv/api/grain/${encodeURIComponent(r.run)}?look=${encodeURIComponent(E.look || "none")}&g=${E.grain}&s=${E.grain_size}&w=${px}&v=${esc(r.looks_sig || "")}`; }, 250); };
+  gi.oninput = () => { E.grain = Math.round(+gi.value * 0.2 * 10) / 1000; drawSliders(); drawApply(); drawGrain(); };
+  gs.oninput = () => { E.grain_size = +gs.value; drawSliders(); drawApply(); drawGrain(); };
   vg.oninput = () => { E.vignette = +vg.value / 100; drawSliders(); drawApply(); };
   const drawApply = () => { const a = $("#apply"), d = dirty(); a.disabled = !d || shooting; a.textContent = d ? "Apply changes · about 2 min" : "No changes yet"; primary(); };
-  drawFxSeg(); drawGrades(); drawSliders(); drawApply();
+  drawFxSeg(); drawGrades(); drawSliders(); drawApply(); drawGrain();
   $("#apply").onclick = async () => {
     try{
       overlay("Making the new cut", "The same shots with the new FX, grade, grain and vignette. Nothing re-renders.");

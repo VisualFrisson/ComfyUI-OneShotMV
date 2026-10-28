@@ -248,6 +248,12 @@ class Finisher:
         return self._vig
 
     def __call__(self, img, frame_index: int = 0):
+        """The whole finish at one size (previews). The cut runs grade() at render size, upscales,
+        then texture() at the delivery size, so the grain is 1080p grain."""
+        return self.texture(self.grade(img), frame_index)
+
+    def grade(self, img):
+        """Everything colour: the World's grade, glow and halation, tone, the base and the Studio's grade."""
         import torch
         import torch.nn.functional as F
         c = self.cfg
@@ -289,17 +295,29 @@ class Finisher:
             x = apply_look(x, base, c.get("base_amount", 1.0))
         if c.get("look") and c["look"] != "none":
             x = apply_look(x, c["look"], c.get("look_amount", 1.0))
+        return x.clamp(0, 1)
+
+    def texture(self, img, frame_index: int = 0):
+        """Grain, then the vignette: at the delivery size, after the upscale."""
+        import torch
+        import torch.nn.functional as F
+        c = self.cfg
+        x = img.float()
+        H, W = x.shape[:2]
         # 4) coloured grain, strongest in the mids (after the grade: the grade never tints the grain)
         gamt = c.get("grain", 0.05)
         if gamt > 0:
             lum = x.clamp(0, 1).mean(-1, keepdim=True)
             gen = torch.Generator(device=x.device).manual_seed(self.seed * 100003 + frame_index)
-            size = max(1.0, float(c.get("grain_size", 1.0)))  # 1 = fine, 4 = coarse
-            gh, gw = max(8, int(H / size)), max(8, int(W / size))
+            size = min(4.0, max(0.5, float(c.get("grain_size", 1.0))))  # 0.5 = finest (one pixel), 4 = chunky
+            gs = max(1.0, size)
+            gh, gw = max(8, int(H / gs)), max(8, int(W / gs))
             g = torch.randn((1, 3, gh, gw), generator=gen, device=x.device, dtype=x.dtype)
-            g = F.avg_pool2d(F.pad(g, (1, 1, 1, 1), mode="replicate"), 3, stride=1)
+            pooled = F.avg_pool2d(F.pad(g, (1, 1, 1, 1), mode="replicate"), 3, stride=1)
+            soft = min(1.0, (size - 0.5) * 2)  # below size 1 the grain is less and less smoothed
+            g = pooled * soft + g * 0.5 * (1 - soft)  # 0.5: a little more energy, so the finest grain still reads
             if (gh, gw) != (H, W):
-                g = F.interpolate(g, size=(H, W), mode="bilinear", align_corners=False) * (1 + 0.18 * (size - 1))
+                g = F.interpolate(g, size=(H, W), mode="bilinear", align_corners=False) * (1 + 0.18 * (gs - 1))
             g = g[0].permute(1, 2, 0) * 2.2
             g = g.mean(-1, keepdim=True) * 0.7 + g * 0.3
             x = x + g * gamt * (0.4 + 0.6 * 4 * lum * (1 - lum))

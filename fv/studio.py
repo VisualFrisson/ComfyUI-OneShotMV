@@ -1117,6 +1117,46 @@ def _look_sheet(name: str) -> str:
     return out
 
 
+def _grain_preview(name: str, look: str, grain: float, size: float, shot: int | None = None, cw_px: int = 640) -> str:
+    """A 1:1 crop of a delivery-size frame with the grain on, made the way the cut makes it:
+    the grade at render size, the upscale, then the grain."""
+    import torch.nn.functional as F
+    from PIL import Image
+    from . import formats
+    if look not in _look_names():
+        look = "none"
+    grain = round(min(0.2, max(0.0, float(grain))), 3)
+    size = round(min(4.0, max(0.5, float(size))) * 2) / 2
+    cw_px = max(160, min(960, int(cw_px)))
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    key = hashlib.sha1(json.dumps([look, grain, size, shot, cw_px, _file_sig(_fv("finish").__file__),
+                                   (p.get("finish") or {}).get("grade_mean")]).encode()).hexdigest()[:12]
+    out = os.path.join(d, "studio_previews", f"grain_{key}.jpg")
+    if os.path.exists(out):
+        return out
+    frame, _ = _preview_frame(d, p, shot)
+    cfg = _finish_cfg(p)
+    cfg.update({"look": look, "grain": grain, "grain_size": size, "vignette": 0})
+    fin = _fv("finish").Finisher(cfg, _lab_cache(d, p), seed=3)
+    y = fin.grade(frame)
+    rw, rh = formats.render_size(p["format"], p["preset"])
+    cx, cy, cw, ch = formats.deliver_crop(p["format"], p["preset"])
+    dw, dh = formats.deliver_size(p["format"])
+    y = y[cy:cy + ch, cx:cx + cw]
+    if (dw, dh) != (cw, ch):
+        y = F.interpolate(y.permute(2, 0, 1)[None], size=(dh, dw), mode="bicubic", align_corners=False,
+                          antialias=True)[0].permute(1, 2, 0).clamp(0, 1)
+    y = fin.texture(y, 0)
+    w = min(cw_px, dw)  # the middle of the frame, pixel for pixel at the width it is shown
+    h = min(int(round(w * 9 / 16)), dh)
+    x0, y0 = (dw - w) // 2, max(0, (dh - h) // 2 - dh // 10)
+    crop = (y[y0:y0 + h, x0:x0 + w].clamp(0, 1) * 255 + 0.5).byte().cpu().numpy()
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    Image.fromarray(crop).save(out, quality=95)
+    return out
+
+
 def _xml(name: str) -> str:
     export = _fv("export")
     d = _run_dir(name)
@@ -1182,6 +1222,11 @@ async def _api(request: web.Request, route: str) -> web.Response:
         path = await _blocking(_look_preview, route[5:], q.get("look", "none"), int(shot) if shot not in (None, "") else None,
                                int(q.get("w") or 560))
         return web.FileResponse(path, headers={"Cache-Control": "max-age=3600"})
+    if route.startswith("grain/"):
+        shot = q.get("shot")
+        path = await _blocking(_grain_preview, route[6:], q.get("look", "none"), q.get("g", 0.05), q.get("s", 1.0),
+                               int(shot) if shot not in (None, "") else None, int(q.get("w") or 640))
+        return web.FileResponse(path, headers={"Cache-Control": "max-age=3600"})
     if route.startswith("looksheet/"):
         path = await _blocking(_look_sheet, route[10:])
         return web.FileResponse(path, headers={"Cache-Control": "no-store"})
@@ -1217,7 +1262,7 @@ async def _api(request: web.Request, route: str) -> web.Response:
                 fu = dict(plan_.get("finish_user") or {})
                 if body.get("look") is not None:
                     fu["look"] = str(body["look"]) if str(body["look"]) in _look_names() else "none"
-                for k, lo, hi in (("grain", 0.0, 0.2), ("grain_size", 1.0, 4.0), ("vignette", 0.0, 0.95)):
+                for k, lo, hi in (("grain", 0.0, 0.2), ("grain_size", 0.5, 4.0), ("vignette", 0.0, 0.95)):
                     if body.get(k) is not None:
                         fu[k] = round(min(hi, max(lo, float(body[k]))), 3)
                 plan_["finish_user"] = fu

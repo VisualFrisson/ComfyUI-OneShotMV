@@ -324,12 +324,16 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
                          level=None if level is None else float(level[min(f, n_out - 1)]))
         y = fx.apply_fx(x, p, prev)
         prev = y
-        z = fin(y, f) if fin is not None else y
+        # colour at render size (cheaper), then the upscale to delivery, then grain and vignette
+        # at delivery size so the grain is full-resolution grain
+        z = fin.grade(y) if fin is not None else y
         if (cw, ch) != (rw, rh):
             z = z[cy:cy + ch, cx:cx + cw]
         if (dw, dh) != (cw, ch):
             z = F.interpolate(z.permute(2, 0, 1)[None], size=(dh, dw), mode="bicubic",
                               align_corners=False, antialias=True)[0].permute(1, 2, 0).clamp(0, 1)
+        if fin is not None:
+            z = fin.texture(z, f)
         u8 = (z * 255 + 0.5).byte().cpu().numpy()
         proc.stdin.write(u8.tobytes())
         if f % max(1, n_out // 8) == 0 and len(previews) < 8:
