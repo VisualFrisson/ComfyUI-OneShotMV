@@ -631,6 +631,7 @@ def _run(name: str) -> dict:
         "soft_clips": len(_soft_clips(d, p)) if done else 0,
         "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
         "looks": [{"id": "none", "name": "As made"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
+        "looks_sig": _file_sig(_fv("finish").__file__),  # in the preview URLs, so browsers drop old tiles
     }
 
 
@@ -964,16 +965,19 @@ def _fv(name: str):
     import importlib
     mod = importlib.import_module("." + name, __package__)
     try:
-        mt = os.path.getmtime(mod.__file__)
-        if getattr(mod, "_studio_mtime", None) != mt:
+        sig = _file_sig(mod.__file__)
+        if getattr(mod, "_studio_sig", None) != sig:
             mod = importlib.reload(mod)
-            mod._studio_mtime = mt
+            mod._studio_sig = sig
     except Exception as e:  # keep the loaded module if an edit is broken
         print(f"[OneShotMV] studio reload {name} failed: {e}")
     return mod
 
 
-SHOWN_LOOKS = ["teal_orange", "print_2383", "golden", "faded70s"]  # the four on the Result screen (the user picks)
+# the 3x3 grid on the Result screen, in this order (from the user's ratings, Oct 28)
+SHOWN_LOOKS = ["neon", "technicolor", "pushed_to",      # vivid
+               "golden", "romantic", "faded70s",        # warm and soft
+               "lowkey", "matrix", "silver"]            # moody
 
 
 def _look_names() -> dict:
@@ -1063,6 +1067,11 @@ def _graded(d: str, p: dict, frame, look: str, overrides: dict | None = None, w:
     return (y.permute(1, 2, 0).clamp(0, 1) * 255 + 0.5).byte().numpy()
 
 
+def _file_sig(path: str) -> str:
+    """A file's content hash: deploys can keep a file's old modification time (tar restores it)."""
+    return hashlib.md5(open(path, "rb").read()).hexdigest()[:10]
+
+
 def _look_preview(name: str, look: str, shot: int | None, w: int = 560) -> str:
     from PIL import Image
     if look not in _look_names():
@@ -1073,7 +1082,7 @@ def _look_preview(name: str, look: str, shot: int | None, w: int = 560) -> str:
     # the grade alone: grain and vignette come after it, with their own sliders
     key = hashlib.sha1(json.dumps([look, shot, w, "grade-only",
                                    (p.get("finish") or {}).get("grade_mean"),
-                                   int(os.path.getmtime(_fv("finish").__file__))]).encode()).hexdigest()[:12]
+                                   _file_sig(_fv("finish").__file__)]).encode()).hexdigest()[:12]
     out = os.path.join(d, "studio_previews", f"{look}_{key}.jpg")
     if not os.path.exists(out):
         frame, _ = _preview_frame(d, p, shot)

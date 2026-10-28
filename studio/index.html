@@ -338,13 +338,13 @@ html[data-look="neon"] .looksw{font-family:var(--mono)}
 @media (max-width:700px){.fixgrid{grid-template-columns:1fr}.fixhead img{width:110px}}
 .refine .ed h3{margin:0;font-size:16px;font-weight:800}
 .refine .ed .tiny{margin:4px 0 12px}
-.grades{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grades{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .grade{padding:0;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--panel2);border:2px solid var(--line);text-align:left;display:flex;flex-direction:column}
 .grade[aria-pressed=true]{border-color:var(--accent)}
 .grade .gimg{display:block;aspect-ratio:16/9;background:linear-gradient(90deg,var(--panel2),var(--line2),var(--panel2));background-size:200% 100%;animation:shim 1.4s linear infinite}
 .grade .gimg.ok{animation:none;background:#000}
 .grade .gimg img{width:100%;height:100%;object-fit:cover;display:block}
-.grade .gname{padding:7px 9px;font-size:13px;font-weight:700}
+.grade .gname{padding:5px 6px 6px;font-size:11.5px;font-weight:700;line-height:1.2}
 @keyframes shim{to{background-position:-200% 0}}
 .linkbtn{background:none;border:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;min-height:32px}
 .linkbtn:hover{color:var(--text)}
@@ -975,7 +975,7 @@ async function viewResult(run){
     $("#efx").querySelectorAll(".opt").forEach(el => el.onclick = () => { E.fx = el.dataset.x; drawFxSeg(); drawApply(); }); };
   const grades = (r.looks || []).filter(l => l.id !== "none");
   const drawGrades = () => {
-    $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
+    $("#grades").innerHTML = grades.map(l => `<button type="button" class="grade" data-l="${l.id}" aria-pressed="${E.look===l.id}"><span class="gimg"><img src="/oneshot-mv/api/look/${encodeURIComponent(r.run)}?look=${l.id}&w=320&v=${esc(r.looks_sig || "")}" alt="" loading="lazy" onload="this.parentNode.classList.add('ok')"></span><span class="gname">${esc(l.name)}</span></button>`).join("");
     $("#grades").querySelectorAll(".grade").forEach(el => el.onclick = () => { E.look = E.look === el.dataset.l ? "none" : el.dataset.l; drawGrades(); drawApply(); });
     $("#asmade").setAttribute("aria-pressed", E.look === "none"); $("#asmade").textContent = E.look === "none" ? "As made ✓" : "Back to as made";
   };

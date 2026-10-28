@@ -1,6 +1,7 @@
 """The finish: a grade learned from a reference edit (Lab mean/std), diffusion + warm halation,
-S-curve contrast, saturation, lifted blacks, the Studio's colour grade, coloured film grain, then
-a rounded gate vignette (the audio-reactive FX come before all of it, in assemble).
+S-curve contrast, saturation, lifted blacks, the Naturalistic base, the Studio's colour grade,
+coloured film grain, then a rounded gate vignette (the audio-reactive FX come before all of it,
+in assemble).
 torch, works on (H, W, 3) float frames in 0..1."""
 from __future__ import annotations
 
@@ -71,6 +72,8 @@ LOOKS = {
     "matrix": "Industrial Green",
     "hardmono": "Hard Mono",
 }
+
+BASE_LOOK = "natural"  # under every grade, "As made" included; not offered as a grade itself
 
 # the reference and what each look is after (the grade rating page shows these)
 LOOK_NOTES = {
@@ -267,7 +270,11 @@ class Finisher:
         x = (l + (x - l) * c.get("saturation", 1.15)).clamp(0, 1)
         lift = c.get("lift", 0.035)
         x = (lift + x * (1 - lift * 1.4)).clamp(0, 1) ** 1.08
-        # 3b) the Studio's colour grade on top of the World's
+        # 3b) the house base: Naturalistic on every video (the user's call, Oct 28), then the
+        # Studio's colour grade on top
+        base = c.get("base_look", BASE_LOOK)
+        if base and base != "none":
+            x = apply_look(x, base, c.get("base_amount", 1.0))
         if c.get("look") and c["look"] != "none":
             x = apply_look(x, c["look"], c.get("look_amount", 1.0))
         # 4) coloured grain, strongest in the mids (after the grade: the grade never tints the grain)
