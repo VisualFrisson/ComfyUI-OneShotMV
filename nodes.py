@@ -417,6 +417,62 @@ class FVQC:
         return {"ui": {"text": [res["message"], _file_ref(res["bundle"])]}, "result": (res["message"],)}
 
 
+def _video_ref(path: str) -> list:
+    """An MP4 under the output folder as a ComfyUI 'gifs' ui entry (UI preview, API / SDK download)."""
+    try:
+        rel = os.path.relpath(path, folder_paths.get_output_directory())
+    except ValueError:
+        return []
+    if rel.startswith(".."):
+        return []
+    sub, name = os.path.split(rel)
+    return [{"filename": name, "subfolder": sub.replace(os.sep, "/"), "type": "output", "format": "video/h264-mp4"}]
+
+
+class FVRunResult:
+    """Where a run is, and its final video once it is finished, as job outputs. For API and
+    Comfy SDK clients (sdk_run.py): queued after a Director, it runs once the run's own stages
+    (which jump the queue) are done."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"run_dir": ("STRING", {"default": "",
+                                         "tooltip": "The run folder (the Director's run_dir output)"})}}
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("status", "video_path")
+    FUNCTION = "run"
+    OUTPUT_NODE = True
+    CATEGORY = CATEGORY
+
+    @classmethod
+    def IS_CHANGED(cls, **kw):
+        return random.random()
+
+    def run(self, run_dir):
+        _reload()
+        import json
+        st = director.run_status(_resolve(run_dir))
+        if st["state"] == "rendering":
+            try:  # nothing else queued and no video: one of the run's stages failed
+                from server import PromptServer
+                _running, pending = PromptServer.instance.prompt_queue.get_current_queue()
+                if not pending:
+                    st["state"] = "stopped"
+                    st["message"] += ("; nothing is left in the queue, so the run stopped early "
+                                      "(the ComfyUI console shows the error)")
+            except Exception:
+                pass
+        ui = {"text": [st["message"]]}
+        if st.get("run_dir"):
+            sp = os.path.join(st["run_dir"], "status.json")
+            json.dump(st, open(sp, "w", encoding="utf-8"), indent=1)
+            ui["text"].append(_file_ref(sp))
+        if st["state"] == "done":
+            ui["gifs"] = _video_ref(st["video"])
+        return {"ui": ui, "result": (st["message"], st.get("video", ""))}
+
+
 class FVCritic:
     """The vision check (fv/critic.py): Gemma 3 looks at every portrait and b-roll still of a run
     against what its character should be (gender, facial hair, glasses, other people, the head in
@@ -770,6 +826,7 @@ NODE_CLASS_MAPPINGS = {
     "FVLeadMask": FVLeadMask,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
+    "FVRunResult": FVRunResult,
     "FVFinish": FVFinish,
     "FVQC": FVQC,
     "FVCritic": FVCritic,
@@ -789,6 +846,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVLeadPose": "OneShot MV: Lead Dancer Pose",
     "FVLeadMask": "OneShot MV: Lead Dancer Only",
     "FVAssemble": "OneShot MV: Assemble",
+    "FVRunResult": "OneShot MV: Run Result",
     "FVFinish": "OneShot MV: Finish",
     "FVQC": "OneShot MV: Take QC",
     "FVCritic": "OneShot MV: Vision Check",

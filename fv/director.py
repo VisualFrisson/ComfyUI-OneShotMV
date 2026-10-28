@@ -406,8 +406,50 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         summary += "\n\n" + plan_preview(p, queued=queue)
     except Exception as e:  # never let the preview stop a run
         log(f"[OneShotMV] preview skipped ({e})")
+    try:  # the summary rides along in jobs.json, so an SDK client can print the plan
+        bp = os.path.join(run_dir, "jobs.json")
+        b = json.load(open(bp, encoding="utf-8"))
+        b.update(summary=summary, queued=bool(queue))
+        json.dump(b, open(bp, "w", encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        log(f"[OneShotMV] summary not written to jobs.json ({e})")
     return {"run_dir": run_dir, "run_id": run_id, "run_rel": rel, "jobs": len(jobs), "prompt_ids": ids,
             "summary": summary, "bundle": os.path.join(run_dir, "jobs.json")}
+
+
+def run_status(run_dir: str) -> dict:
+    """Where a run is: done (with its final video) or still rendering, with what is made so far.
+    FVRunResult hands this to API / SDK clients; sdk_run.py waits on it."""
+    import glob
+    pj = os.path.join(run_dir, "plan.json")
+    if not run_dir or not os.path.exists(pj):
+        return {"state": "missing", "video": "", "message": f"no OneShot MV run at '{run_dir}'"}
+    p = json.load(open(pj, encoding="utf-8"))
+    tm = p.get("timing") or {}
+    queued = tm.get("queued", "")
+    stills = len(glob.glob(os.path.join(run_dir, "*.png")))
+    clips = len([f for f in glob.glob(os.path.join(run_dir, "*.mp4"))
+                 if not os.path.basename(f).startswith("final")])
+    planned = len(p.get("renders", []))
+    steps = sorted((v, k) for k, v in tm.items() if isinstance(v, str))
+    last_at, last = steps[-1] if steps else ("", "")
+    done = None
+    dj = os.path.join(run_dir, "done.json")
+    if os.path.exists(dj):
+        try:
+            d = json.load(open(dj, encoding="utf-8"))
+            if d.get("at", "") >= queued and os.path.exists(d.get("video", "")):
+                done = d
+        except (OSError, ValueError):
+            pass
+    st = {"state": "done" if done else "rendering", "run_dir": run_dir, "run_id": p.get("run_id", ""),
+          "video": done["video"] if done else "", "stills": stills, "clips": clips,
+          "renders_planned": planned, "last_step": last, "last_step_at": last_at,
+          "missing_renders": (done or {}).get("missing_renders", [])}
+    st["message"] = (f"done: {os.path.basename(done['video'])}" if done else
+                     f"rendering: {stills} stills, {clips} clips so far ({planned} renders planned)"
+                     + (f", last step {last} at {last_at[11:16]}" if last else ""))
+    return st
 
 
 def _clock(t: float) -> str:

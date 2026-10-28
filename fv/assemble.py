@@ -330,5 +330,12 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
         print(f"[OneShotMV] {sum(held.values())} lookups held a clip's first/last frame: "
               + ", ".join(f"r{k:03d} x{v}" for k, v in sorted(held.items())))
     edl_path = export.write_edl(plan, os.path.join(run_dir, f"{out_name}.edl"))
+    try:  # the run is finished: FVRunResult (and so an SDK client) hands this video out
+        import datetime as _dt
+        json.dump({"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,
+                   "at": _dt.datetime.now().isoformat(timespec="seconds")},
+                  open(os.path.join(run_dir, "done.json"), "w", encoding="utf-8"), indent=1)
+    except OSError:
+        pass
     return {"video": out_path, "edl": edl_path, "frames": n_out, "missing_renders": missing,
             "previews": previews}

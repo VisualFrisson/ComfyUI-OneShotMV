@@ -128,6 +128,7 @@ Render sizes are a touch off the exact aspect: the stage-1 size of the multi-sta
 | **OneShot MV: Lip Sync Repair** | Re-draws the mouth of any clip to an audio track with LatentSync 1.6. |
 | **OneShot MV: Face Match** | Moves and scales an edited keyframe so its face sits where the reference frame's face is (used for the pose-matched looks). |
 | **OneShot MV: Assemble** | Cuts a run together. Queue it again to re-cut with different FX intensity; nothing re-renders. |
+| **OneShot MV: Run Result** | Says where a run is and, once it's finished, returns the final video as a job output (used by `sdk_run.py` and other API clients). |
 | **OneShot MV: Finish** | A pack's finish on any frames. |
 | **OneShot MV: Weight Backups to RAM** | Keeps LoRA weight backups in system RAM (see Performance). |
 | **OneShot MV: Lead Dancer Pose** | Keeps only the lead dancer in a DWPose guide (queued by the Director for motion runs). |
@@ -177,23 +178,31 @@ Press Queue once. The Director queues every job, and the finished video lands in
 
 To re-roll one shot, re-queue its file from `<run>/jobs/`, then re-cut.
 
-**With the Comfy SDK** (`sdk_run.py`), the script drives the whole run through the Comfy API v2:
-1. The Director plans.
-2. The SDK submits every render.
-3. Take QC returns re-rolls, which the SDK submits; the last pass returns the b-roll cutaways.
-4. Assemble runs and the SDK downloads the MP4.
+**With the Comfy SDK** (`sdk_run.py`): one command takes a song and a World line to a finished MP4 through the Comfy API v2.
+1. The SDK uploads the song and runs the Director, then prints the shot plan (the same preview the Run summary shows).
+2. The run's stages render in ComfyUI in the staged order: stills, vision check, lip-sync clips, take QC, b-roll, the cut.
+3. A **Run Result** job waits behind those stages and hands back the final video, which the SDK downloads.
+4. `--recut` re-cuts a finished run at another FX level without re-rendering.
 
-Point it at your own ComfyUI through `comfy-api-proxy`, or at a Comfy API deployment:
+Comfy Cloud doesn't install custom node packs yet, so the SDK talks to your own ComfyUI through Comfy's open-source [`comfy-api-proxy`](https://github.com/Comfy-Org/comfy-api-proxy). The proxy gives a local ComfyUI the same API as Comfy Cloud, and `sdk_run.py` starts it for you if it isn't already running. Start ComfyUI first.
+
+On Windows (ComfyUI portable), double-click **`run_sdk.bat`** in the pack folder. The first time, it installs `comfy-sdk` and `comfy-api-proxy` into `.sdk\` next to it and leaves ComfyUI's own Python packages alone. It then asks for the song, the World line and the length. You can also pass the options yourself:
+
+```
+run_sdk.bat --song "D:\music\track.wav" --theme "the gladiator games in ancient Rome" --seconds 40
+```
+
+Anywhere else:
 
 ```
 pip install comfy-sdk comfy-api-proxy
-comfy-api-proxy --max-upload-mb 2000                  # beside your ComfyUI
-export COMFY_BASE_URL=http://127.0.0.1:8189
-python sdk_run.py --song track.mp3 --pack crowd --seconds 30
-python sdk_run.py --song track.mp3 --pack crowd --seconds 30 --theme "an 80s Florida retirement community"
-python sdk_run.py --song track.mp3 --pack artist --artist me.png --format 9:16
-python sdk_run.py --song track.mp3 --mode motion --dance dance.mp4 --pack spotlight --format 1:1
+python sdk_run.py --song track.wav --theme "a 1965 airline: pilots, stewardesses and passengers" --preview
+python sdk_run.py --song track.wav --theme "a 1965 airline: pilots, stewardesses and passengers" --seconds 30
+python sdk_run.py --song track.wav --format 9:16 --fx intense --cuts-high "to the music (intense)"
+python sdk_run.py --recut "<run folder>" --fx none
 ```
+
+`python sdk_run.py --help` lists every option; they match the Director's inputs. To use another deployment that has the OneShot MV nodes installed, set `COMFY_BASE_URL` (and `COMFY_API_KEY` if it needs one).
 
 ## Performance notes
 

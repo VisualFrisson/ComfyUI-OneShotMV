@@ -5,7 +5,8 @@
    "run_dir": "",
    "filename_prefix": "oneshot-mv/final",
    "fx_intensity": 1.0,
-   "finish": true
+   "finish": true,
+   "audio_fx": "from the run"
   }
  }
 }

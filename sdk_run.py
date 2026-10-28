@@ -1,38 +1,80 @@
 #!/usr/bin/env python3
-"""OneShot MV, driven end to end by the Comfy SDK.
+"""OneShot MV, driven by the Comfy SDK: one song and one World line in, a music video out.
 
-The SDK talks the Comfy API v2. Point it at:
-  - your own ComfyUI, through the open-source comfy-api-proxy that runs beside it:
-        pip install comfy-sdk comfy-api-proxy
-        comfy-api-proxy --max-upload-mb 2000          # serves http://127.0.0.1:8189
-        set COMFY_BASE_URL=http://127.0.0.1:8189      # (macOS/Linux: export ...)
-  - or a Comfy API deployment with the OneShot MV nodes installed (COMFY_BASE_URL + COMFY_API_KEY).
+The Comfy SDK talks the Comfy API v2. Comfy Cloud doesn't install custom node packs yet,
+so point it at your own ComfyUI through Comfy's open-source comfy-api-proxy, which gives a
+local ComfyUI the same API. This script starts the proxy for you if it isn't running:
 
-    python sdk_run.py --song my_track.mp3 --pack crowd --format 9:16 --seconds 30
-    python sdk_run.py --song my_track.mp3 --pack artist --artist me.png --framing mixed
-    python sdk_run.py --song track.wav --mode motion --dance me_dancing.mp4 --pack wardrobe --preset fast
+    pip install comfy-sdk comfy-api-proxy        (or run_sdk.bat on Windows, which does it)
+    python sdk_run.py --song my_track.wav --theme "the gladiator games in ancient Rome" --seconds 30
+
+Another deployment that runs the OneShot MV nodes: set COMFY_BASE_URL (and COMFY_API_KEY).
 
 What happens:
-  1. Director job: analyses the song (beats, bars, sections, drop), separates the vocal and
-     drum stems, plans the cut, casts the performers and returns the run as jobs.json.
-  2. This script submits every render job (portraits, lip-sync clips, twin keys, pose-matched
-     twins; grouped by model) and waits for them.
-  3. Take QC job: checks every clip (missing / frozen / blown / dead mouth / cut away / lip sync) and returns re-roll
-     jobs with new seeds; the script submits those and checks again (--retries times).
-  4. Assemble job: cut on the beat, audio-reactive FX, the finish, the song muxed in; the SDK
-     downloads the MP4 (plus the EDL for your editor).
+  1. The song goes up as an asset, and a Director job analyses it (beats, sections, energy,
+     stems, lyrics), writes the World, casts the performers and plans every shot. The plan
+     prints here. With --preview it stops there and renders nothing.
+  2. The Director queues the run's own stages in ComfyUI (they jump the queue): portraits and
+     b-roll stills, the vision check (re-makes bad stills), the lip-sync clips, take QC with
+     SyncNet (re-rolls weak takes), then the cut with audio-reactive FX.
+  3. A Run Result job waits behind those stages; when the run is finished it hands back the
+     final MP4, which the SDK downloads.
+  4. --recut RUN_DIR re-cuts a finished run at another FX level (no re-rendering).
 """
 from __future__ import annotations
 
 import argparse
-import datetime as dt
+import atexit
 import json
+import os
+import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+SDK_DIR = HERE / ".sdk"  # run_sdk.bat installs comfy-sdk and comfy-api-proxy here
+if SDK_DIR.is_dir():
+    sys.path.insert(0, str(SDK_DIR))
 DIRECTOR = HERE / "api" / "OneShotMV_director_api.json"
+RESULT = HERE / "api" / "OneShotMV_result_api.json"
+ASSEMBLE = HERE / "api" / "OneShotMV_assemble_api.json"
+LOCAL_PROXY = "http://127.0.0.1:8189"
+CUTS = ["every 2 bars", "every bar", "to the music (subtle)", "to the music (intense)"]
+
+
+def say(msg: str = "") -> None:
+    print(msg, flush=True)
+
+
+def healthy(base: str) -> bool:
+    try:
+        with urllib.request.urlopen(base.rstrip("/") + "/api/v2/health", timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def ensure_proxy(base: str, comfyui: str) -> None:
+    """Start comfy-api-proxy beside the local ComfyUI unless one already answers at base."""
+    if healthy(base):
+        return
+    port = base.rsplit(":", 1)[-1].strip("/")
+    boot = ("import sys; sys.path.insert(0, %r); from comfy_api_proxy.cli import main; "
+            "sys.exit(main(sys.argv[1:]))" % str(SDK_DIR))
+    say(f"starting comfy-api-proxy on port {port} (in front of ComfyUI at {comfyui})")
+    proc = subprocess.Popen([sys.executable, "-c", boot, "run", "--comfyui", comfyui, "--port", port,
+                             "--max-upload-mb", "2000"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    atexit.register(proc.terminate)
+    for _ in range(40):
+        if healthy(base):
+            return
+        if proc.poll() is not None:
+            break
+        time.sleep(0.5)
+    sys.exit(f"comfy-api-proxy didn't start at {base}. Is ComfyUI running at {comfyui}?")
 
 
 def node_id(wf, class_type: str) -> str:
@@ -42,104 +84,151 @@ def node_id(wf, class_type: str) -> str:
     raise KeyError(class_type)
 
 
-def fetch_json(job, suffix: str) -> dict:
+def fetch_json(job, name: str) -> dict:
     for o in job.outputs:
-        if o.name.endswith(suffix):
+        if o.name == name or o.name.endswith(name):
             return json.loads(o.to_bytes().decode("utf-8"))
-    raise RuntimeError(f"job {job.id} returned no {suffix}")
+    raise RuntimeError(f"job {job.id} returned no {name}")
 
 
-def run_all(client, graphs: list[dict], label: str, run: str, timeout: float) -> int:
-    """Submit graphs in order (the server runs them in order, so models load once per group)
-    and wait for all of them. Returns the number that failed."""
-    jobs = [client.submit(client.workflows.from_json(g), metadata={"app": "oneshot-mv", "run": run})
-            for g in graphs]
-    failed = 0
-    t0 = time.time()
-    for i, j in enumerate(jobs, 1):
-        j.wait(timeout=max(60.0, timeout - (time.time() - t0)))
-        if j.status != "succeeded":
-            failed += 1
-        print(f"\r  {label}: {i}/{len(jobs)} done, {failed} failed, {(time.time() - t0) / 60:.1f} min",
-              end="", flush=True)
-    print()
-    return failed
+def videos(job) -> list:
+    return [o for o in job.outputs if o.name.lower().endswith((".mp4", ".mov", ".webm"))]
+
+
+def wait(job, label: str, t0: float, timeout: float):
+    """Wait for a job, printing the elapsed time while it runs or waits in the queue."""
+    while True:
+        try:
+            return job.wait(timeout=30)
+        except TimeoutError:
+            if time.time() - t0 > timeout:
+                raise
+            print(f"\r  {label}: {(time.time() - t0) / 60:5.1f} min", end="", flush=True)
+
+
+def download(job, out: Path, prefix: str) -> list[Path]:
+    saved = []
+    for o in videos(job):
+        saved.append(o.to_file(out / f"{prefix}{o.name}"))
+    return saved
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--song", required=True, help="a song you have the rights to use")
-    ap.add_argument("--mode", default="voice", choices=["voice", "motion"])
-    ap.add_argument("--dance", default="", help="motion mode: the dance clip (path on the server)")
-    ap.add_argument("--artist", default="", help="one-artist mode: a photo of the singer (path on the server)")
-    ap.add_argument("--pack", default="crowd")
+    ap.add_argument("--song", help="a song you have the rights to use (wav, mp3, flac, m4a)")
+    ap.add_argument("--theme", default="", help='the World in a line, e.g. "a 1965 airline: pilots, '
+                    'stewardesses and passengers; the cabin, the tarmac; warm afternoon light"')
+    ap.add_argument("--seconds", type=float, default=30.0, help="length of the video; 0 = the whole song")
+    ap.add_argument("--start", type=float, default=-1.0, help="song time to start at; -1 = the strongest stretch")
     ap.add_argument("--format", default="16:9", choices=["16:9", "9:16", "1:1"])
     ap.add_argument("--preset", default="quality", choices=["quality", "fast"])
-    ap.add_argument("--framing", default="mixed", choices=["mixed", "close"])
-    ap.add_argument("--seconds", type=float, default=30.0, help="0 = whole song")
-    ap.add_argument("--start", type=float, default=-1.0, help="-1 = strongest stretch")
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--theme", default="", help='one line that sets the world, e.g. "an 80s Florida retirement community"')
-    ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become lyric cutaways (0 = none)")
-    ap.add_argument("--twins", default="auto", choices=["auto", "loud", "all", "off"])
-    ap.add_argument("--retries", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
-    ap.add_argument("--fx", type=float, default=1.0, help="FX intensity (0 = clean cut)")
+    ap.add_argument("--fx", default="subtle", choices=["none", "subtle", "intense"],
+                    help="audio-reactive effects (flash, zoom punch, glow, colour split)")
+    ap.add_argument("--cuts-low", default=CUTS[0], choices=CUTS, help="cuts in low-energy sections")
+    ap.add_argument("--cuts-medium", default=CUTS[1], choices=CUTS, help="cuts in medium-energy sections")
+    ap.add_argument("--cuts-high", default=CUTS[2], choices=CUTS, help="cuts in high-energy sections")
+    ap.add_argument("--cast-order", default="as written", choices=["as written", "mixed"])
+    ap.add_argument("--crowd", default="auto", choices=["auto", "on", "off"])
+    ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become b-roll cutaways")
+    ap.add_argument("--qc", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
     ap.add_argument("--run-name", default="")
-    ap.add_argument("--out", default="oneshot_mv_out")
-    ap.add_argument("--timeout", type=float, default=8 * 3600)
+    ap.add_argument("--preview", action="store_true", help="plan and print the shot list; render nothing")
+    ap.add_argument("--recut", default="", metavar="RUN_DIR", help="re-cut a finished run at --fx")
+    ap.add_argument("--out", default="oneshot_mv_out", help="where the MP4 is saved")
+    ap.add_argument("--comfyui", default="http://127.0.0.1:8188", help="the ComfyUI the proxy fronts")
+    ap.add_argument("--no-proxy", action="store_true", help="don't start comfy-api-proxy")
+    ap.add_argument("--timeout", type=float, default=8.0, help="hours to wait for the run")
     a = ap.parse_args()
+    if not a.song and not a.recut:
+        ap.error("--song is required (or --recut RUN_DIR)")
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
+
+    if not os.environ.get("COMFY_BASE_URL", "").strip():
+        os.environ["COMFY_BASE_URL"] = LOCAL_PROXY  # Comfy Cloud can't run custom node packs yet
+    base = os.environ["COMFY_BASE_URL"]
+    if not a.no_proxy and base.rstrip("/") == LOCAL_PROXY:
+        ensure_proxy(base, a.comfyui)
 
     from comfy_sdk import Comfy
 
-    run = a.run_name or f"sdk-{a.mode}-{a.pack}-{dt.datetime.now():%Y%m%d-%H%M%S}"
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    timeout = a.timeout * 3600
     with Comfy() as client:
-        # 1. plan
+        say(f"Comfy SDK -> {client!r}")
+
+        if a.recut:  # re-cut a finished run at another FX level
+            wf = client.workflows.from_file(ASSEMBLE)
+            n = node_id(wf, "FVAssemble")
+            wf.set_input(n, "run_dir", a.recut)
+            wf.set_input(n, "audio_fx", a.fx)
+            job = wait(client.submit(wf), "re-cut", t0, timeout)
+            say()
+            if job.status != "succeeded":
+                say(f"re-cut failed: {job.error}")
+                return 1
+            for f in download(job, out, f"recut_{a.fx}_"):
+                say(f"saved {f}")
+            return 0
+
+        # 1. the Director: song analysis, World, cast, shot plan
         wf = client.workflows.from_file(DIRECTOR)
         song, d = node_id(wf, "LoadAudio"), node_id(wf, "FVDirector")
+        say(f"uploading {Path(a.song).name}")
         wf.set_input(song, "audio", client.assets.from_file(a.song))
-        for k, v in (("mode", a.mode), ("pack", a.pack), ("format", a.format), ("preset", a.preset),
-                     ("seconds", a.seconds), ("start", a.start), ("seed", a.seed), ("twins", a.twins),
-                     ("run_name", run), ("dance_video_path", a.dance), ("artist_image_path", a.artist),
-                     ("framing", a.framing), ("queue_renders", False), ("queue_assemble", False),
-                     ("qc_retries", 0), ("theme", a.theme), ("broll_share", a.broll)):
+        for k, v in (("theme", a.theme), ("seconds", a.seconds), ("start", a.start), ("format", a.format),
+                     ("preset", a.preset), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
+                     ("cuts_medium", a.cuts_medium), ("cuts_high", a.cuts_high), ("cast_order", a.cast_order),
+                     ("crowd", a.crowd), ("broll_share", a.broll), ("qc_retries", a.qc),
+                     ("run_name", a.run_name), ("queue_renders", not a.preview), ("queue_assemble", True)):
             wf.set_input(d, k, v)
-        job = client.submit(wf, metadata={"app": "oneshot-mv", "run": run}).result()
+        say("Director: analysing the song, writing the World, planning the shots")
+        job = wait(client.submit(wf), "Director", t0, timeout)
+        say()
+        if job.status != "succeeded":
+            say(f"the Director failed: {job.error}")
+            return 1
         bundle = fetch_json(job, "jobs.json")
+        say(bundle.get("summary") or f"run '{bundle['run_id']}' planned")
+        say()
+        if a.preview:
+            say("Preview only: nothing was rendered. Change --theme if needed and run again "
+                "without --preview (the song analysis and the World are cached).")
+            return 0
+
+        # 2-3. the run's stages render in ComfyUI; a Run Result job waits behind them
         run_dir = bundle["run_dir"]
-        print(f"run '{bundle['run_id']}': {len(bundle['jobs'])} jobs planned")
-
-        # 2. renders
-        run_all(client, [j["graph"] for j in bundle["jobs"]], "renders", run, a.timeout)
-
-        # 3. take QC and re-rolls
-        for p in range(a.retries + 1):
-            qc = {"1": {"class_type": "FVQC", "inputs": {"run_dir": run_dir, "pass_index": p,
-                                                         "max_passes": a.retries, "then_assemble": False,
-                                                         "queue_rerolls": False}}}
-            qj = client.submit(client.workflows.from_json(qc), metadata={"app": "oneshot-mv", "run": run}).result()
-            q = fetch_json(qj, f"qc{p}.json")
-            print(f"  {q['message']}")
-            if q["final"]:  # the last pass returns the b-roll cutaways (stills, then their clips)
-                if q["jobs"]:
-                    run_all(client, [j["graph"] for j in q["jobs"]], "b-roll", run, a.timeout)
+        say(f"rendering run '{bundle['run_id']}' (the ComfyUI page shows each stage)")
+        res = client.workflows.from_file(RESULT)
+        rid = node_id(res, "FVRunResult")
+        res.set_input(rid, "run_dir", run_dir)
+        while True:
+            job = wait(client.submit(res), "rendering", t0, timeout)
+            if job.status != "succeeded":
+                say(f"\nthe result check failed: {job.error}")
+                return 1
+            st = fetch_json(job, "status.json")
+            print(f"\r  {st['message']}  [{(time.time() - t0) / 60:.1f} min]", flush=True)
+            if st["state"] == "done":
                 break
-            if not q["jobs"]:
-                break
-            run_all(client, [j["graph"] for j in q["jobs"]], f"re-rolls (pass {p + 1})", run, a.timeout)
+            if st["state"] in ("stopped", "missing"):
+                return 1
+            if time.time() - t0 > timeout:
+                say("timed out; the run may still finish in ComfyUI")
+                return 1
+            time.sleep(20)
 
-        # 4. cut
-        asm = {"1": {"class_type": "FVFreeMemory", "inputs": {"note": "before assembly"}}}
-        client.submit(client.workflows.from_json(asm)).result()
-        asm = {"1": {"class_type": "FVAssemble", "inputs": {"run_dir": run_dir, "filename_prefix": bundle["run_rel"],
-                                                            "fx_intensity": a.fx, "finish": True}}}
-        aj = client.submit(client.workflows.from_json(asm), metadata={"app": "oneshot-mv", "run": run}).result()
-        saved = [o.to_file(out / o.name) for o in aj.outputs if o.name.lower().endswith((".mp4", ".mov", ".webm"))]
-    print(f"done in {(time.time() - t0) / 60:.1f} min")
+        saved = download(job, out, f"{bundle['run_id']}_")
+    say(f"done in {(time.time() - t0) / 60:.1f} min")
     for f in saved:
-        print(f)
+        say(f"saved {f}")
+    other = "subtle" if a.fx == "intense" else "intense"
+    say(f"re-cut it with other FX:  python sdk_run.py --recut \"{run_dir}\" --fx {other}")
     return 0
 
 
