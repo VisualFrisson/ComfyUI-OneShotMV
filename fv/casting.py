@@ -289,9 +289,11 @@ def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
         dressed = f" The crowd is {dress}, as in a big-budget period film." if era else f" The crowd is {dress}."
     p = _ONLY_ONE.sub("An invented person. " + CROWD_BEHIND + dressed, prompt)
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
-    p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close: the spectators stay in their seats far behind as "
-               "a soft blur" + (f" ({dress})" if dress else f", all in the clothes of {era}" if era else "") +
-               ", and nobody walks into the shot or up to the person.", p)
+    # in the clip, never name people, clothes or anyone arriving: LTX acts every person a prompt names
+    # (sx05k: "spectators stay in their seats ... a sea of wool tunics" and "anyone who comes into view"
+    # walked crowds of tunic-clad extras onto the sand around every gladiator)
+    p = re.sub(r"(?i)\bNo one else in frame\.", "They stand alone on open ground for the whole shot, with the stands "
+               "far behind as a still, soft blur of colour.", p)
     # a moving camera brings new people into the frame, and LTX dresses them in modern clothes (the
     # user, Oct 27): in front of a crowd the camera stays put
     p = re.sub(r"(?i)\bThe (?:handheld )?camera (?:sways|drifts|bobs|tracks|arcs)[^.]*\.",
@@ -300,12 +302,13 @@ def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
 
 
 def period_background(sing: str, era: str) -> str:
-    """Every clip in a period World: whoever is or comes into the background is dressed for the
-    period (the user, Oct 27: as the camera moves, LTX's new background people were in modern
-    clothes). Positive words only: the clips run at cfg 1, where a negative prompt does nothing."""
-    if not era or "comes into view" in sing:
+    """Every clip in a period World: the background stays as it is (the user, Oct 27: as the camera
+    moved, LTX brought new people into the background in modern clothes). Said without naming people
+    or clothes: "anyone who comes into view is dressed for the period" made LTX bring people into view
+    (sx05k). Positive words only: the clips run at cfg 1, where a negative prompt does nothing."""
+    if not era or "background stays the same" in sing:
         return sing
-    return sing.rstrip() + f" Everyone in the background, including anyone who comes into view, is dressed in the clothes of {era}."
+    return sing.rstrip() + " The background stays the same, still and unchanged, from the first frame to the last."
 
 
 def edit_realism(close: bool = True) -> str:
