@@ -189,10 +189,11 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_on
     """Krea 2 W5 hybrid (Turbo composes, RAW + Turbo LoRA redetails). turbo_only=True uses the
     Turbo model for both passes: one model to load instead of two (the fast preset).
     denoise: how hard the RAW pass redetails the upscaled image; 0.40 looks too gritty, so 0.25
-    keeps Turbo's cleaner composition and adds less texture."""
+    keeps Turbo's cleaner composition and adds less texture. A set that names the same file for
+    Turbo and RAW also runs Turbo for both passes (the Turbo LoRA is only for the RAW model)."""
     g = Graph()
     turbo = g.add("UNETLoader", unet_name=M["krea_turbo"], weight_dtype="default")
-    if turbo_only:
+    if turbo_only or M["krea_raw"] == M["krea_turbo"]:
         lora = turbo
     else:
         raw = g.add("UNETLoader", unet_name=M["krea_raw"], weight_dtype="default")
