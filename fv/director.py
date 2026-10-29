@@ -72,9 +72,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            queue: bool = True, editor: str = "klein", guide_strength: float = 1.0,
            do_stems: bool = True, queue_assemble: bool = True, framing: str = "mixed",
            artist_path: str = "", qc_retries: int = 2, theme: str = "", broll_share: float = 0.125,
-           broll_style: str = "mix", lip_repair: bool = False, staged: bool = True,
+           broll_style: str = "mix", staged: bool = True,
            look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "",
-           cast_order: str = "as written", crowd: str = "auto", log=print) -> dict:
+           cast_order: str = "as written", crowd: str = "auto", log=print,
+           lip_repair: bool = False) -> dict:  # lip_repair: retired Oct 28 (LatentSync removed), ignored;
+    # still accepted so a ComfyUI that has not restarted (old nodes.py in memory) can call in
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
@@ -165,30 +167,15 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         stems.write_wav(os.path.join(run_dir, "vocals.wav"), st["vocals"], st["sr"])
         stems.write_wav(os.path.join(run_dir, "drums.wav"), st["drums"], st["sr"])
         vocal_path = os.path.join(run_dir, "vocals.wav")
+        log("[OneShotMV] stems: vocals and drums")
     else:
         vocal_path = os.path.join(run_dir, "song.wav")
         p["stems_t0"] = 0.0
 
-    p["lipfix"] = bool(lip_repair)  # LatentSync repair pass in the final QC (off: user NG on ls1)
-    # lyrics with word timings (Whisper) for b-roll that matches the words (fv/broll.py)
+    # b-roll cutaways (fv/broll.py): World characters in a candid moment, dancers in instrumental gaps
     if mode == "voice" and broll_share > 0:
         p["broll_share"] = float(broll_share)
-        p["broll_style"] = broll_style
-        from . import lyrics
-        if lyrics.available() and os.path.exists(vocal_path):
-            try:
-                vx_, vsr_ = stems.read_wav(vocal_path)
-                shift = p["stems_t0"] - p["song_t0"]
-                raw = lyrics.transcribe(vx_, vsr_, log=log)
-                p["lyrics_debug"] = {"raw": len(raw), "first": raw[:6], "text": getattr(lyrics, "LAST_TEXT", "")[:300]}
-                words = [dict(w, t0=round(w["t0"] + shift, 3), t1=round(w["t1"] + shift, 3)) for w in raw]
-                words = [w for w in words if -0.5 <= w["t0"] <= p["duration"] + 0.5]
-                p["lyrics"] = {"words": words, "lines": lyrics.lines(words)}
-                if lyrics.LAST_ERROR:
-                    p["lyrics_error"] = lyrics.LAST_ERROR
-                log(f"[OneShotMV] lyrics: {len(words)} words, {len(p['lyrics']['lines'])} lines")
-            except Exception as e:
-                log(f"[OneShotMV] lyrics skipped ({e})")
+        p["broll_style"] = broll_style if broll_style in ("mix", "world", "dance") else "mix"
 
     rsize = formats.render_size(fmt, preset)
     jobs: list[tuple[str, dict]] = []
@@ -1139,56 +1126,12 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 if "sync_offset" in best:
                     r["sync_delay"] = round(min(0.4, max(-0.1, -best["sync_offset"] / 25.0)), 3)
                     r["sync_conf"] = best.get("sync_conf")
-        # lip-sync repair: LatentSync re-draws the mouth of the leads SyncNet still scores low
-        # (fv/lipfix.py); a repaired take replaces the original only if it scores clearly higher
-        fixed = []
-        if voice and vocal is not None and stage != "looks" and p.get("lipfix", False) and not p.get("lipfix_done"):
-            from . import lipfix
-            if lipfix.available():
-                thr = qc.THRESH.get("sync_conf", 4.5)
-                sung = qc.THRESH.get("sync_singing", 0.55)
-                weak = []
-                for r in p["renders"]:
-                    if r["role"] != "A" or r.get("size", "close") == "wide" or r.get("sync_conf") is None:
-                        continue
-                    cur = next((t for t in r.get("takes", []) if t.get("path") == r.get("path")), {})
-                    if r["sync_conf"] < thr and cur.get("singing_frac25", 1.0) >= sung:
-                        weak.append((r, cur))
-                weak.sort(key=lambda x: x[0]["sync_conf"])
-                for r, cur in weak[:int(p.get("lipfix_max", 16))]:
-                    seek = r["t_start"] + p["song_t0"] - p.get("stems_t0", 0.0)
-                    out = os.path.join(run_dir, f"r{r['id']:03d}A_ls_00001_.mp4")
-                    try:
-                        res = lipfix.repair(r["path"], vocal, sr, seek, out, log=log)
-                    except Exception as e:  # never let the repair block the cut
-                        log(f"[OneShotMV] lip-sync repair of r{r['id']:03d}A failed: {e}")
-                        continue
-                    if not res:
-                        continue
-                    sc = qc.sync_check(out, vocal, sr, seek)
-                    before = float(r["sync_conf"])
-                    after = float(sc.get("sync_conf", 0.0))
-                    better = after >= before + 0.5
-                    take = {"path": out, "fps": 25, "frames": res["frames"], "latentsync": True, "v": qc.VERSION,
-                            "fail": [], "face_frac_ls": res["face_frac"], **sc,
-                            "score": round(cur.get("score", 0.0) + 0.08 * (after - before) + (0.01 if better else -1.0), 4)}
-                    r.setdefault("takes", []).append(take)
-                    if better:
-                        r["sync_delay_ltx"] = r.get("sync_delay")
-                        r.update(path=out, fps=25, frames=res["frames"], sync_conf=after, latentsync=True)
-                        if "sync_offset" in sc:
-                            r["sync_delay"] = round(min(0.4, max(-0.1, -sc["sync_offset"] / 25.0)), 3)
-                    fixed.append(f"r{r['id']:03d}A {before:.1f}->{after:.1f}{' kept' if better else ''}")
-                lipfix.free()
-                if fixed:
-                    log("[OneShotMV] lip-sync repair: " + ", ".join(fixed))
-            p["lipfix_done"] = True
-            p["lipfix_report"] = fixed
         shots = {s["index"]: s for s in p.get("shots", []) if "index" in s}
         for r in p["renders"]:  # twins follow their lead's mouth, so they share its offset
             lead = by_id.get(r.get("twin_of"))
             if r["role"] == "B" and lead is not None and "sync_delay" in lead:
-                # a repaired lead's own offset changed; its twins still follow the original take
+                # (runs from before Oct 28 may hold a LatentSync-repaired lead: its twins follow
+                # the original take's offset)
                 r["sync_delay"] = lead.get("sync_delay_ltx", lead["sync_delay"]) if lead.get("latentsync") \
                     else lead["sync_delay"]
             # a delay can't reach back past the clip's own lead-in (it would hold the first

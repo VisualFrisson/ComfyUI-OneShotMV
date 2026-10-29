@@ -137,11 +137,6 @@ def _system() -> dict:
         out["queue"] = {"running": len(running), "pending": len(pending)}
     except Exception:
         pass
-    try:
-        from . import lyrics
-        out["whisper"] = bool(lyrics.available())
-    except Exception:
-        out["whisper"] = False
     return out
 
 
@@ -233,7 +228,7 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
 # for a 111 s window took 16 min, most of it writing 53 extra characters 8 at a time). A World
 # already written for the same line and seed is reused, so a second preview is quick.
 T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
-     "gender": 55, "stems": 5, "stems_per_s": 0.25, "lyrics": 10, "lyrics_per_s": 0.05, "crowd": 45, "finish": 5}
+     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5}
 
 
 def _bible(theme: str, seed: int) -> dict | None:
@@ -282,12 +277,6 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
-    try:
-        from . import lyrics
-        if share > 0 and lyrics.available():
-            parts.append({"id": "lyrics", "name": "Reading the lyrics", "s": round(T["lyrics"] + T["lyrics_per_s"] * win)})
-    except Exception:
-        pass
     if theme and b.get("crowd", "auto") != "off":
         from . import theme as themes
         if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
@@ -338,8 +327,8 @@ def _progress(pid: str, rec: dict) -> dict:
             done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "voice plan:" in m:
             done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
-        if "lyrics:" in m or "lyrics skipped" in m:
-            done.update({"listen", "load", "world", "roles", "cast", "gender", "stems", "lyrics"}); last_t = ts
+        if "[OneShotMV] stems:" in m or "lyrics:" in m or "lyrics skipped" in m:  # older runs logged lyrics
+            done.update({"listen", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
     now = time.time()
     left, cur = 0.0, None
     for x in parts:

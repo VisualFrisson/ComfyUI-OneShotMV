@@ -380,16 +380,6 @@
      "link": null
     },
     {
-     "localized_name": "lip_repair",
-     "name": "lip_repair",
-     "shape": 7,
-     "type": "BOOLEAN",
-     "widget": {
-      "name": "lip_repair"
-     },
-     "link": null
-    },
-    {
      "localized_name": "qc_retries",
      "name": "qc_retries",
      "shape": 7,
@@ -524,7 +514,6 @@
     "",
     0.125,
     "mix",
-    false,
     2,
     true,
     "every 2 bars",

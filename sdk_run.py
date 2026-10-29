@@ -12,7 +12,7 @@ Another deployment that runs the OneShot MV nodes: set COMFY_BASE_URL (and COMFY
 
 What happens:
   1. The song goes up as an asset, and a Director job analyses it (beats, sections, energy,
-     stems, lyrics), writes the World, casts the performers and plans every shot. The plan
+     stems), writes the World, casts the performers and plans every shot. The plan
      prints here. With --preview it stops there and renders nothing.
   2. The Director queues the run's own stages in ComfyUI (they jump the queue): portraits and
      b-roll stills, the vision check (re-makes bad stills), the lip-sync clips, take QC with

@@ -1,7 +1,8 @@
 """B-roll (Second Unit): a few cutaways where nobody sings: one of the World's characters caught in
 a candid moment of their own life (the user, Oct 25: empty environment shots fell flat, every
-cutaway has a person), and performers dancing to the track (medium shots, not full body) as filler. Cutaways that illustrate the lyrics (broll_style 'lyrics') are still there, but no longer
-the default: in the Oct 24 samples they came out as a rock on concrete and a fruit bowl.
+cutaway has a person), and performers dancing to the track (medium shots, not full body) as filler.
+Cutaways that illustrated the lyrics (Whisper) were removed on Oct 28: they were off by default
+and, in the Oct 24 samples, came out as a rock on concrete and a fruit bowl.
 
 About one shot in eight (`broll_share`), never on the drop and never the opening shot, never
 two in a row. Slots are filled first where lip sync is still weak after the re-rolls (a sung
@@ -9,18 +10,15 @@ shot whose SyncNet confidence stayed low), then in instrumental gaps (a lead wit
 vocal under it). Each world cutaway is written as an image prompt by the same local language
 model as themes (fv/theme.py), from one of the World's places and lights; Krea 2 makes the still
 and LTX moves it. broll_style 'mix' (default) puts the world cutaways over weak lip sync and the
-dance filler in instrumental gaps; 'world', 'lyrics' or 'dance' uses one kind everywhere."""
+dance filler in instrumental gaps; 'world' or 'dance' uses one kind everywhere."""
 from __future__ import annotations
 
 import json
 import os
 import re
 
-from . import formats, graphs, lyrics
+from . import formats, graphs
 from .casting import finish_prompt
-
-PROMPT = """You are editing a music video{world}. Write the image prompt for one b-roll shot, a cutaway where nobody sings, for the moment when the singer sings: "{line}"
-Show the idea of these words literally or as a visual metaphor: an object, a place, a detail, a landscape, the weather, the sky, a street. No people at all, no brands, no logos, no text or lettering anywhere, nothing explicit. Make it look like a real photograph of an ordinary moment someone actually took: specific, believable details, nothing magical, surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
 PROMPT_WORLD = """You are editing a music video set in this world: "{world}". Write the image prompt for one b-roll cutaway: an ordinary, everyday view {place}, {light}, exactly as it really looks at that moment, with the things normally found there, and nobody in it. Nothing odd, symbolic, dramatic, sad or out of place, no story and no metaphor. No people, no brands, no logos, no recognisable car or product models, no text, screens or lettering anywhere. Answer with one sentence of at most 40 words that describes the image, and nothing else."""
 
@@ -137,14 +135,6 @@ def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: s
     """(image prompt, the line it illustrates: '' for world cutaways)."""
     from . import theme as themes
     th = p.get("theme") or {}
-    if style == "lyrics":
-        lns = (p.get("lyrics") or {}).get("lines", [])
-        ln = lyrics.line_near(lns, shot["t0"], shot["t1"])
-        if ln:
-            q = PROMPT.format(world=_world(p, pack), line=ln["text"].replace('"', "'"))
-            text = themes.llm(q, seed=seed, max_length=160, log=log)
-            if text:
-                return _clean(text), ln["text"]
     if th.get("theme") and th.get("places"):
         # the characters' own workplaces first: the extra places drift off-world (Night Shift
         # retest: a record store, a bowling alley, a theatre lobby)
@@ -236,12 +226,10 @@ def _action_for(p: dict, pack: dict, d: dict, seed: int, log=print) -> str:
 
 def kind_for(why: str, style: str) -> str:
     """'moment' (one of the world's characters in a candid moment, not singing), 'dance' (a
-    performer dancing, not singing) or 'words' (an empty shot of the lyric; broll_style 'lyrics'
-    only: empty cutaways fell flat, the user's note of Oct 25)."""
+    performer dancing, not singing). Empty cutaways ('words') are kept for the artist pack's
+    instrumental gaps only: they fell flat elsewhere (the user's note of Oct 25)."""
     if style == "dance":
         return "dance"
-    if style == "lyrics":
-        return "words"
     if style == "world":
         return "moment"
     return "dance" if why == "instrumental gap" else "moment"  # mix
