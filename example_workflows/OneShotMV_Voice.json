@@ -171,7 +171,15 @@
     "",
     0.125,
     "mix",
-    2
+    2,
+    true,
+    "every 2 bars",
+    "every bar",
+    "to the music (subtle)",
+    "subtle",
+    false,
+    "as written",
+    "auto"
    ],
    "title": "OneShot MV: Director"
   },

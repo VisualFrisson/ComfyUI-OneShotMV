@@ -1099,32 +1099,6 @@ def _look_preview(name: str, look: str, shot: int | None, w: int = 560) -> str:
     return out
 
 
-def _look_sheet(name: str) -> str:
-    """Every look on three frames of the run, for choosing which four the Result screen shows."""
-    from PIL import Image, ImageDraw
-    LOOKS = _fv("finish").LOOKS
-    d = _run_dir(name)
-    p = _load(os.path.join(d, "plan.json"), {}) or {}
-    shots = [s for s in p.get("shots", []) if any(r.get("shot") == s["index"] and r.get("role") == "A" for r in p["renders"])]
-    pick = [shots[len(shots) // 6]["index"], shots[len(shots) // 2]["index"], shots[(5 * len(shots)) // 6]["index"]]
-    frames = [_preview_frame(d, p, i)[0] for i in pick]
-    looks = list(LOOKS)
-    tiles = [[_graded(d, p, f, lk, {"grain": 0, "vignette": 0}) for f in frames] for lk in looks]
-    th, tw = tiles[0][0].shape[:2]
-    lab = 34
-    sheet = Image.new("RGB", (tw * 3, (th + lab) * len(looks)), (13, 16, 21))
-    dr = ImageDraw.Draw(sheet)
-    for i, lk in enumerate(looks):
-        y0 = i * (th + lab)
-        dr.text((10, y0 + 9), f"{i}. {LOOKS[lk]}  ({lk})", fill=(238, 240, 244))
-        for j, t in enumerate(tiles[i]):
-            sheet.paste(Image.fromarray(t), (j * tw, y0 + lab))
-    out = os.path.join(d, "studio_previews", "look_sheet.jpg")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    sheet.save(out, quality=84)
-    return out
-
-
 def _grain_preview(name: str, look: str, grain: float, size: float, shot: int | None = None, cw_px: int = 640) -> str:
     """A 1:1 crop of a delivery-size frame with the grain on, made the way the cut makes it:
     the grade at render size, the upscale, then the grain."""
@@ -1236,9 +1210,6 @@ async def _api(request: web.Request, route: str) -> web.Response:
         path = await _blocking(_grain_preview, route[6:], q.get("look", "none"), q.get("g", 0.05), q.get("s", 1.0),
                                int(shot) if shot not in (None, "") else None, int(q.get("w") or 640))
         return web.FileResponse(path, headers={"Cache-Control": "max-age=3600"})
-    if route.startswith("looksheet/"):
-        path = await _blocking(_look_sheet, route[10:])
-        return web.FileResponse(path, headers={"Cache-Control": "no-store"})
     if route.startswith("run/"):
         return web.json_response(await _blocking(_run, route[4:]))
     if route.startswith("job/"):

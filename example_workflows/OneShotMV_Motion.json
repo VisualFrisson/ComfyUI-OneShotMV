@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## OneShot MV: motion\n\n**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then click **Run**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts are calm in the quiet parts, a bar a character in the build, and fast on the drop, where a second character flickers in doing the same move.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
+    "## OneShot MV: motion (experimental)\n\nNeeds FLUX.2 [klein], LTX-2.5, the LTX-2.3 union-control IC-LoRA and comfyui_controlnet_aux (see the README). The voice workflow and the Studio don't.\n\n**One dance, many dancers.** Load a song and a dance clip (full body, steady camera), then click **Run**. A crew behind the lead dancer is fine: only the lead's pose guides the render. A new character takes over the same choreography. Every cut is a match cut, because each segment is rendered from the clip's pose (DWPose plus the LTX union-control IC-LoRA). The cuts are calm in the quiet parts, a bar a character in the build, and fast on the drop, where a second character flickers in doing the same move.\n\n**Packs**\n- **spotlight**: one dark stage, costume changes, motion trails.\n- **wardrobe**: a new world every beat.\n\nThe finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.\n\nUse music and footage you have the rights to."
    ],
    "title": "How it works"
   },
@@ -166,7 +166,15 @@
     "",
     0.0,
     "mix",
-    2
+    2,
+    true,
+    "every 2 bars",
+    "every bar",
+    "to the music (subtle)",
+    "subtle",
+    false,
+    "as written",
+    "auto"
    ],
    "title": "OneShot MV: Director"
   },

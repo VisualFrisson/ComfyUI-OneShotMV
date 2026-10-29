@@ -11,7 +11,52 @@ import os
 from . import formats
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-M = json.load(open(os.path.join(HERE, "models.json"), encoding="utf-8"))
+MODEL_FOLDERS = ("checkpoints", "diffusion_models", "unet", "loras", "text_encoders", "clip", "vae",
+                 "latent_upscale_models")
+MODEL_EXT = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
+
+
+def _resolve_models(m: dict) -> dict:
+    """Each model file in models.json as this ComfyUI lists it. A name that isn't found as written is
+    looked up by its file name in the model folders, so the files can sit in any sub-folder and the
+    path separator doesn't matter. Names that aren't found are left as written (the job then says
+    which file is missing)."""
+    try:
+        import folder_paths  # type: ignore
+    except Exception:
+        return m
+    have, by_name = set(), {}
+    for kind in MODEL_FOLDERS:
+        if kind not in getattr(folder_paths, "folder_names_and_paths", {}):
+            continue
+        try:
+            names = folder_paths.get_filename_list(kind)
+        except Exception:
+            continue
+        for n in names:
+            have.add(n)
+            by_name.setdefault(os.path.basename(n.replace("\\", "/")).lower(), n)
+
+    def fix(v):
+        if not isinstance(v, str) or not v.lower().endswith(MODEL_EXT) or v in have:
+            return v
+        alt = v.replace("\\", os.sep).replace("/", os.sep)
+        return alt if alt in have else by_name.get(os.path.basename(v.replace("\\", "/")).lower(), v)
+
+    return {k: [[fix(x[0]), *x[1:]] if isinstance(x, list) else fix(x) for x in v] if isinstance(v, list) else fix(v)
+            for k, v in m.items()}
+
+
+def _have_sage() -> bool:
+    """SageAttention is optional: without the package the LTX jobs skip the patch."""
+    try:
+        import importlib.util
+        return importlib.util.find_spec("sageattention") is not None
+    except Exception:
+        return False
+
+
+M = _resolve_models(json.load(open(os.path.join(HERE, "models.json"), encoding="utf-8")))
 
 R8_S2 = "0.909, 0.880, 0.840, 0.780, 0.700, 0.600, 0.500, 0.400, 0.250, 0.100, 0.0"
 R8_S3 = "0.909375, 0.725, 0.421875, 0.0"
@@ -110,7 +155,7 @@ def _ram_backups(g, model):
 def _ltx23(g, union=False):
     ck = g.add("CheckpointLoaderSimple", ckpt_name=M["ltx23_ckpt"])
     model = _ram_backups(g, O(ck, 0))
-    if M.get("ltx23_sage"):
+    if M.get("ltx23_sage") and _have_sage():
         model = O(g.add("PathchSageAttentionKJ", model=model, sage_attention=M["ltx23_sage"],
                         allow_compile=False))
     for name, st in M["ltx23_loras"]:

@@ -24,7 +24,7 @@
     "Node name for S&R": "MarkdownNote"
    },
    "widgets_values": [
-    "## OneShot MV: re-cut\n\nRe-cuts a finished run without re-rendering anything. Paste the run folder (it is printed by the Director) and set **fx_intensity**:\n- 0 = a clean cut;\n- 1 = the house style;\n- 2 to 3 = heavier.\n\nThe cut is re-derived from the pack's edit settings each time."
+    "## OneShot MV: re-cut\n\nCuts a finished run again without re-rendering anything. Paste the run folder into **run_dir** (the Director prints it; runs live in `output/oneshot-mv/runs/`), then set:\n- **audio_fx**: `from the run`, `none`, `subtle` or `intense`;\n- **fx_intensity**: 0 for no FX, 1 for the normal strength, up to 3 for heavier;\n- **finish**: the grade, grain and vignette.\n\nThe new cut replaces `final_<format>.mp4` in the run folder. The Studio's Post Processing does the same with FX per energy section and a grade preview."
    ],
    "title": "How it works"
   },
@@ -64,6 +64,7 @@
     "oneshot-mv/runs/<run>",
     "oneshot-mv/recut",
     1.0,
+    "from the run",
     true
    ],
    "title": "OneShot MV: Assemble"
