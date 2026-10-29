@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OneShot MV Studio</title>
+<link rel="icon" id="fav" href="data:,">
 <script>
 // the Studio's look: "neon" (blue-grey with the neon gradient, Oct 28) or "classic" (black with lime, Oct 24).
 // ?look=classic or the Look button switches; the choice is remembered in this browser.
@@ -27,8 +28,8 @@ button{font:inherit;color:inherit}
 .muted{color:var(--muted)}.dim{color:var(--dim)}
 header.top{display:flex;align-items:center;gap:20px;padding:14px 32px;border-bottom:1px solid var(--line);flex-wrap:wrap;position:sticky;top:0;background:rgba(10,10,10,.94);backdrop-filter:blur(6px);z-index:10}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text)}
-.logo .dot{width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px 4px rgba(200,255,61,.45)}
-.logo b{font-weight:800;font-stretch:125%;letter-spacing:.04em;font-size:16px}
+.logo .mark{width:28px;height:28px;flex:none;display:block}.logo .mark svg{width:100%;height:100%;display:block}
+.logo{gap:12px}.logo b{font-weight:800;font-stretch:125%;letter-spacing:.04em;font-size:26px;line-height:28px}
 nav.steps{display:flex;gap:6px;flex-wrap:wrap;margin-left:12px}
 .step{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:999px;font-size:13px;color:#999}
 .step .n{width:22px;height:22px;border-radius:50%;border:1px solid var(--line3);display:flex;align-items:center;justify-content:center;font-size:12px}
@@ -80,6 +81,7 @@ h1{margin:0;font-size:40px;line-height:1.05;font-weight:800;font-stretch:112%;le
 .tier small{display:block;font-size:13px;color:var(--muted);margin-top:2px}
 textarea,select,input[type=number],input[type=text]{width:100%;padding:12px 14px;border-radius:12px;background:var(--bg);border:1px solid var(--line2);color:var(--text);font:inherit}
 textarea{font-size:16px;line-height:1.4;resize:vertical;min-height:84px}
+#world{height:150px;min-height:110px;overflow-y:auto}
 textarea:focus,select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px}
@@ -200,6 +202,7 @@ html[data-look="neon"]{
   --g1:#d7ff3d;--g2:#19e6b0;--g3:#3a86ff;--g4:#b44dff;
   --grad:linear-gradient(90deg in oklch,var(--g1),var(--g2) 36%,var(--g3) 68%,var(--g4));
   --grad-v:linear-gradient(180deg in oklch,var(--g1),var(--g2) 36%,var(--g3) 68%,var(--g4));
+  --grad-d:linear-gradient(135deg in oklch,var(--g1),var(--g2) 36%,var(--g3) 68%,var(--g4));
   --grad-soft:linear-gradient(90deg in oklch,color-mix(in srgb,var(--g2) 13%,transparent),color-mix(in srgb,var(--g3) 15%,transparent),color-mix(in srgb,var(--g4) 18%,transparent));
   --ink:#0b0d10;
   --accent:#d7ff3d;--accent-bg:#181d24;--accent-bg2:#181d24;--accent-text:#eef0f4;
@@ -234,15 +237,13 @@ html[data-look="neon"] .toplink{font-size:14px;font-weight:700;letter-spacing:.0
 html[data-look="neon"] .toplink:hover{color:var(--text)}
 /* chrome */
 html[data-look="neon"] header.top{background:rgba(10,13,17,.94);border-bottom-color:var(--line)}
-html[data-look="neon"] .logo .dot{width:26px;height:26px;border-radius:6px;background:var(--grad);box-shadow:none;display:flex;align-items:center;justify-content:center}
-html[data-look="neon"] .logo .dot::after{content:"1";color:var(--ink);font:700 17px/1 var(--sans);font-stretch:condensed;font-variation-settings:'wdth' 75}
-html[data-look="neon"] .logo b{font-size:17px;letter-spacing:.06em;font-weight:700}
+html[data-look="neon"] .logo b{font-size:40px;line-height:28px;letter-spacing:.04em;font-weight:700}
 html[data-look="neon"] .step{position:relative;border-radius:0;padding:8px 10px;font-size:14px;letter-spacing:.06em;font-weight:700;background:none}
 html[data-look="neon"] .step .n{border-radius:6px;font-family:var(--mono);font-size:11px;border-color:var(--line2)}
 html[data-look="neon"] .step.done .n{background:var(--panel3);border-color:var(--panel3)}
 html[data-look="neon"] .step.now{background:none;color:var(--text)}
 html[data-look="neon"] .step.now::after{content:"";position:absolute;left:8px;right:8px;bottom:-2px;height:2px;background:var(--grad)}
-html[data-look="neon"] .step.now .n{background:var(--grad);border-color:transparent;color:var(--ink)}
+html[data-look="neon"] .step.now .n{background:var(--grad-d);border-color:transparent;color:var(--ink)}
 html[data-look="neon"] .chip{border-radius:7px;border-color:var(--line2);background:var(--panel2);text-transform:uppercase;letter-spacing:.06em;font-size:11px;font-weight:600}
 html[data-look="neon"] .chip .led{background:var(--ok)}
 /* surfaces */
@@ -262,7 +263,7 @@ html[data-look="neon"] .btn.primary:hover{background:var(--grad);color:var(--ink
 html[data-look="neon"] .btn.primary[disabled]{opacity:.35;filter:none}
 html[data-look="neon"] .btn.danger{border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:#ffb3ae;background:color-mix(in srgb,var(--bad) 9%,var(--panel2))}
 html[data-look="neon"] #recut{border-color:var(--line2)!important}
-html[data-look="neon"] textarea,html[data-look="neon"] select,html[data-look="neon"] input[type=number],html[data-look="neon"] input[type=text]{border-radius:8px;background:#0b0e12;border-color:var(--line2)}
+html[data-look="neon"] textarea,html[data-look="neon"] select,html[data-look="neon"] input[type=number],html[data-look="neon"] input[type=text]{border-radius:8px;background-color:#0b0e12;border-color:var(--line2)}
 html[data-look="neon"] .opt{border-radius:99px;background:var(--panel2);color:var(--muted);border-color:var(--line2);letter-spacing:.06em;font-weight:700;font-size:13px}
 html[data-look="neon"] .opt:hover{background:var(--panel3);color:var(--text)}
 html[data-look="neon"] .fmt,html[data-look="neon"] .tier{border-radius:10px;background:var(--panel2);border-color:var(--line2);color:var(--muted)}
@@ -405,11 +406,37 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 .demobar button:hover,.demobar select:hover{border-color:var(--warn)}
 .demobar select{max-width:260px}
 @media (max-width:700px){ .demobar{padding:8px 16px} }
+/* The Brief's right column: Format, Quality and Advanced as headlines; Advanced is a compact list */
+.side-h{margin:0 0 14px;font-size:20px;line-height:1;font-weight:800;color:var(--accent)}
+.adv summary .side-h{margin:0}
+.adv .car{color:var(--muted);flex:none}
+.adv summary{color:var(--text);min-height:36px}
+.opts{display:flex;flex-direction:column;margin-top:8px}
+.orow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:6px 0;border-top:1px solid var(--line);font-size:13px;font-weight:600;color:#C9CED6}
+.orow:first-child,.ogroup + .orow{border-top:0}
+.ogroup{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:12px 0 2px}
+.ogroup:first-child{padding-top:4px}
+.orow > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow.sub > span{display:flex;align-items:center;gap:8px}
+.orow.sub > span i{width:9px;height:9px;border-radius:50%;flex:none}
+.orow > span{flex:1 1 auto;min-width:0}
+.orow select,.orow input{flex:none;width:auto;max-width:60%;height:32px;padding:0 30px 0 11px;font-size:13px;font-weight:600;border-radius:8px;background-color:var(--panel2);border:1px solid var(--line2);color:var(--text);cursor:pointer;background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%}
+.orow input{width:68px;padding:0 10px;text-align:right;cursor:text}
+.orow select:hover,.orow input:hover{border-color:var(--line3)}
+.seg.mini{flex-wrap:nowrap;gap:4px}
+.seg.mini .opt{min-height:30px;padding:0 10px;font-size:12px}
+option{background:var(--panel2);color:var(--text)}
+html[data-look="neon"] .side-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.02em;font-weight:700;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
+html[data-look="neon"] .orow{color:#c9d0d9}
+html[data-look="neon"] .orow select,html[data-look="neon"] .orow input{background-color:var(--panel2)}
+html[data-look="neon"] .orow select,html[data-look="neon"] .orow input{text-transform:none;font-stretch:normal;font-variation-settings:normal}
+html{color-scheme:dark}
 </style>
 </head>
 <body>
 <header class="top">
-  <a class="logo" href="#/" aria-label="OneShot MV Studio, new video"><span class="dot" aria-hidden="true"></span><b>ONESHOT MV</b></a>
+  <a class="logo" href="#/" aria-label="OneShot MV Studio, new video"><span class="mark" id="mark" aria-hidden="true"></span><b>ONESHOT MV</b></a>
   <nav class="steps" aria-label="Steps" id="steps"></nav>
   <div class="topright">
     <span class="chip" id="sys"><span class="led" aria-hidden="true"></span>ComfyUI</span>
@@ -598,6 +625,7 @@ function overlayProgress(elapsed, left){
   $("#ovfill").style.width = pct + "%"; $("#ovbar").setAttribute("aria-valuenow", pct);
   $("#ovt2").textContent = `${clock(elapsed)} in · ` + (left > 20 ? `about ${dur(left)} left` : "almost done");
 }
+const gpuName = g => String(g || "").replace(/^NVIDIA\s+/i, "").replace(/\s+(Blackwell\s+)?(Workstation|Server|Max-Q)(\s+Edition)?$/i, "").replace(/\s+Laptop GPU$/i, "").trim();
 const dur = s => { s = Math.max(0, Math.round(s)); if (s < 90) return s + " s"; const m = Math.round(s / 60); return mins(m); };
 function estimate(b){ const sec = +b.seconds > 0 ? +b.seconds : (S.analysis ? S.analysis.duration : 30); return 6 + (b.preset === "quality" ? 2 : 1) * sec; }
 function saveBrief(){ store.set("brief", S.brief); }
@@ -630,7 +658,7 @@ async function loadSystem(){
   try{
     const s = S.sys = await api("system");
     const q = s.queue.running + s.queue.pending;
-    $("#sys").innerHTML = `<span class="led" aria-hidden="true"></span>ComfyUI${s.gpu ? " · " + esc(s.gpu) : ""}${q ? " · " + q + " in queue" : ""}`;
+    $("#sys").innerHTML = `<span class="led" aria-hidden="true"></span>ComfyUI${s.gpu ? " · " + esc(gpuName(s.gpu)) : ""}${q ? " · " + q + " in queue" : ""}`;
   }catch(e){
     $("#sys").innerHTML = `<span class="led off" aria-hidden="true"></span>ComfyUI not reachable`;
   }
@@ -647,13 +675,13 @@ async function viewBrief(){
    <div class="colmain">
     <section class="card" aria-labelledby="songh">
       <div class="row"><h2 class="label" id="songh">Song</h2><span id="songname" style="font-weight:700;font-size:16px"></span><span id="songmeta" class="mono muted" style="font-size:12px"></span>
-        <span style="margin-left:auto" class="row"><button class="btn sm hide" id="playbtn" type="button">Play this part</button><button class="btn sm hide" id="replace" type="button">Replace</button></span></div>
+        <span style="margin-left:auto" class="row"><button class="btn sm hide" id="playbtn" type="button">Play this part</button><button class="btn sm hide" id="replace" type="button">New song</button></span></div>
       <div id="songpick"></div>
       <div id="songwave" class="hide">
         <div class="wave" id="wave" title="Click to start the video there"><div class="bars" id="bars" aria-hidden="true"></div><div class="win" id="win" role="img"><i class="ring" aria-hidden="true"></i></div><div class="wl" id="wl"></div><div class="ph" id="ph"></div></div>
         <div class="ticks" id="ticks" aria-hidden="true"></div>
         <div class="row" style="margin-top:14px">
-          <div class="legend"><span><i style="background:var(--low)"></i>Low: intro, quiet bridges</span><span><i style="background:var(--mid)"></i>Medium: verses, builds</span><span><i style="background:var(--high)"></i>High: choruses, drops</span></div>
+          <div class="legend"><span><i style="background:var(--low)"></i>Low energy: intro, quiet bridges</span><span><i style="background:var(--mid)"></i>Medium energy: verses, builds</span><span><i style="background:var(--high)"></i>High energy: choruses, drops</span></div>
           <div class="seg" role="group" aria-label="Length" id="lens" style="margin-left:auto"></div>
         </div>
         <p class="note" id="winnote"></p>
@@ -665,29 +693,29 @@ async function viewBrief(){
       <h2 class="label" id="worldh" style="margin-bottom:16px">World</h2>
       <div class="tiles" role="group" aria-label="World examples" id="tiles"></div>
       <label for="world" style="display:block;margin:16px 0 8px;font-size:13px;color:var(--muted)">Describe the world in a line: who they are, what they wear, where they are, the light</label>
-      <textarea id="world" rows="3" placeholder="Like “the gladiator games in ancient Rome”. For more control: the people in the order you want them; the places; the light."></textarea>
+      <textarea id="world" rows="6" placeholder="Like “the gladiator games in ancient Rome”. For more control: the people in the order you want them; the places; the light."></textarea>
       <p class="note">One line is enough. The characters you name are cast first, in the order you name them, and every shot is a different invented person.</p>
     </section>
    </div>
 
    <aside class="colside">
     <section class="card">
-      <h2 class="label" style="margin-bottom:14px">Format</h2>
+      <h2 class="side-h">Format</h2>
       <div class="grid3" role="group" aria-label="Format" id="fmts"></div>
-      <h2 class="label" style="margin:22px 0 12px">Quality</h2>
+      <h2 class="side-h" style="margin-top:26px">Quality</h2>
       <div class="stack" role="group" aria-label="Quality" id="tiers"></div>
       <p class="tiny" style="margin:8px 0 0" id="etanote"></p>
-      <details class="adv" style="margin-top:12px">
-        <summary><svg class="car" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l4 4-4 4"/></svg>Advanced: cuts, effects, cast</summary>
-        <div class="advgrid">
-          <label class="field">Cuts in low parts<select id="cuts_low">${CUTS.map(c=>`<option>${c}</option>`).join("")}</select></label>
-          <label class="field">Cuts in medium parts<select id="cuts_medium">${CUTS.map(c=>`<option>${c}</option>`).join("")}</select></label>
-          <label class="field wide">Cuts in high parts (choruses, drops)<select id="cuts_high">${CUTS.map(c=>`<option>${c}</option>`).join("")}</select></label>
-          <div class="field wide">Audio FX on the drums<div class="seg" role="group" aria-label="Audio FX" id="fxs"></div></div>
-          <label class="field">Crowd behind singers<select id="crowd"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select></label>
-          <label class="field">Cast order<select id="cast_order"><option>as written</option><option>mixed</option></select></label>
-          <label class="field">Seed (new cast)<input id="seed" type="number" min="0" step="1"></label>
-          <label class="field">Cutaways<select id="broll"><option value="0">none</option><option value="0.125">about 1 in 8</option><option value="0.25">about 1 in 4</option></select></label>
+      <details class="adv" style="margin-top:22px">
+        <summary><span class="side-h">Advanced: cuts, effects, cast</span><svg class="car" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l4 4-4 4"/></svg></summary>
+        <div class="opts">
+          <div class="ogroup">Cuts by energy</div>
+          ${[["low","Low"],["medium","Medium"],["high","High"]].map(([k, n]) => `<label class="orow sub"><span><i style="background:${LEVEL_COL[k]}"></i>${n}</span><select id="cuts_${k}">${CUTS.map(c=>`<option>${c}</option>`).join("")}</select></label>`).join("")}
+          <div class="ogroup">Effects and cast</div>
+          <div class="orow"><span>Audio FX</span><div class="seg mini" role="group" aria-label="Audio FX on the drums" id="fxs"></div></div>
+          <label class="orow"><span>Crowd behind singers</span><select id="crowd"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select></label>
+          <label class="orow"><span>Cast order</span><select id="cast_order"><option>as written</option><option>mixed</option></select></label>
+          <label class="orow"><span>Cutaways</span><select id="broll"><option value="0">none</option><option value="0.125">about 1 in 8</option><option value="0.25">about 1 in 4</option></select></label>
+          <label class="orow"><span>Seed (new number, new cast)</span><input id="seed" type="number" min="0" step="1"></label>
         </div>
       </details>
     </section>
@@ -726,7 +754,7 @@ async function viewBrief(){
     $("#tiers").innerHTML = t.map(x => { const e = estimate(Object.assign({}, b, {preset:x[0]})); return `<button type="button" class="tier" data-q="${x[0]}" aria-pressed="${b.preset===x[0]}"><span class="t"><span><b>${x[1]}</b><span class="mono muted" style="font-size:12px;margin-left:8px">${x[2]}</span></span><span class="eta">≈ ${mins(e)}</span></span><small>${x[3]}</small></button>`; }).join("");
     $("#tiers").querySelectorAll(".tier").forEach(el => el.onclick = () => { b.preset = el.dataset.q; saveBrief(); drawTiers(); });
     const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song";
-    $("#etanote").textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + S.sys.gpu : ""}.`;
+    $("#etanote").textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`;
   };
   drawFmt(); drawTiers();
 
@@ -833,7 +861,7 @@ function drawWave(){
 }
 function viewBriefTiersRefresh(){ const b = S.brief; const tiers = $("#tiers"); if (!tiers) return;
   tiers.querySelectorAll(".tier").forEach(el => { const e = estimate(Object.assign({}, b, {preset: el.dataset.q})); el.querySelector(".eta").textContent = "≈ " + mins(e); });
-  const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song"; const n = $("#etanote"); if (n) n.textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + S.sys.gpu : ""}.`; }
+  const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song"; const n = $("#etanote"); if (n) n.textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`; }
 
 let _estT = null, _estN = 0;
 function refreshEstimate(){
@@ -1251,9 +1279,31 @@ async function viewVideos(){
   }catch(e){ $("#vg").innerHTML = `<p class="banner">${esc(e.message)}</p>`; }
 }
 
+// ---------------------------------------------------------------- app icon
+// Five candidates (Oct 28). ?icon=1..5 shows one, and the choice is remembered in this browser.
+const ICON_STOPS = '<stop offset="0" stop-color="#d7ff3d"/><stop offset=".36" stop-color="#19e6b0"/><stop offset=".68" stop-color="#3a86ff"/><stop offset="1" stop-color="#b44dff"/>';
+const iconGrad = (id, a = 0, b = 32) => `<defs><linearGradient id="${id}" x1="${a}" y1="${a}" x2="${b}" y2="${b}" gradientUnits="userSpaceOnUse">${ICON_STOPS}</linearGradient></defs>`;
+const INK = "#0b0d10", darkTile = '<rect x=".5" y=".5" width="31" height="31" rx="7" fill="#0b0d10" stroke="#2c3440"/>';
+const svgWrap = (id, body, a, b) => `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">${iconGrad(id, a, b)}${body}</svg>`;
+const ICONS = [
+  // 1. The cut: a play button cut through on the diagonal
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/><path d="M11.5 8.5v15L24 16z" fill="${INK}"/><path d="M8.5 21.5L23.5 8.5" stroke="url(#${id})" stroke-width="2.4"/>`),
+  // 2. Beat play: waveform bars in the shape of a play button
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/>` + [10.2, 13.7, 17.2, 20.7].map(x => { const h = 25 - x; return `<rect x="${x - 1.3}" y="${16 - h / 2}" width="2.6" height="${h}" rx="1.3" fill="${INK}"/>`; }).join("")),
+  // 3. Viewfinder: corner brackets around a record dot
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/><path d="M8 12.5V8h4.5M19.5 8H24v4.5M24 19.5V24h-4.5M12.5 24H8v-4.5" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="16" r="4.3" fill="${INK}"/>`),
+  // 4. Clapper: a gradient clapperboard on a dark tile
+  id => svgWrap(id, `${darkTile}<rect x="7" y="13.6" width="18" height="11" rx="2" fill="url(#${id})"/><g transform="rotate(-14 7.5 12.2)"><rect x="7" y="8.4" width="18" height="3.8" rx="1" fill="url(#${id})"/><path d="M11.4 8.4l-2.2 3.8M15.8 8.4l-2.2 3.8M20.2 8.4L18 12.2M24.6 8.4l-2.2 3.8" stroke="${INK}" stroke-width="1.7"/></g>`, 7, 25),
+  // 5. Aperture: a gradient iris on a dark tile
+  id => svgWrap(id, `${darkTile}<circle cx="16" cy="16" r="10.5" fill="url(#${id})"/><path d="M20.44 17.19L17.19 20.44L12.75 19.25L11.56 14.81L14.81 11.56L19.25 12.75Z" fill="${INK}"/><path d="M20.44 17.19L25.69 11.95M17.19 20.44L24.35 22.36M12.75 19.25L14.67 26.41M11.56 14.81L6.31 20.05M14.81 11.56L7.65 9.64M19.25 12.75L17.33 5.59" stroke="${INK}" stroke-width="1.5" stroke-linecap="round"/>`, 6, 26),
+];
+const ICON_N = (() => { let n = +QS.get("icon"); try{ if (n >= 1 && n <= ICONS.length) localStorage.setItem("osmv.icon", String(n)); else n = +localStorage.getItem("osmv.icon"); }catch(e){} return n >= 1 && n <= ICONS.length ? n : 1; })();
+function drawIcon(){ $("#mark").innerHTML = ICONS[ICON_N - 1]("lg"); $("#fav").href = "data:image/svg+xml," + encodeURIComponent(ICONS[ICON_N - 1]("fg")); }
+
 function drawLook(){ const l = document.documentElement.getAttribute("data-look") || "neon"; const b = $("#look"); if (b) b.textContent = "Look: " + (l === "neon" ? "Neon" : "Classic"); }
 $("#look").onclick = () => { const l = document.documentElement.getAttribute("data-look") === "neon" ? "classic" : "neon"; document.documentElement.setAttribute("data-look", l); store.set("look", l); try{ localStorage.setItem("osmv.look", l); }catch(e){} drawLook(); };
 drawLook();
+drawIcon();
 demoBar();
 loadSystem();
 setInterval(loadSystem, 30000);
