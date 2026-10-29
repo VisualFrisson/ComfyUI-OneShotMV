@@ -6,9 +6,12 @@
 <title>OneShot MV Studio</title>
 <link rel="icon" id="fav" href="data:,">
 <script>
-// the Studio's look: "neon" (blue-grey with the neon gradient, Oct 28) or "classic" (black with lime, Oct 24).
-// ?look=classic or the Look button switches; the choice is remembered in this browser.
-(function(){ var l = "neon"; try{ var q = new URLSearchParams(location.search).get("look"); if (q === "neon" || q === "classic") localStorage.setItem("osmv.look", q); l = localStorage.getItem("osmv.look") || "neon"; }catch(e){} document.documentElement.setAttribute("data-look", l); })();
+// the Studio's look: the Neon layout in one of four palettes (a gradient with matching surfaces).
+// ?pal=neon|sunset|aurora|ember or the Look menu switches; the choice is remembered in this browser.
+(function(){ var P = ["neon","sunset","aurora","ember"], l = "neon";
+  try{ var q = new URLSearchParams(location.search).get("pal"); if (P.indexOf(q) >= 0) localStorage.setItem("osmv.pal", q); l = localStorage.getItem("osmv.pal") || "neon"; }catch(e){}
+  if (P.indexOf(l) < 0) l = "neon";
+  document.documentElement.setAttribute("data-look", "neon"); document.documentElement.setAttribute("data-pal", l); })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -236,10 +239,10 @@ html[data-look="neon"] .kv{letter-spacing:.1em}
 html[data-look="neon"] .toplink{font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
 html[data-look="neon"] .toplink:hover{color:var(--text)}
 /* chrome */
-html[data-look="neon"] header.top{background:rgba(10,13,17,.94);border-bottom-color:var(--line)}
-html[data-look="neon"] .logo b{font-size:40px;line-height:28px;letter-spacing:.04em;font-weight:700}
-html[data-look="neon"] .step{position:relative;border-radius:0;padding:8px 10px;font-size:14px;letter-spacing:.06em;font-weight:700;background:none}
-html[data-look="neon"] .step .n{border-radius:6px;font-family:var(--mono);font-size:11px;border-color:var(--line2)}
+html[data-look="neon"] header.top{background:color-mix(in srgb,var(--chrome) 94%,transparent);border-bottom-color:var(--line)}
+html[data-look="neon"] .logo b{font-size:30px;line-height:28px;letter-spacing:.05em;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-look="neon"] .step{position:relative;border-radius:0;padding:8px 10px;font-size:16px;letter-spacing:.06em;font-weight:700;background:none}
+html[data-look="neon"] .step .n{width:24px;height:24px;border-radius:6px;font-family:var(--mono);font-size:12px;border-color:var(--line2)}
 html[data-look="neon"] .step.done .n{background:var(--panel3);border-color:var(--panel3)}
 html[data-look="neon"] .step.now{background:none;color:var(--text)}
 html[data-look="neon"] .step.now::after{content:"";position:absolute;left:8px;right:8px;bottom:-2px;height:2px;background:var(--grad)}
@@ -250,7 +253,7 @@ html[data-look="neon"] .chip .led{background:var(--ok)}
 html[data-look="neon"] .card{border-radius:18px;background:var(--panel);border-color:var(--line);box-shadow:0 1px 2px rgba(0,0,0,.45),0 14px 30px -14px rgba(0,0,0,.7)}
 html[data-look="neon"] .card.cta{position:relative;overflow:hidden}
 html[data-look="neon"] .card.cta::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--grad)}
-html[data-look="neon"] .bar{border-radius:12px;background:rgba(16,20,26,.92);border-color:#232a34;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.045)}
+html[data-look="neon"] .bar{border-radius:12px;background:color-mix(in srgb,var(--panel) 92%,transparent);border-color:var(--line);box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.045)}
 html[data-look="neon"] .overlay .box{border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.045)}
 html[data-look="neon"] .spin{border-top-color:var(--g3);animation-duration:1.6s}
 /* buttons and controls */
@@ -263,7 +266,7 @@ html[data-look="neon"] .btn.primary:hover{background:var(--grad);color:var(--ink
 html[data-look="neon"] .btn.primary[disabled]{opacity:.35;filter:none}
 html[data-look="neon"] .btn.danger{border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:#ffb3ae;background:color-mix(in srgb,var(--bad) 9%,var(--panel2))}
 html[data-look="neon"] #recut{border-color:var(--line2)!important}
-html[data-look="neon"] textarea,html[data-look="neon"] select,html[data-look="neon"] input[type=number],html[data-look="neon"] input[type=text]{border-radius:8px;background-color:#0b0e12;border-color:var(--line2)}
+html[data-look="neon"] textarea,html[data-look="neon"] select,html[data-look="neon"] input[type=number],html[data-look="neon"] input[type=text]{border-radius:8px;background-color:var(--chrome);border-color:var(--line2)}
 html[data-look="neon"] .opt{border-radius:99px;background:var(--panel2);color:var(--muted);border-color:var(--line2);letter-spacing:.06em;font-weight:700;font-size:13px}
 html[data-look="neon"] .opt:hover{background:var(--panel3);color:var(--text)}
 html[data-look="neon"] .fmt,html[data-look="neon"] .tier{border-radius:10px;background:var(--panel2);border-color:var(--line2);color:var(--muted)}
@@ -428,10 +431,39 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 option{background:var(--panel2);color:var(--text)}
 html[data-look="neon"] .side-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.02em;font-weight:700;
   background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
-html[data-look="neon"] .orow{color:#c9d0d9}
+html[data-look="neon"] .orow{color:color-mix(in srgb,var(--text) 80%,var(--muted))}
 html[data-look="neon"] .orow select,html[data-look="neon"] .orow input{background-color:var(--panel2)}
 html[data-look="neon"] .orow select,html[data-look="neon"] .orow input{text-transform:none;font-stretch:normal;font-variation-settings:normal}
 html{color-scheme:dark}
+/* palettes: each swaps the gradient and the surfaces that go with it (Neon is the default above) */
+html[data-look="neon"][data-pal="sunset"]{
+  --bg:#130e13;--chrome:#0e0a0e;--panel:#1a1319;--panel2:#221820;--panel3:#2c1f29;--line:#2d2029;--line2:#3d2c37;--line3:#4b3845;
+  --text:#f6eef2;--muted:#bba8b2;--dim:#8a7781;
+  --g1:#ffd166;--g2:#ff8a5b;--g3:#ff4f8b;--g4:#b14dff;--accent:#ffd166;--accent-bg:#221820;--accent-bg2:#221820;--accent-text:#f6eef2;--ink:#120b10}
+html[data-look="neon"][data-pal="aurora"]{
+  --bg:#0a1218;--chrome:#070d12;--panel:#0f1a22;--panel2:#14222c;--panel3:#1b2c38;--line:#1b2b36;--line2:#263946;--line3:#314757;
+  --text:#ecf6fa;--muted:#9fb6c2;--dim:#72899a;
+  --g1:#a8ffe0;--g2:#4fd8ff;--g3:#6a86ff;--g4:#c38bff;--accent:#a8ffe0;--accent-bg:#14222c;--accent-bg2:#14222c;--accent-text:#ecf6fa;--ink:#08121a}
+html[data-look="neon"][data-pal="ember"]{
+  --bg:#120f0c;--chrome:#0d0b09;--panel:#1a1511;--panel2:#221c16;--panel3:#2c241c;--line:#2d251d;--line2:#3d3228;--line3:#4b3f33;
+  --text:#f6f0e9;--muted:#b9ad9f;--dim:#8a7f72;
+  --g1:#ffe27a;--g2:#ffb347;--g3:#ff7a45;--g4:#ff4d6d;--accent:#ffe27a;--accent-bg:#221c16;--accent-bg2:#221c16;--accent-text:#f6f0e9;--ink:#140e09}
+/* the Look menu */
+.lookwrap{position:relative}
+.looksw{display:flex;align-items:center;gap:8px;cursor:pointer}
+.looksw .lsw{width:28px;height:10px;border-radius:3px;background:var(--grad)}
+.lookmenu{position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:230px;padding:6px;border-radius:12px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 20px 50px rgba(0,0,0,.55)}
+.lookmenu.hide{display:none}
+.lookmenu button{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border-radius:8px;background:none;border:0;color:var(--text);font:inherit;font-size:14px;font-weight:700;text-align:left;cursor:pointer}
+.lookmenu button:hover{background:var(--panel2)}
+.lookmenu button[aria-checked=true]{background:var(--panel2)}
+.lookmenu .pv{display:flex;align-items:center;gap:0;width:64px;height:26px;border-radius:7px;overflow:hidden;flex:none;border:1px solid rgba(255,255,255,.08)}
+.lookmenu .pv i{display:block;height:100%}
+.lookmenu .pv i:first-child{width:22px}
+.lookmenu .pv i:last-child{flex:1}
+.lookmenu .nm{flex:1}
+.lookmenu .ck{color:var(--muted);font-size:13px}
+html[data-look="neon"] .lookmenu button{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -442,7 +474,7 @@ html{color-scheme:dark}
     <span class="chip" id="sys"><span class="led" aria-hidden="true"></span>ComfyUI</span>
     <a class="toplink" href="#/videos">Your videos</a>
     <a class="toplink" href="/" target="_blank" rel="noopener">Open ComfyUI</a>
-    <button type="button" class="chip looksw" id="look" title="Switch the Studio's look">Look: Neon</button>
+    <span class="lookwrap"><button type="button" class="chip looksw" id="look" aria-haspopup="true" aria-expanded="false" aria-controls="lookmenu" title="The Studio's colours"><span class="lsw" aria-hidden="true"></span><span id="lookname">Look: Neon</span></button><div class="lookmenu hide" id="lookmenu" role="menu" aria-label="Look"></div></span>
   </div>
 </header>
 <main id="app" aria-live="polite"></main>
@@ -702,10 +734,14 @@ async function viewBrief(){
     <section class="card">
       <h2 class="side-h">Format</h2>
       <div class="grid3" role="group" aria-label="Format" id="fmts"></div>
-      <h2 class="side-h" style="margin-top:26px">Quality</h2>
+    </section>
+    <section class="card">
+      <h2 class="side-h">Quality</h2>
       <div class="stack" role="group" aria-label="Quality" id="tiers"></div>
       <p class="tiny" style="margin:8px 0 0" id="etanote"></p>
-      <details class="adv" style="margin-top:22px">
+    </section>
+    <section class="card">
+      <details class="adv">
         <summary><span class="side-h">Advanced: cuts, effects, cast</span><svg class="car" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l4 4-4 4"/></svg></summary>
         <div class="opts">
           <div class="ogroup">Cuts by energy</div>
@@ -1280,10 +1316,10 @@ async function viewVideos(){
 }
 
 // ---------------------------------------------------------------- app icon
-// Five candidates (Oct 28). ?icon=1..5 shows one, and the choice is remembered in this browser.
-const ICON_STOPS = '<stop offset="0" stop-color="#d7ff3d"/><stop offset=".36" stop-color="#19e6b0"/><stop offset=".68" stop-color="#3a86ff"/><stop offset="1" stop-color="#b44dff"/>';
+// Icon candidates (Oct 28). ?icon=N shows one, and the choice is remembered in this browser.
+const ICON_STOPS = '<stop offset="0" style="stop-color:var(--g1)"/><stop offset=".36" style="stop-color:var(--g2)"/><stop offset=".68" style="stop-color:var(--g3)"/><stop offset="1" style="stop-color:var(--g4)"/>';
 const iconGrad = (id, a = 0, b = 32) => `<defs><linearGradient id="${id}" x1="${a}" y1="${a}" x2="${b}" y2="${b}" gradientUnits="userSpaceOnUse">${ICON_STOPS}</linearGradient></defs>`;
-const INK = "#0b0d10", darkTile = '<rect x=".5" y=".5" width="31" height="31" rx="7" fill="#0b0d10" stroke="#2c3440"/>';
+const INK = "#0b0d10", darkTile = '<rect x=".5" y=".5" width="31" height="31" rx="7" style="fill:var(--chrome);stroke:var(--line2)"/>';
 const svgWrap = (id, body, a, b) => `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">${iconGrad(id, a, b)}${body}</svg>`;
 const ICONS = [
   // 1. The cut: a play button cut through on the diagonal
@@ -1296,12 +1332,43 @@ const ICONS = [
   id => svgWrap(id, `${darkTile}<rect x="7" y="13.6" width="18" height="11" rx="2" fill="url(#${id})"/><g transform="rotate(-14 7.5 12.2)"><rect x="7" y="8.4" width="18" height="3.8" rx="1" fill="url(#${id})"/><path d="M11.4 8.4l-2.2 3.8M15.8 8.4l-2.2 3.8M20.2 8.4L18 12.2M24.6 8.4l-2.2 3.8" stroke="${INK}" stroke-width="1.7"/></g>`, 7, 25),
   // 5. Aperture: a gradient iris on a dark tile
   id => svgWrap(id, `${darkTile}<circle cx="16" cy="16" r="10.5" fill="url(#${id})"/><path d="M20.44 17.19L17.19 20.44L12.75 19.25L11.56 14.81L14.81 11.56L19.25 12.75Z" fill="${INK}"/><path d="M20.44 17.19L25.69 11.95M17.19 20.44L24.35 22.36M12.75 19.25L14.67 26.41M11.56 14.81L6.31 20.05M14.81 11.56L7.65 9.64M19.25 12.75L17.33 5.59" stroke="${INK}" stroke-width="1.5" stroke-linecap="round"/>`, 6, 26),
+  // 6. Crosshair: the shot, lined up
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/><circle cx="16" cy="16" r="8.2" fill="none" stroke="${INK}" stroke-width="2.4"/><path d="M16 4.5v6.5M16 21v6.5M4.5 16H11M21 16h6.5" stroke="${INK}" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="16" r="2.1" fill="${INK}"/>`),
+  // 7. Crosshair on a dark tile, in the gradient
+  id => svgWrap(id, `${darkTile}<circle cx="16" cy="16" r="8.2" fill="none" stroke="url(#${id})" stroke-width="2.4"/><path d="M16 4.5v6.5M16 21v6.5M4.5 16H11M21 16h6.5" stroke="url(#${id})" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="16" r="2.1" fill="url(#${id})"/>`, 5, 27),
+  // 8. Sound wave: centred bars of different heights
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/>` + [[7, 6], [10.33, 12], [13.67, 19], [17, 14], [20.33, 21], [23.67, 11], [27, 5]].map(([x, h]) => `<rect x="${x - 1.15 - 1}" y="${16 - h / 2}" width="2.3" height="${h}" rx="1.15" fill="${INK}"/>`).join("")),
+  // 9. Sound wave on a dark tile, in the gradient
+  id => svgWrap(id, `${darkTile}` + [[7, 6], [10.33, 12], [13.67, 19], [17, 14], [20.33, 21], [23.67, 11], [27, 5]].map(([x, h]) => `<rect x="${x - 1.15 - 1}" y="${16 - h / 2}" width="2.3" height="${h}" rx="1.15" fill="url(#${id})"/>`).join(""), 5, 27),
+  // 10. Crosshair with a sound wave in its sights
+  id => svgWrap(id, `<rect width="32" height="32" rx="7" fill="url(#${id})"/><circle cx="16" cy="16" r="9.6" fill="none" stroke="${INK}" stroke-width="2.2"/><path d="M16 3.5v4.4M16 24.1v4.4M3.5 16h4.4M24.1 16h4.4" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>` + [[11.6, 4.5], [14.2, 9], [16.8, 12], [19.4, 6.5]].map(([x, h]) => `<rect x="${x - 1}" y="${16 - h / 2}" width="2" height="${h}" rx="1" fill="${INK}"/>`).join("")),
 ];
 const ICON_N = (() => { let n = +QS.get("icon"); try{ if (n >= 1 && n <= ICONS.length) localStorage.setItem("osmv.icon", String(n)); else n = +localStorage.getItem("osmv.icon"); }catch(e){} return n >= 1 && n <= ICONS.length ? n : 1; })();
-function drawIcon(){ $("#mark").innerHTML = ICONS[ICON_N - 1]("lg"); $("#fav").href = "data:image/svg+xml," + encodeURIComponent(ICONS[ICON_N - 1]("fg")); }
+function drawIcon(){
+  $("#mark").innerHTML = ICONS[ICON_N - 1]("lg");
+  // a favicon can't read the page's CSS variables, so it gets the palette's colours written in
+  const cs = getComputedStyle(document.documentElement);
+  const fav = ICONS[ICON_N - 1]("fg").replace(/var\((--[a-z0-9]+)\)/g, (m, v) => cs.getPropertyValue(v).trim() || "#000");
+  $("#fav").href = "data:image/svg+xml," + encodeURIComponent(fav);
+}
 
-function drawLook(){ const l = document.documentElement.getAttribute("data-look") || "neon"; const b = $("#look"); if (b) b.textContent = "Look: " + (l === "neon" ? "Neon" : "Classic"); }
-$("#look").onclick = () => { const l = document.documentElement.getAttribute("data-look") === "neon" ? "classic" : "neon"; document.documentElement.setAttribute("data-look", l); store.set("look", l); try{ localStorage.setItem("osmv.look", l); }catch(e){} drawLook(); };
+// the palettes, with the surface and gradient colours the menu previews
+const PALS = [["neon","Neon","#0d1015",["#d7ff3d","#19e6b0","#3a86ff","#b44dff"]],["sunset","Sunset","#130e13",["#ffd166","#ff8a5b","#ff4f8b","#b14dff"]],
+              ["aurora","Aurora","#0a1218",["#a8ffe0","#4fd8ff","#6a86ff","#c38bff"]],["ember","Ember","#120f0c",["#ffe27a","#ffb347","#ff7a45","#ff4d6d"]]];
+function drawLook(){
+  const cur = document.documentElement.getAttribute("data-pal") || "neon", p = PALS.find(x => x[0] === cur) || PALS[0];
+  $("#lookname").textContent = "Look: " + p[1];
+  $("#lookmenu").innerHTML = PALS.map(([id, name, bg, g]) => `<button type="button" role="menuitemradio" aria-checked="${id === cur}" data-pal="${id}">
+    <span class="pv" aria-hidden="true"><i style="background:${bg}"></i><i style="background:linear-gradient(90deg,${g.join(",")})"></i></span><span class="nm">${name}</span><span class="ck" aria-hidden="true">${id === cur ? "✓" : ""}</span></button>`).join("");
+  $("#lookmenu").querySelectorAll("[data-pal]").forEach(el => el.onclick = () => {
+    document.documentElement.setAttribute("data-pal", el.dataset.pal); try{ localStorage.setItem("osmv.pal", el.dataset.pal); }catch(e){}
+    drawLook(); drawIcon(); closeLook(); });
+}
+const closeLook = () => { $("#lookmenu").classList.add("hide"); $("#look").setAttribute("aria-expanded", "false"); };
+$("#look").onclick = e => { e.stopPropagation(); const m = $("#lookmenu"), open = m.classList.contains("hide"); m.classList.toggle("hide", !open); $("#look").setAttribute("aria-expanded", String(open));
+  if (open){ const b = m.querySelector('[aria-checked="true"]'); if (b) b.focus(); } };
+document.addEventListener("click", e => { if (!e.target.closest(".lookwrap")) closeLook(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#lookmenu").classList.contains("hide")){ closeLook(); $("#look").focus(); } });
 drawLook();
 drawIcon();
 demoBar();
