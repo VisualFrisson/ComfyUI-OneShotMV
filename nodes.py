@@ -697,6 +697,15 @@ class FVFreeMemory:
         import gc
         import json as _json
         import urllib.request
+        try:  # the most GPU memory the stage before this used (to check a run fits a smaller card)
+            import torch
+            if torch.cuda.is_available():
+                print(f"[OneShotMV] peak GPU memory before '{note}': "
+                      f"{torch.cuda.max_memory_allocated() / 2 ** 30:.1f} GB allocated, "
+                      f"{torch.cuda.max_memory_reserved() / 2 ** 30:.1f} GB reserved")
+                torch.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
         try:
             req = urllib.request.Request(director.server_url() + "/free",
                                          data=_json.dumps({"unload_models": True, "free_memory": True}).encode(),
