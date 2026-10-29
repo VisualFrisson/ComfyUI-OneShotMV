@@ -395,6 +395,16 @@ html[data-look="neon"] .refine .acc.open::before{content:"";position:absolute;in
 html[data-look="neon"] .applybar .btn{font-size:18px;letter-spacing:.05em}
 html[data-look="neon"] .fixpanel{background:var(--panel2);border-color:var(--line2);box-shadow:inset 3px 0 0 var(--g3)}
 html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase}
+/* demo mode (?demo): a strip above the header with jumps to every screen */
+.demobar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:8px 32px;background:#1a1408;border-bottom:1px solid #4a3a14;font-size:13px;color:var(--text)}
+.demobar.hide{display:none}
+.demobar b{color:var(--warn);letter-spacing:.04em;text-transform:uppercase;font-size:12px}
+.demobar .dmn{color:var(--muted);flex:1 1 260px}
+.demobar .dmgo{display:flex;flex-wrap:wrap;gap:6px}
+.demobar button,.demobar select{font:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:5px 10px;cursor:pointer;max-width:100%}
+.demobar button:hover,.demobar select:hover{border-color:var(--warn)}
+.demobar select{max-width:260px}
+@media (max-width:700px){ .demobar{padding:8px 16px} }
 </style>
 </head>
 <body>
@@ -444,11 +454,141 @@ const $ = (s, el=document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const clock = t => { t = Math.max(0, +t || 0); return Math.floor(t/60) + ":" + String(Math.floor(t%60)).padStart(2,"0"); };
 const mins = m => { m = Math.round(m); if (m < 60) return m + " min"; return Math.floor(m/60) + " h " + String(m%60).padStart(2,"0") + " min"; };
-async function api(path, body){
+async function realApi(path, body){
   const r = await fetch("/oneshot-mv/api/" + path, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {cache:"no-store"});
   let j = {}; try{ j = await r.json(); }catch(e){}
   if (!r.ok || j.error) throw new Error(j.error || ("HTTP " + r.status));
   return j;
+}
+const api = (path, body) => DEMO ? demoApi(path, body) : realApi(path, body);
+
+// ---------------------------------------------------------------- demo mode
+// /oneshot-mv/?demo : every screen works on a finished video's real data, but nothing is queued
+// in ComfyUI. Starting a video, the render, Apply and pickups are simulated in seconds.
+// ?demo=<run> picks the finished video; otherwise the newest one whose World matches the brief.
+// &render_s=<seconds> sets how long the simulated render takes (default 60).
+const QS = new URLSearchParams(location.search);
+const DEMO = QS.has("demo");
+const DM = {pick: QS.get("demo") || "", runs: null, phase: {}, t0: {}, stop: {}, finish: {}, pickup: {}, left: {}, jobs: {}, n: 0,
+            render_s: Math.max(10, +QS.get("render_s") || 60)};
+async function demoRuns(){ if (!DM.runs) DM.runs = (await realApi("runs")).filter(v => v.video); return DM.runs; }
+const normWorld = s => String(s || "").toLowerCase().split(":")[0].split(",")[0].trim();
+async function demoSource(b){
+  const runs = await demoRuns();
+  if (!runs.length) throw new Error("demo mode needs one finished video in Your videos");
+  if (DM.pick && runs.some(v => v.run === DM.pick)) return DM.pick;
+  const w = normWorld(b && b.theme), f = b && b.format, same = v => w && v.world.toLowerCase() === w;
+  return (runs.find(v => same(v) && v.format === f) || runs.find(same) || runs.find(v => v.format === f) || runs[0]).run;
+}
+function demoJob(ms, run, steps, done){ const id = "demo-" + (++DM.n); DM.jobs[id] = {t0: Date.now(), ms, run, steps, done}; return {prompt_id: id}; }
+async function demoApi(path, body){
+  const parts = path.split("?")[0].split("/"), what = parts[0], arg = decodeURIComponent(parts.slice(1).join("/"));
+  if (what === "start"){
+    const run = await demoSource(body), render = !!body.render;
+    return demoJob(render ? 6000 : 5000, run, ["Analysing the song", "Writing the World", "Planning every shot", render ? "Queueing every shot" : "Writing the shot list"],
+      () => { DM.phase[run] = render ? "render" : "preview"; DM.t0[run] = Date.now(); DM.stop[run] = 0; });
+  }
+  if (what === "job"){
+    const j = DM.jobs[arg]; if (!j) return {state: "done"};
+    const el = Date.now() - j.t0;
+    if (el < j.ms) return {state: "running", step: j.steps ? j.steps[Math.min(j.steps.length - 1, Math.floor(el / j.ms * j.steps.length))] : "", elapsed_s: el / 1000, left_s: (j.ms - el) / 1000};
+    if (j.done){ j.done(); j.done = null; }
+    return {state: "done", run: j.run};
+  }
+  if (what === "recut") return demoJob(5000, body.run, null, () => { DM.finish[body.run] = Object.assign({}, body); });
+  if (what === "pickups"){
+    const prev = DM.pickup[body.run];
+    DM.pickup[body.run] = {n: (prev ? prev.n : 0) + 1, items: body.items, t0: Date.now(), ms: 15000 + 4000 * body.items.length};
+    return {pickup: DM.pickup[body.run].n, jobs: body.items.length * 2 + 1};
+  }
+  if (what === "cancel"){ DM.stop[body.run] = Date.now(); return {removed: DM.left[body.run] || 0}; }
+  if (what === "run") return demoRun(await realApi(path));
+  return realApi(path, body);  // songs, the song analysis, estimates, the system chip: nothing is queued
+}
+const SIM_W = {plan: 3, stills: 12, check: 5, clips: 55, takes: 15, broll: 5, edit: 5};  // as fv/studio.py weighs the stages
+function demoRun(r){
+  const run = r.run;
+  if (r.stage !== "done") return r;  // a real run still going is shown as it is
+  const fin = DM.finish[run];
+  if (fin){
+    r.finish = Object.assign({}, r.finish, {look: fin.look, grain: fin.grain, grain_size: fin.grain_size, vignette: fin.vignette});
+    r.fx_levels = typeof fin.fx === "object" ? Object.assign({}, fin.fx) : {low: fin.fx, medium: fin.fx, high: fin.fx};
+  }
+  const pk = DM.pickup[run];
+  if (pk){
+    const el = Date.now() - pk.t0, over = el >= pk.ms, jobs = pk.items.length * 2 + 1, est = 2 + 1.2 * pk.items.length;
+    r.pickup = {n: pk.n, kind: "pickups", state: over ? "done" : "running", jobs, jobs_left: over ? 0 : Math.max(1, Math.ceil(jobs * (1 - el / pk.ms))),
+                items: pk.items.map(x => ({shot: x.n})), elapsed_min: est * Math.min(1, el / pk.ms), left_min: over ? 0 : Math.max(0.5, est * (1 - el / pk.ms))};
+    if (over){
+      const ns = new Set(pk.items.map(x => x.n));
+      r.shots = r.shots.map(s => ns.has(s.n) ? Object.assign({}, s, {pickup: pk.n}) : s);
+      r.versions = (r.versions || []).concat([{name: "v" + pk.n, url: r.video, when: ""}]);
+    }
+  }
+  const ph = DM.phase[run];
+  if (ph === "preview")
+    return Object.assign(r, {stage: "preview", pct: 0, elapsed_min: 0, latest: "", stages: r.stages.map((s, i) => Object.assign({}, s, {state: i ? "next" : "done"}))});
+  if (ph !== "render") return r;
+  const total = r.elapsed_min || r.estimate_min || 60;
+  const f = Math.min(1, ((DM.stop[run] || Date.now()) - DM.t0[run]) / (DM.render_s * 1000));
+  if (f >= 1){ DM.phase[run] = "done"; return r; }
+  const ids = r.stages.map(s => s.id);
+  let acc = 0, cur = ids.length - 1, within = 1;
+  for (let i = 0; i < ids.length; i++){ const w = SIM_W[ids[i]] || 5; if (f * 100 < acc + w){ cur = i; within = (f * 100 - acc) / w; break; } acc += w; }
+  const at = id => { const i = ids.indexOf(id); return i < cur ? 1 : (i === cur ? within : 0); };
+  const sing = r.shots.filter(s => s.kind !== "broll").length, nb = r.shots.length - sing;
+  const nStill = Math.floor(at("stills") * sing), nClip = Math.floor(at("clips") * sing), brollOn = at("broll") > 0.5, retakes = at("takes") > 0;
+  let k = 0, latest = "";
+  const shots = r.shots.map(s => {
+    const o = Object.assign({}, s);
+    if (s.kind === "broll"){ o.state = brollOn ? "clip" : "planned"; if (!brollOn) o.still = ""; return o; }
+    const i = k++;
+    o.state = i < nClip ? "clip" : (i < nStill ? "still" : "planned");
+    if (i >= nStill) o.still = "";
+    if (!retakes) o.takes = Math.min(o.takes || 1, 1);
+    if (i < nClip && s.clip) latest = s.clip;
+    return o;
+  });
+  const stages = r.stages.map((s, i) => {
+    const o = Object.assign({}, s, {state: i < cur ? "done" : (i === cur ? "now" : "next")});
+    if (s.id === "stills") o.meta = `${nStill + (brollOn ? nb : 0)} of ${r.shots.length} made`;
+    if (s.id === "clips") o.meta = `${nClip} of ${sing} sung`;
+    return o;
+  });
+  const nNotes = cur < ids.indexOf("check") ? 0 : Math.ceil(r.notes.length * Math.min(1, (f * 100 - 15) / 75));
+  DM.left[run] = shots.filter(s => s.state !== "clip").length;
+  return Object.assign(r, {stage: ids[cur], stages, shots, pct: Math.min(99, Math.round(f * 100)), elapsed_min: f * total,
+    left_min: Math.max(0, (1 - f) * total), latest, notes: r.notes.slice(0, nNotes), stalled: !!DM.stop[run], queued_jobs: DM.stop[run] ? 0 : 1});
+}
+function demoBar(){
+  if (!DEMO) return;
+  const bar = document.createElement("div"); bar.className = "demobar"; bar.id = "demobar";
+  bar.innerHTML = `<b>Demo mode</b><span class="dmn">Nothing is queued in ComfyUI; renders, Apply and pickups are simulated.</span>
+    <select id="dmrun" aria-label="The finished video the demo uses"><option value="">Video: match the brief</option></select>
+    <span class="dmgo">${[["brief","Brief"],["plan","Plan"],["render","Rendering"],["result","Result"],["videos","Your videos"]].map(([k, n]) => `<button type="button" data-go="${k}">${n}</button>`).join("")}</span>
+    <button type="button" data-go="hide" title="Hide this bar; Shift+D shows it again">Hide</button><button type="button" data-go="exit">Exit demo</button>`;
+  document.body.insertBefore(bar, document.body.firstChild);
+  let hidden = false; try{ hidden = sessionStorage.getItem("osmv.demobar") === "hidden"; }catch(e){}
+  const setHidden = h => { bar.classList.toggle("hide", h); try{ sessionStorage.setItem("osmv.demobar", h ? "hidden" : ""); }catch(e){} };
+  setHidden(hidden);
+  document.addEventListener("keydown", e => { if (e.shiftKey && (e.key === "D" || e.key === "d") && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) setHidden(!bar.classList.contains("hide")); });
+  demoRuns().then(runs => { $("#dmrun").innerHTML += runs.map(v => `<option value="${esc(v.run)}"${v.run === DM.pick ? " selected" : ""}>${esc((v.world || "House look") + " · " + v.format + " · " + Math.round(v.seconds) + " s")}</option>`).join(""); }).catch(() => {});
+  $("#dmrun").onchange = e => { DM.pick = e.target.value; };
+  bar.querySelectorAll("[data-go]").forEach(el => el.onclick = async () => {
+    const go = el.dataset.go;
+    if (go === "hide") return setHidden(true);
+    if (go === "exit"){ location.href = location.pathname + "#/videos"; return; }
+    if (go === "brief" || go === "videos"){ location.hash = go === "brief" ? "#/" : "#/videos"; return; }
+    let run; try{ run = await demoSource(S.brief); }catch(e){ toast(e.message); return; }
+    if (go === "plan"){
+      const briefs = store.get("briefs", {}); if (!briefs[run]){ briefs[run] = Object.assign({}, S.brief); store.set("briefs", briefs); }
+      DM.phase[run] = "preview";
+    }
+    if (go === "render"){ DM.phase[run] = "render"; DM.t0[run] = Date.now(); DM.stop[run] = 0; }
+    if (go === "result") DM.phase[run] = "done";
+    const h = "#/" + go + "/" + encodeURIComponent(run);
+    if (location.hash === h) route(); else location.hash = h;
+  });
 }
 function toast(msg, ms=4200){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(t._h); t._h = setTimeout(()=>t.classList.add("hide"), ms); }
 function overlay(title, sub){ const o = $("#overlay"); if (!title){ o.classList.add("hide"); return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide"); o.classList.remove("hide"); }
@@ -821,7 +961,7 @@ async function viewRender(run){
     renderUpdate(r);
   };
   await tick();
-  S.timer = setInterval(tick, 5000);
+  S.timer = setInterval(tick, DEMO ? 1000 : 5000);
 }
 function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : ""); }
 function renderSkeleton(r){
@@ -1084,7 +1224,7 @@ async function viewResult(run){
     if (r.pickup.state === "running"){
       S.timer = setInterval(async () => {
         try{ const r2 = await api("run/" + encodeURIComponent(run)); if (r2.pickup.state !== "running"){ stopTimer(); viewResult(run); if (r2.pickup.state === "done") toast("New cut ready, with the pickups."); } else drawBanner(r2.pickup); }catch(e){}
-      }, 5000);
+      }, DEMO ? 1000 : 5000);
     }
   }
   $("#showplan").onclick = e => { e.preventDefault(); showPlanTable(r); };
@@ -1114,6 +1254,7 @@ async function viewVideos(){
 function drawLook(){ const l = document.documentElement.getAttribute("data-look") || "neon"; const b = $("#look"); if (b) b.textContent = "Look: " + (l === "neon" ? "Neon" : "Classic"); }
 $("#look").onclick = () => { const l = document.documentElement.getAttribute("data-look") === "neon" ? "classic" : "neon"; document.documentElement.setAttribute("data-look", l); store.set("look", l); try{ localStorage.setItem("osmv.look", l); }catch(e){} drawLook(); };
 drawLook();
+demoBar();
 loadSystem();
 setInterval(loadSystem, 30000);
 route();

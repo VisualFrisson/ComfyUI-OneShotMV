@@ -617,7 +617,6 @@ def _run(name: str) -> dict:
         "finished_at": (done or {}).get("at", ""),
         "song": _view(os.path.join(d, "song.wav")) if os.path.isfile(os.path.join(d, "song.wav")) else "",
         "versions": _versions(d, p), "pickup": _pickup_state(d, p, done),
-        "soft_clips": len(_soft_clips(d, p)) if done else 0,
         "finish": _finish_settings(p), "fx_now": (done or {}).get("fx") or p.get("fx_level") or "subtle",
         "fx_levels": (done or {}).get("fx_levels") or _fv("assemble").fx_levels(p),
         "looks": [{"id": "none", "name": "None"}] + [{"id": k, "name": _look_names().get(k, k)} for k in SHOWN_LOOKS],
