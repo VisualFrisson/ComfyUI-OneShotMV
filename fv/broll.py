@@ -1,8 +1,6 @@
 """B-roll (Second Unit): a few cutaways where nobody sings: one of the World's characters caught in
-a candid moment of their own life (the user, Oct 25: empty environment shots fell flat, every
-cutaway has a person), and performers dancing to the track (medium shots, not full body) as filler.
-Cutaways that illustrated the lyrics (Whisper) were removed on Oct 28: they were off by default
-and, in the Oct 24 samples, came out as a rock on concrete and a fruit bowl.
+a candid moment of their own life (every cutaway has a person in it: empty environment shots look
+like filler), and performers dancing to the track (medium shots, not full body) as filler.
 
 About one shot in eight (`broll_share`), never on the drop and never the opening shot, never
 two in a row. Slots are filled first where lip sync is still weak after the re-rolls (a sung
@@ -24,8 +22,8 @@ PROMPT_WORLD = """You are editing a music video set in this world: "{world}". Wr
 
 PROMPT_NO_WORDS = """You are editing a music video{world}. Write the image prompt for one atmospheric b-roll shot, a cutaway where nobody sings, that fits this world: a place, an object, a detail, the light, the weather. No people at all, no brands, no logos, no text or lettering anywhere. Make it look like a real photograph of an ordinary moment: specific, believable details, nothing surreal or too perfect. Answer with one sentence of at most 45 words that describes the image, and nothing else."""
 
-# dance filler (the n34-n36 notes: pose-guided full-body dance doesn't hold up in LTX, but a
-# performer grooving to the track in a medium shot works as a cutaway between sung lines)
+# dance filler (pose-guided full-body dance doesn't hold up in LTX, but a performer grooving to
+# the track in a medium shot works as a cutaway between sung lines)
 DANCE_STILL = ("Medium shot on a 35mm lens of {who}, wearing {wear}, dancing to the music with loose "
                "shoulders and one arm raised, eyes half closed, mouth closed in a slight smile, not singing. "
                "{light}. Setting: {place}. Photorealistic film still, an invented person, the only person in frame, "
@@ -37,8 +35,8 @@ DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again some
                 "lens. They are dancing to the music with loose shoulders and one arm raised, eyes half closed, "
                 "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
                 "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
-# A person in every cutaway (the user, Oct 25: "the empty environment shots don't seem to fit"):
-# one of the world's characters caught in a candid moment of their own life, not singing.
+# A person in every cutaway (empty environment shots don't fit the video): one of the world's
+# characters caught in a candid moment of their own life, not singing.
 PROMPT_ACTION = """You are editing a music video set in this world: "{world}". One person from it: {who}, {place}. Write what they are doing in a candid moment between the sung lines: one specific, everyday action that belongs to their role and place, with their hands on the real things of their work or life. No musical instruments, microphones, phones, screens, books, papers or anything with writing, and nothing to eat, drink or smoke. At most 10 words, starting with a verb ending in -ing. Answer with the action only."""
 MOMENT_STILL = ("Candid medium shot on a 35mm lens of {who}, wearing {wear}, {action}, absorbed in what they are "
                 "doing, mouth closed, not singing, not looking at the camera. {light}. Setting: {place}. An invented "
@@ -48,23 +46,23 @@ MOMENT_MOTION = ("Candid medium shot of {who}, {action}: natural, unhurried move
                  "No text appears.")
 MOMENT_FALLBACK = ["adjusting something with careful hands", "tidying up after a long day", "stretching and looking around",
                    "checking their work closely", "straightening their clothes", "walking slowly through the room"]  # no mirror: a reflection is a second person
-# no "cinematic": in text to video it brings letterbox bars with it (n39's cutaways)
-# the n39 note: the text-to-video cutaways "have a real AI feel": cutaways start from a Krea 2
-# still (the realism model the portraits use) written as a real photograph, and LTX moves it
+# no "cinematic": in text to video it brings letterbox bars with it
+# text-to-video cutaways look AI-made, so cutaways start from a Krea 2 still (the realism model
+# the portraits use) written as a real photograph, and LTX moves it
 STILL = " Nobody in the picture. No text, no lettering."  # + casting.REALISM_SCENE (finish_prompt)
 MOTION = (" The camera moves slowly and smoothly; gentle natural motion in the scene. Nobody is in the frame. "
           "No black bars. No text appears.")
 NEGATIVE = ("text, lettering, subtitles, watermark, logo, singing, talking, microphone, blurry, low quality, "
             "flicker, deformed hands, distorted faces, letterbox, black bars, widescreen bars, frame border, "
             "picture in picture, frame within a frame, shrinking picture, zoom out to black, black border")
-# a lyric cutaway has nobody in it (n39: a stranger turned up on the beach in an artist's video)
+# an empty cutaway has nobody in it (otherwise a stranger can turn up in an artist's video)
 NEGATIVE_EMPTY = NEGATIVE + ", person, people, face, crowd, figure, silhouette"
 
 
 def slots(p: dict, share: float) -> int:
     """How many cutaways: `share` of the shots, but never more than a third of the shots they can
-    go in (the energy grammar's drop cuts every beat: 36 shots in st2e's 30 s, 31 of them on the
-    drop, where no cutaway goes)."""
+    go in (the energy grammar's drop cuts every beat: a 30 s run can have 36 shots, 31 of them on
+    the drop, where no cutaway goes)."""
     if share <= 0 or not p.get("shots"):
         return 0
     n = max(1, int(round(len(p["shots"]) * share)))
@@ -95,8 +93,8 @@ def choose(p: dict, share: float = 0.125, sync_min: float = 4.5, sung_from: floa
     weak.sort(key=lambda s: lead(s)["sync_conf"])
     gaps = [s for s in cands if lead(s).get("vocal_density", 1.0) < gap_below and s not in weak]
     gaps.sort(key=lambda s: lead(s).get("vocal_density", 1.0))
-    # when lip sync holds up everywhere and there are no gaps, cutaways still mix things up
-    # (the n31b note: "not many, but to keep things interesting"): the weakest remaining shots
+    # when lip sync holds up everywhere and there are no gaps, a few cutaways still add variety:
+    # the weakest remaining shots
     rest = [s for s in cands if s not in weak and s not in gaps]
     rest.sort(key=lambda s: (lead(s).get("sync_conf") is None, lead(s).get("sync_conf") or 0.0))
     picks = []
@@ -125,23 +123,24 @@ def _world(p: dict, pack: dict) -> str:
 def _clean(text: str) -> str:
     from . import theme as themes
     text = " ".join(text.strip().strip('"').split()).split("\n")[0][:400]
-    # a recognisable car model is a brand (the Y2K sample opened on a blue sports car)
+    # a recognisable car model is a brand ("a blue sports car" comes out as a real model)
     text = re.sub(r"(?i)\b(sports|supercar|luxury|vintage|classic|muscle)\s+cars?\b", "car", text)
     return themes._debrand(text)
 
 
 def _prompt_for(p: dict, pack: dict, shot: dict, seed: int, k: int = 0, style: str = "mix",
                 log=print) -> tuple[str, str]:
-    """(image prompt, the line it illustrates: '' for world cutaways)."""
+    """(image prompt, line) for an empty cutaway: one of the World's places, or an atmospheric
+    shot when there is no World. line is always '' (the plan keeps the field)."""
     from . import theme as themes
     th = p.get("theme") or {}
     if th.get("theme") and th.get("places"):
-        # the characters' own workplaces first: the extra places drift off-world (Night Shift
-        # retest: a record store, a bowling alley, a theatre lobby)
+        # the characters' own workplaces first: the extra places drift off-world (a record store,
+        # a bowling alley or a theatre lobby in a World about night-shift workers)
         chars = [c for c in th.get("characters") or [] if c.get("place")]
         places = [c["place"] for c in chars] or th["places"]
         lights = th.get("light") or ["natural light"]
-        # night only when the world is set at night (Florida v2's "harsh Florida sun" got two
+        # night only when the world is set at night (otherwise a World in "harsh Florida sun" gets
         # cutaways under streetlights and moonlight)
         if not _NIGHT.search(th.get("theme", "")):
             lights = [x for x in lights if not _NIGHT.search(x)] or lights
@@ -172,7 +171,7 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
     if th.get("characters"):  # a whole character, so the outfit fits the dancer
         from .casting import _no_feet
         chars = th["characters"]
-        # a unique cast (the user, Oct 26: no repeats): someone who has no shot of their own yet
+        # a unique cast (no repeats): someone who has no shot of their own yet
         taken = {c.get("char") for c in p.get("cast", []) if c.get("char") is not None} | set(p.get("broll_chars", []))
         free = [i for i in range(len(chars)) if i not in taken] if p.get("unique_cast") else []
         ci = rng.choice(free) if free else rng.randrange(len(chars))
@@ -184,7 +183,7 @@ def _dancer(p: dict, pack: dict, k: int) -> dict:
         tod = time_of_day(th.get("theme", ""))
         own = ch.get("light") if light_fits(ch.get("light") or "", tod) else None
         if own and not _lights_for([own], place, tod) == [own]:
-            own = None  # an indoor lamp at an outdoor place (sx01w)
+            own = None  # no indoor lamp at an outdoor place
         light = own or rng.choice(_lights_for(lights_at(th["light"], tod), place, tod))  # the light of the place
         wear = _no_feet(ch["wear"])
         return {"who": ch["who"], "wear": wear, "place": place.split(" ", 1)[-1],
@@ -215,7 +214,7 @@ def _action_for(p: dict, pack: dict, d: dict, seed: int, log=print) -> str:
     act = " ".join((text or "").strip().strip('"').split()).split("\n")[0].rstrip(".").strip()
     act = themes._no_props(themes._debrand(act))
     if len(act.split()) < 2:
-        act = ""  # "folding" alone: the prop scrub took the object (st2b's mother folding a newspaper)
+        act = ""  # "folding" alone: the prop scrub took the object ("folding a newspaper")
     if act and act[:1].isupper():
         act = act[0].lower() + act[1:]
     if not re.match(r"^[a-z]+ing\b", act or "") or len(act.split()) > 14:
@@ -227,7 +226,7 @@ def _action_for(p: dict, pack: dict, d: dict, seed: int, log=print) -> str:
 def kind_for(why: str, style: str) -> str:
     """'moment' (one of the world's characters in a candid moment, not singing), 'dance' (a
     performer dancing, not singing). Empty cutaways ('words') are kept for the artist pack's
-    instrumental gaps only: they fell flat elsewhere (the user's note of Oct 25)."""
+    instrumental gaps only: elsewhere they read as filler."""
     if style == "dance":
         return "dance"
     if style == "world":
@@ -250,7 +249,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     style = p.get("broll_style", "mix")
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
     from .casting import era_line
-    era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink (st6)
+    era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink
     drums = os.path.join(run_dir, "drums.wav")
     # whoever comes into view in a period World's clips is dressed for it (casting.period_background)
     from .casting import period_background
@@ -269,8 +268,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         key = os.path.join(run_dir, f"k{rid:03d}R_00001_.png")
         seed = p.get("seed", 1) * 1000 + 900 + k
         line = ""
-        # a Krea 2 still first, then LTX image to video: text to video alone looked AI-made (the n39
-        # note); the model swap costs a few minutes per run. broll_stills False goes back to it
+        # a Krea 2 still first, then LTX image to video: text to video alone looks AI-made; the
+        # model swap costs a few minutes per run. broll_stills False uses text to video
         stills = bool(p.get("broll_stills", True))
         if kind in ("dance", "moment") and p.get("artist_path"):
             kind = "words"  # the artist's own dance would need an identity edit (another model swap)
@@ -354,9 +353,9 @@ def finalize(p: dict, log=print) -> list[int]:
     by_id = {r["id"]: r for r in p["renders"]}
     cand = [by_id[i] for i in p.get("broll_candidates", []) if i in by_id]
     ok = [r for r in cand if r.get("path") and os.path.exists(r["path"])]
-    # cutaways get no take QC: drop the ones that shrink into a black frame or show bars (st3: two
-    # cutaways pulled back into a picture inside black over about a second); twice the slots were
-    # rendered, so another candidate takes the slot
+    # cutaways get no take QC: drop the ones that shrink into a black frame or show bars (a
+    # cutaway can pull back into a picture inside black over about a second); twice the slots
+    # were rendered, so another candidate takes the slot
     from . import qc
     clean = []
     for r in ok:

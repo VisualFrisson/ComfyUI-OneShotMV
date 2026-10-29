@@ -60,7 +60,7 @@ LOOKS = {
     "moonlit": "Moonlit Blue",
     "faded70s": "Faded 70s",
     "silver": "Silver Mono",
-    # the looks from Mark Bone's "Breaking Down Every Major Color Grade in Film" (Oct 2026)
+    # grade recipes after Mark Bone's "Breaking Down Every Major Color Grade in Film"
     "neon": "Neon Saturated",
     "natural": "Naturalistic",
     "lowcon": "Low Contrast",
@@ -75,11 +75,11 @@ LOOKS = {
 
 BASE_LOOK = "natural"  # under every grade, "None" included; not offered as a grade itself
 
-# the Studio's starting settings for every run (the user, Oct 28): no grade on top of the base,
+# the Studio's starting settings for every run: no grade on top of the base,
 # 25% grain at the finest size, no vignette (audio-reactive FX start at subtle, in fx.py)
 STUDIO_DEFAULTS = {"look": "none", "grain": 0.05, "grain_size": 0.5, "vignette": 0.0}
 
-# the reference and what each look is after (the grade rating page shows these)
+# the reference and what each look is after
 LOOK_NOTES = {
     "teal_orange": ("Transformers, Mad Max: Fury Road", "Teal shadows, warm skin and highlights, pushed halfway to Fury Road: complementary colours make faces jump out."),
     "print_2383": ("Kodak 2383 print stock", "Denser colour, highlights that roll off softly, slightly warm."),
@@ -146,7 +146,7 @@ def apply_look(x, name: str, amount: float = 1.0):
         return 1 - (1 - y) * (1 - hl)
 
     y = x
-    if name == "teal_orange":  # halfway between the classic and the Fury Road push (Oct 28)
+    if name == "teal_orange":  # halfway between a classic teal and orange and the Fury Road push
         y = split(y, (-0.0475, 0.016, 0.06), (0.07, 0.02, -0.06), bal=0.435)
         y = y * v(1.03, 0.995, 0.95)
         y = con(sat(y, 1.19), 1.15, 0.435)
@@ -197,7 +197,7 @@ def apply_look(x, name: str, amount: float = 1.0):
     elif name == "lowkey":
         x0 = y.clamp(0, 1)
         y = x0 ** 1.45  # deep shadows
-        # the highs and whites come well back up (Oct 28, twice: faces and lights were too dim)
+        # the highs and whites come well back up (otherwise faces and lights are too dim)
         w = ((lum(x0) - 0.3) / 0.7).clamp(0, 1) ** 1.2
         y = y + (x0 * 1.12 - y) * w
         # amber everywhere, but whites keep more of their blue, so they read white, not tan
@@ -295,7 +295,7 @@ class Finisher:
         x = (l + (x - l) * c.get("saturation", 1.15)).clamp(0, 1)
         lift = c.get("lift", 0.035)
         x = (lift + x * (1 - lift * 1.4)).clamp(0, 1) ** 1.08
-        # 3b) the house base: Naturalistic on every video (the user's call, Oct 28), then the
+        # 3b) the house base: Naturalistic on every video, then the
         # Studio's colour grade on top
         base = c.get("base_look", BASE_LOOK)
         if base and base != "none":

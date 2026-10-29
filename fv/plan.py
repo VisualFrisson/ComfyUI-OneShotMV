@@ -85,8 +85,8 @@ def _intense(s: dict) -> bool:
     alone can't tell them apart in songs that stay loud throughout (rap verses are as loud as
     the hook); without labels, the loud sections count."""
     if s.get("label"):
-        # a final chorus is often labelled "outro" (a test track from 3:10, st2d: the last chorus,
-        # 4 dB under the loudest section, planned as all holds): a loud outro counts too
+        # a final chorus is often labelled "outro" (a last chorus 4 dB under the loudest section
+        # would otherwise be planned as all holds): a loud outro counts too
         return s.get("is_drop") or s["label"] in INTENSE or \
             (s["label"] == "outro" and s.get("loud") and s.get("energy", 0.0) >= 0.6)
     return s["loud"]
@@ -96,12 +96,13 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float, medium: tuple =
     """quiet / build / drop at a time: the intense sections (_intense) are drops; the last
     `build_bars` bars before one are the build; the rest holds. medium: section labels that count
     as build too (the energy grammar: verses and builds are the song's medium energy, intros,
-    breaks and quiet outros its low energy; beat.label_sections labels by energy tertile)."""
+    breaks and quiet outros its low energy; beat.label_sections labels by loudness against the
+    song's usual level)."""
     hot = [s for s in secs if _intense(s)]
     mid = [s for s in secs if medium and not _intense(s) and s.get("label") in medium]
-    # a window that opens inside a chorus (a song loud from end to end: sx01, a test track, was
-    # one 32 s chorus, so every shot was a close-up on the beat and no cutaway could go in) still
-    # gets its build: the first `build_bars` bars, at most a third of the window
+    # a window that opens inside a chorus (a song loud from end to end can read as one 32 s
+    # chorus, so every shot is a close-up on the beat and no cutaway can go in) still gets its
+    # build: the first `build_bars` bars, at most a third of the window
     total = max((s["end"] for s in secs), default=0.0)
     lead = min(build_bars * bar_len, total / 3) if hot and hot[0]["start"] <= 0.05 else 0.0
 
@@ -119,9 +120,9 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float, medium: tuple =
     return phase
 
 
-# How each energy level is cut (the user, Oct 26: a drop-down per level; "to the music, intense" is
-# the beat cut of the first tests, too fast and chaotic for some songs, so the default for high
-# energy is the subtle one, a little faster than a bar)
+# How each energy level is cut (a drop-down per level). "To the music, intense" cuts on nearly
+# every beat, too fast and chaotic for some songs, so the default for high energy is the subtle
+# one, a little faster than a bar
 CUT_CHOICES = ["every 2 bars", "every bar", "to the music (subtle)", "to the music (intense)"]
 CUT_DEFAULTS = {"low": "every 2 bars", "medium": "every bar", "high": "to the music (subtle)"}
 LEVEL_OF = {"quiet": "low", "build": "medium", "drop": "high"}
@@ -138,15 +139,15 @@ def cut_modes(ed: dict) -> dict:
 
 def subtle_beats(bar_len: float, beat_len: float) -> int:
     """'To the music, subtle': two or four beats, whichever lands nearer 1.2 s, and never faster
-    than twice the intense cut (a rap test track, tracked at double time, 180 BPM: half a bar was 0.67 s,
-    the same pace as intense; now a bar of 1.33 s, against 0.67 s for intense)."""
+    than twice the intense cut (a rap track tracked at double time, 180 BPM: half a bar would be
+    0.67 s, the same pace as intense; this gives a bar of 1.33 s, against 0.67 s for intense)."""
     k = min((2, 4), key=lambda b: abs(b * beat_len - 1.2))
     return max(k, 2 * intense_beats(beat_len))
 
 
 def intense_beats(beat_len: float) -> int:
     """'To the music, intense': one or two beats, whichever lands nearer 0.6 s (one beat at 107
-    BPM, 0.56 s, the pace of the first new-system tests)."""
+    BPM is 0.56 s)."""
     return min((1, 2), key=lambda b: abs(b * beat_len - 0.6))
 
 
@@ -188,7 +189,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
                 beats: list[float] | None = None, tempo: float = 120.0) -> list[dict]:
     """The hold grammar's shots: long holds in quiet stretches, one bar each in the build,
     one-bar groups in the drop (cut on the beat inside each group, see _hold_renders).
-    The energy grammar (pack edit "cuts": "energy", the user's rule of Oct 26): low energy
+    The energy grammar (pack edit "cuts": "energy"): low energy
     (intro, breaks, quiet outro) a cut every `shot_bars_quiet` (2) bars, medium (verses, build)
     every bar, high (choruses, drops) a cut every drop_beats() beats, each a new person."""
     energy = ed.get("cuts") == "energy"
@@ -199,7 +200,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     modes = cut_modes(ed) if energy else {}
     if energy:  # the level's cut: bars, or one-bar groups cut to the music below
         nbars = {ph: 2 if modes[LEVEL_OF[ph]] == "every 2 bars" else 1 for ph in nbars}
-        if bar_len < 1.4:  # a double-time grid (a rap test track at 180 BPM: 1.33 s bars): bars in pairs, or
+        if bar_len < 1.4:  # a double-time grid (a rap track tracked at 180 BPM: 1.33 s bars): bars in pairs, or
             # "every bar" is the same pace as the subtle cut on the drop and the drop doesn't lift
             nbars = {ph: 2 * n for ph, n in nbars.items()}
     sec_starts = sorted(s["start"] for s in secs)
@@ -525,7 +526,7 @@ def _hold_edl(fz, shots: list[dict], renders: list[dict], ed: dict, out_fps: flo
                 al = fz.align(lf, bf)
             cands.append((rid, fc, al))
         # each look's clip only runs to the next planned cut: a look may stay up only until the
-        # next look that is actually shown, or it would freeze on its last frame (n31 at 0:40).
+        # next look that is actually shown, or it would freeze on its last frame.
         # Pick, from the end of the bar back, the looks whose clips reach the next one shown.
         need, keep = f1, []
         for rid, fc, al in reversed(cands):

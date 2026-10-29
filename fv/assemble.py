@@ -43,7 +43,7 @@ class ClipReader:
         self.cap = cv2.VideoCapture(path) if path and os.path.exists(path) else None
         self.pos, self.last = 0, None
         self.n = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) if self.cap else 0
-        # text-to-video b-roll sometimes comes back letterboxed (n39): crop the bars, then cover
+        # text-to-video b-roll sometimes comes back letterboxed: crop the bars, then cover
         self.bars = letterbox(path, cv2) if trim_bars and self.ok else (0, 0)
 
     @property

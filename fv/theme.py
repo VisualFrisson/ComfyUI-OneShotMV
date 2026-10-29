@@ -37,25 +37,24 @@ GRADES = {
 
 COUNTS = {"who": 12, "wear": 12, "places": 12, "light": 8, "actions": 10, "poses": 10}
 OPTIONAL = {"poses"}  # bibles from before poses existed (and the template fallback) have none
-# v7 (the user, Oct 26: "girls with beards, guys wearing girls clothes", modern glasses in ancient
-# Rome): a bigger cast, every shot its own character. The first call writes the world and 12
-# characters; extend() asks for more in batches until every shot has someone new.
+# v7 bibles: a bigger cast, every shot its own character, each with a role, gender, age and look
+# the vision check can hold the still to. The first call writes the world and 12 characters;
+# extend() asks for more in batches until every shot has someone new.
 N_CHARACTERS = 12
-EXTRA_BATCH = 8  # st2e: batches of 12 came back cut off (+5, then +0)
+EXTRA_BATCH = 8  # batches of 12 come back cut off
 
-# One character, the keys the model fills (shared by the world call and the extra-cast calls). The
-# v6 bibles had one "who" field and Gemma wrote just the role ("a Hotel Valet"): no gender, age or
-# face, so the image model drew its default man again and again (sx02w: the radio announcer, the
-# businessman and the bellhop were one face) and a "musician" could come out either way.
+# One character, the keys the model fills (shared by the world call and the extra-cast calls).
+# Separate keys because, given one "who" field (v6 bibles), Gemma writes just the role ("a Hotel
+# Valet"): no gender, age or face, so the image model draws its default man again and again (a
+# radio announcer, a businessman and a bellhop with one face) and a "musician" can come out either way.
 CHARACTER_KEYS = """each an object with ten keys. "role": the job, role or type, at most 5 words, no names: every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world (never a generic "customer", "passenger", "resident" or "friend"). "gender": "woman" or "man"; about half the characters are women and half men, mixed through the list, except that a role only one gender held in this world's place and time keeps that gender. "age": a number from 18 to 80 that fits the role and the theme. "look": this person's own face and body, unlike anyone else's in the list: skin tone, hair colour and a hairdo of the period, a beard or moustache for some of the men only, build and one distinctive feature; at most 20 words. "wear": exactly what this person wears for their role in this world, every piece right for its place and period, specific in fabric, colour and cut, cut for their gender; plain, with no writing, badges with words or logos; no glasses, sunglasses or goggles unless the role truly needs them and they existed then; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words."""
 STRICT = ("Strict accuracy: every outfit, hairdo, prop and place is exactly right for this world and its "
           "period, as a costume historian would check it, and nothing comes from a later time.")
 
 # Characters come whole (who + outfit + place), so a role reads at a glance and an outfit always
-# fits the person wearing it. The sample runs of Oct 24 picked who and wear separately: men in lace
-# corsets (Y2K Pop Star) and night-shift workers you couldn't place (Night Shift). The prompt also
-# carries no example phrases any more: Gemma copied the old ones into every bible (the same
-# silver-beehive woman and the same two poses in all three sample casts).
+# fits the person wearing it (picking who and wear separately gives men in lace corsets and
+# night-shift workers you can't place). The prompt also carries no example phrases: Gemma copies
+# them into every bible (the same silver-beehive woman and the same two poses in every cast).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
 "characters": a list of {characters} different characters, all adults, {character_keys} When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, skin tones, builds, faces and hairdos; no two people look alike and no two outfits are alike. {strict}
@@ -66,15 +65,15 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
-# st2e: shown the cast so far and asked for more, Gemma wrote the cast so far out again and added
-# one or two (+1 of 8). Two steps instead: new role names first, then those roles written out,
-# each with the gender the cast needs.
+# Shown the cast so far and asked for more, Gemma writes the cast so far out again and adds one
+# or two. Two steps instead: new role names first, then those roles written out, each with the
+# gender the cast needs.
 ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
 Roles already in the video: {taken}.
 List {n} more roles, jobs or kinds of people who belong in this theme's own places at its own moment (when the theme is one day, one event or one night, the people who are really there then and part of it). Most of them belong in these places of the theme, as part of what happens there: {places}. Each one is obviously tied to the theme at a glance: the people at the heart of what happens there, who perform, compete, rule, host or watch it (the stars, the rich and powerful, eye-catching guests and spectators), never people who only work behind the scenes or keep the place running (cleaners, sweepers, clerks, scribes, mechanics, porters, vendors, cooks, labourers) unless the theme itself names that kind of person. Every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
 
-# A role only one gender held there and then keeps that gender (the user's strict accuracy, Oct 26):
-# checked over the whole cast once it is written (sx05c's first world call gave a woman chariot racer)
+# A role only one gender held there and then keeps that gender (strict period accuracy): checked
+# over the whole cast once it is written (the first world call can give a woman chariot racer)
 GENDER_PROMPT = """A music video is set in this world: "{theme}"
 For each role below, say who really held it in this world's place and time: "women" if only women did, "men" if only men did, "both" if both did. Roles: {roles}.
 Answer with one JSON object only, no other text, each role exactly as written with its answer: {{"roles": {{"<role>": "women" or "men" or "both", ...}}}}"""
@@ -89,7 +88,7 @@ COPIED = {"a woman in her sixties with deep brown skin, a towering silver beehiv
 
 
 def _adults(s: str) -> str:
-    """Every character is an adult: 'in her late teens' (Night Shift sample, Oct 24) -> 'in her early twenties'."""
+    """Every character is an adult: 'in her late teens' -> 'in her early twenties'."""
     s = re.sub(r"(?i)\b(in (?:his|her|their)) (?:late |early |mid-?)?teens\b", r"\1 early twenties", s)
     s = re.sub(r"(?i)\bteenage (girl|boy|kid)\b", lambda m: "young " + {"girl": "woman", "boy": "man"}.get(
         m.group(1).lower(), "adult"), s)
@@ -103,32 +102,31 @@ def _adults(s: str) -> str:
     return re.sub(r"(?i)\b(a|an) young adult (woman|man)\b", r"a young \2", s)
 
 
-# things that show text (a tablet, a magazine, record sleeves: stress test st3, st4, st8) count as props too
+# things that show text (a tablet, a magazine, record sleeves) count as props too
 _PROPS = re.compile(r"(?i)\b(tablets?|laptops?|monitors?|screens?|magazines?|newspapers?|books?|notebooks?|sketchbooks?|"
                     r"vinyl(?: records?)?|records|menus?|clipboards?|maps?|hymnals?|hymn ?books?|prayer ?books?|"
                     r"guitars?|drums?|drumsticks|keyboards?|keytars?|pianos?|basses|bass guitar|violins?|"
                     r"saxophones?|trumpets?|instruments?|microphones?|mics?|mic stands?|headsets?|phones?|"
                     r"cell ?phones?|flip ?phones?|smartphones?|turntables?|"
-                    # a singer's mouth must be free (st4's barber sipping a drink, st5's pipe)
+                    # a singer's mouth must be free (no sipping a drink, no pipe)
                     r"sipping|drinking|eating|chewing|smoking|pipes?|cigarettes?|cigars?|straws?)\b")
 
 
 def _no_props(s: str) -> str:
     """Drop the clauses of a place or action that put an instrument, a microphone or a phone in
-    someone's hands (Y2K retest: 'strumming a guitar', 'slamming a drum')."""
+    someone's hands ('strumming a guitar', 'slamming a drum')."""
     if not _PROPS.search(s):
         return s
     parts = [p for p in re.split(r",\s*", s) if not _PROPS.search(p)]
     return ", ".join(parts).strip(" ,")
 
 
-# Light and places that bring other people into a one-person shot. Y2K v3 (Oct 24): the bible's
-# "intense flashes of white light mimicking paparazzi cameras" put photographers behind three of
-# the singers' portraits.
+# Light and places that bring other people into a one-person shot: "intense flashes of white
+# light mimicking paparazzi cameras" puts photographers behind the singer.
 _CROWD = re.compile(r"(?i)\b(paparazzi|photographers?|flashbulbs?|flashing cameras|press pit|crowds?|audiences?|"
                     r"fans|onlookers|spectators|bystanders|passers-?by|backing dancers|dancers|backing band|"
                     r"performers?|players|people|patrons|customers|guests|partygoers|bustling|crowded|packed)\b")
-# a character doing something to someone ("a barber ..., trimming hair" in Night Shift v3) brings
+# a character doing something to someone ("a barber ..., trimming hair") brings
 # the customer into a one-person portrait
 _NO_OTHERS = re.compile(r"(?i),\s*(?:trimming|cutting|styling|shaving|serving|helping|checking on|tending to|"
                         r"talking to|chatting with|waiting on|greeting|handing|pouring for)\b[^,]*")
@@ -137,12 +135,12 @@ _TWO = re.compile(r"(?i)\b(couple|pair|duo|twins|and (?:his|her|their) (?:wife|h
 _LIGHT_SPARE = ["soft daylight from a large window to one side", "warm light from a lamp in the room",
                 "bright, even light from large softboxes, like a magazine studio shoot",
                 "hard light from a single bare bulb overhead", "the camera's own flash, with dark falloff behind"]
-# Coloured washes and gels read as AI, not as a photograph (the user on Y2K v3: "weird unnatural
-# blue pink lighting", where the singers lit by plain window or lamp light looked real). A light
-# has to be a source you could point at; mood clauses ("creating a dreamy atmosphere", "casting a
+# Coloured washes and gels read as AI, not as a photograph (unnatural blue and pink light), while
+# plain window or lamp light looks real. A light has to be a source you could point at; mood
+# clauses ("creating a dreamy atmosphere", "casting a
 # nostalgic glow", "simulating a nighttime sky") go.
 _WASH = re.compile(r"(?i)\b(gels?|wash(?:es|ed)?|backdrop|hues|swirl(?:s|ing)?|dreamy|accents|bathed|haze of|"
-                   r"reflect(?:s|ing|ions?|ed)?)\b")  # reflections: Y2K v3's chrome light gave a mirror twin
+                   r"reflect(?:s|ing|ions?|ed)?)\b")  # reflections: light off chrome can give a mirror twin
 _SOURCE = re.compile(r"(?i)\b(windows?|sun|sunlight|daylight|golden hour|moonlight|lamps?|bulbs?|tubes?|fluorescents?|"
                      r"neon|flash|softbox(?:es)?|street ?lights?|spotlights?|spots|candles?|fire|firelight|screens?|"
                      r"headlights?|fixtures?|lanterns?|torch(?:es)?|chandeliers?|curtains?|skylights?|overhead|"
@@ -180,8 +178,8 @@ _CAM_BRANDS = re.compile(r"(?i)\b(kodak|fuji(?:film)?|ilford|agfa|canon|nikon|le
                          r"ultramax|colorplus|instax|mju|stylus|t4|t2|g2|elph|sure ?shot)\b\s*)?(?:\d{2,4}\b\s*)?")
 
 
-# black-and-white processes: Rome's bible picked "a large format glass plate camera using wet
-# collodion process", and Krea drew 3 of 15 portraits (every take) in pure black and white (sx05f)
+# black-and-white processes: given "a large format glass plate camera using wet collodion
+# process" (a bible for ancient Rome), Krea draws some portraits in pure black and white on every take
 _MONO_CAMERA = re.compile(r"(?i)\b(?:wet[- ]?collodion|collodion|glass[- ]plate|daguerreotype|tintype|ambrotype|"
                           r"calotype|albumen|cyanotype|silver[- ]gelatin|orthochromatic|black[- ]and[- ]white|"
                           r"b\s*&\s*w|monochrome|monochromatic|sepia|silent[- ]film|hand[- ]crank(?:ed)?)\b")
@@ -197,7 +195,7 @@ def _camera(v) -> str:
         return COLOUR_PERIOD_CAMERA
     v = _CAM_BRANDS.sub("", " ".join(v.split())).strip(" .,")
     # "The video was captured using X, utilizing Y for a nostalgic feel, resulting in a grainy
-    # aesthetic" (the first v4 bible) -> "Shot on X, Y, a grainy look"
+    # aesthetic" -> "Shot on X, Y, a grainy look"
     v = re.sub(r"(?i)^(?:the\s+)?(?:video|footage|photos?|photographs?|images?|pictures?|world|scenes?)\s+"
                r"(?:was|were|is|are|would be|would have been)\s+(?:captured|shot|taken|filmed|recorded|photographed)"
                r"\s+(?:using|with|on)\s+", "Shot on ", v)
@@ -227,9 +225,9 @@ def _role_words(chars: list) -> set:
 
 
 def _no_others(v: list, roles: set) -> list:
-    """Drop actions and poses that name a character (stress test st2b: 'The waitress refills a
-    coffee cup' in the mother's portrait drew the waitress next to her, seven portraits with two
-    people), or start with 'The ...'; keep the list if that would empty it."""
+    """Drop actions and poses that name a character ('The waitress refills a coffee cup' in the
+    mother's portrait draws the waitress next to her), or start with 'The ...'; keep the list if
+    that would empty it."""
     pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(roles, key=len, reverse=True)) + r")s?\b") \
         if roles else None
     keep = [x for x in v if not re.match(r"(?i)^the\s", x.strip()) and not (pat and pat.search(x))]
@@ -238,15 +236,15 @@ def _no_others(v: list, roles: set) -> list:
 
 def _plain(wear: str) -> str:
     """A 'graphic tee' or 'band tee' comes out with garbled print on it."""
-    # quoted words on clothes are drawn as garbled lettering (sx01w: "satin sash with 'Miss County
-    # Fair' embroidered")
+    # quoted words on clothes are drawn as garbled lettering ("satin sash with 'Miss County Fair'
+    # embroidered")
     wear = re.sub(r"\s*(?:with|reading|saying|that says|bearing)?\s*(?<![\w])[\"'\u2018\u201c][A-Z][^\"'\u2019\u201d]{1,40}"
                   r"[\"'\u2019\u201d](?:\s*(?:embroidered|printed|written|stitched|on it|on the front|across it))?", "", wear)
     wear = re.sub(r"(?i)\b(graphic|band|logo|printed|slogan)\s+(t-?shirt|tee)\b", r"plain \2", wear)
     if "lettering" not in wear.lower():
         wear = re.sub(r"(?i)\b((?:satin |pageant |silk )?sash|bowling shirt|jersey|varsity jacket|letterman jacket)\b",
                       r"plain \1 with no lettering", wear, count=1)
-    # caps come out with a real team or brand logo on the front (v4c: a league logo on a cap)
+    # caps come out with a real team or brand logo on the front
     if "no logo" not in wear.lower():
         wear = re.sub(r"(?i)\b(baseball caps?|trucker hats?|snapbacks?|ball caps?)\b", r"\1 with no logo", wear, count=1)
     return wear
@@ -256,7 +254,7 @@ def _copied(x: str) -> bool:
     return any(c in x.lower() for c in COPIED)
 
 
-# glasses in the bible drew glasses on every other face (sx02w, sx05w's gladiators): eyewear only
+# glasses in the bible draw glasses on every other face: eyewear only
 # when the World line itself asks for it
 EYEWEAR = re.compile(r"(?i)\b(glasses|eyeglasses|spectacles|sunglasses|shades|sunnies|goggles|monocles?|pince-nez|"
                      r"lorgnettes?|eyewear|cat-eye|horn-rimmed|wire-rimmed|aviators|bifocals|frames)\b")
@@ -317,9 +315,9 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
         role = " ".join((low.get("role") or "").split())
         if role:
             role = _adults(_debrand(_NAME.sub("", role)))
-            # the role alone: "rodeo clown entertaining the crowd" (st2e) put a crowd in the portrait,
+            # the role alone: "rodeo clown entertaining the crowd" puts a crowd in the portrait,
             # "cowgirl in pink fringe" repeats the outfit; what they do and wear has its own key
-            role = re.sub(r"\s*\((?:a\s+)?(?:woman|man|female|male)\)", "", role)  # the gender asked for, echoed (sx05c)
+            role = re.sub(r"\s*\((?:a\s+)?(?:woman|man|female|male)\)", "", role)  # the gender asked for, echoed
             short = re.sub(r"\s+(?:(?!(?:king|viking|darling|wedding|building|evening|morning|earring|string|swing|"
                            r"wing|ring|spring|ceiling|clothing|pudding|sterling|duckling|lightning)\s)[a-z]+ing\s+"
                            r"(?:the|a|an|his|her|their|its|some|[a-z]+s)\b.*|"
@@ -342,12 +340,12 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
             extra["eyewear"] = bool(EYEWEAR.search(wear or ""))
         place = low.get("place") or low.get("where") or low.get("location") or ""
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
-        # "neon sign, red" (sx01) draws garbled lettering: the sign scrub, as on the world's lists
+        # "neon sign, red" draws garbled lettering: the sign scrub, as on the world's lists
         light = (_real_light([_debrand(light)]) or [""])[0] if light and not _CROWD.search(light) else ""
         who = _adults(_debrand(_NAME.sub("", " ".join(who.split()).strip(" ,.-"))))
         who = _no_props(_NO_OTHERS.sub("", who).strip(" ,"))
         if _TWO.search(who):
-            continue  # a couple, or someone with a baby, is two people in a one-person portrait (st6)
+            continue  # a couple, or someone with a baby, is two people in a one-person portrait
         wear = _plain(_debrand(" ".join(wear.split()).strip(" ,.")))
         if re.match(r"^(?:[A-Z][a-z]|A\s)", wear):
             wear = wear[0].lower() + wear[1:]  # "Pale green scrubs" reads "Wearing pale green scrubs"
@@ -380,7 +378,7 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
 
 
 def _ing(s: str) -> str:
-    """'twirls her lasso' -> 'twirling her lasso' (Gemma 3 wrote a stress test's actions this way)."""
+    """'twirls her lasso' -> 'twirling her lasso' (Gemma 3 sometimes writes actions this way)."""
     m = re.match(r"([A-Za-z]+)(\b.*)$", s)
     if not m or m.group(1).lower().endswith("ing") or not m.group(1).lower().endswith("s"):
         return s
@@ -412,9 +410,9 @@ _HEAD_DOWN = re.compile(r"(?i)\b(bow(?:s|ed|ing)?|eyes (?:closed|shut)|looking d
 
 def _own(s: str, ing: bool = False) -> str:
     """A character's own action or expression, scrubbed like the shared lists: no props in the hands
-    or at the mouth, nobody else, no crowd. Gemma 3 wrote one action per character even when asked
-    for a shared list (stress test st2b: 'The cowgirl twirls her lasso', 'The radio DJ spins a
-    record'); shuffled into a pool, st2c's gas-station attendant spun the DJ's record."""
+    or at the mouth, nobody else, no crowd. Gemma 3 writes one action per character even when asked
+    for a shared list ('The cowgirl twirls her lasso', 'The radio DJ spins a record'); shuffled
+    into a pool, those would have a gas-station attendant spinning the DJ's record."""
     s = " ".join(str(s or "").split()).strip(" ,.")
     s = re.sub(r"(?i)^(?:is|are|while|she is|he is|they are|she|he|they)\s+", "", s)
     if ing:
@@ -429,8 +427,8 @@ def _own(s: str, ing: bool = False) -> str:
 
 
 def cache_dir(out_root: str) -> str:
-    """output/oneshot-mv/themes; the first call copies the cache from the old name
-    (output/frissonvision/themes) so cached Worlds and casts carry over the rename."""
+    """output/oneshot-mv/themes. Installs from before the pack's rename keep their cache in
+    output/frissonvision/themes; the first call copies it here so cached Worlds and casts still apply."""
     new = os.path.join(out_root, "oneshot-mv", "themes")
     old = os.path.join(out_root, "frissonvision", "themes")
     if not os.path.isdir(new) and os.path.isdir(old):
@@ -443,7 +441,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v10".encode("utf-8")).hexdigest()[:16]  # v10: extra roles from the theme's own places; v9: role, gender, age, look; bigger cast; roles of the theme's moment, with their real gender
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v10".encode("utf-8")).hexdigest()[:16]  # v10: the bible format version; a new one stops older cached bibles from being reused
 
 
 # ------------------------------------------------------------------ the language model
@@ -505,7 +503,7 @@ def _parse(text: str) -> dict | None:
                 return d
         except Exception:
             continue
-    # curly quotes as the JSON's own quotes (sx02c's role list switched to them halfway through)
+    # curly quotes as the JSON's own quotes (a list can switch to them halfway through)
     if "\u201c" in t or "\u201d" in t:
         t2 = t.replace("\u201c", '"').replace("\u201d", '"')
         for fix in (lambda s: s, lambda s: re.sub(r",\s*([\]}])", r"\1", s)):
@@ -559,7 +557,7 @@ _WORDS = re.compile(r"\b(logos?|lettering|slogans?|name ?tags?|insignia|printed 
 _NO_WORDS = re.compile(r"\b(no|without)\b[^,.]*\b(logos?|lettering|slogans?|text)\b", re.I)
 
 
-# brand names the model slips in anyway ("oversized Versace sunglasses", n46): a generic word instead,
+# brand names the model slips in anyway ("oversized Versace sunglasses"): a generic word instead,
 # so the image models don't draw a logo
 BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|fendi|hermes|hermès|burberry|"
                     r"cartier|rolex|ray-?ban|oakley|nike|adidas|reebok|levi'?s|calvin klein|"
@@ -568,8 +566,8 @@ BRANDS = re.compile(r"\b(versace|gucci|chanel|prada|louis vuitton|vuitton|dior|f
                     r"sony|gameboy|game boy|nintendo|casio|swatch|members only|timberlands?|dr\.? martens|doc martens|"
                     r"skechers|juicy couture|von dutch|fubu|abercrombie|hollister|ugg|heelys)\b", re.I)
 # brand names that are also plain words (a champion gladiator, a supreme court, a puma, to converse,
-# delivery vans, crocodiles): only before a garment (sx05h/k: "a designer charioteer", "a designer
-# murmillo gladiator" from "champion")
+# delivery vans, crocodiles): only before a garment (otherwise "champion" turns into "a designer
+# charioteer" or "a designer murmillo gladiator")
 BRANDS_IN_CONTEXT = re.compile(r"(?i)\b(champion|supreme|puma|converse|vans|crocs|tommy)(?=\s+(?:hoodies?|sweat(?:shirt|er)s?|"
                                r"t-?shirts?|tees?|sneakers|trainers|shoes|slip-ons|jackets?|caps?|shirts?|logos?|"
                                r"tracksuits?|clogs|sandals|jeans|bags?)\b)")
@@ -579,9 +577,9 @@ _SIGNS = "signs?|banners?|posters?|billboards?|marquees?|placards?|menu boards?"
 
 
 def _design(s: str) -> str:
-    """Signs come out as garbled lettering (n45's "neon signs reflecting off the floor", n46's
-    "neon pink and blue signs advertising early-bird specials" and "a bench adorned with
-    hand-painted signs"): plain light or plain decoration instead, and never what they say."""
+    """Signs come out as garbled lettering ("neon signs reflecting off the floor", "neon pink and
+    blue signs advertising early-bird specials", "a bench adorned with hand-painted signs"): plain
+    light or plain decoration instead, and never what they say."""
     s = re.sub(rf"(?i)\b({_SIGNS})\s+(advertising|reading|saying|announcing|promoting|offering|for|that say)\b[^,.;:]*",
                r"\1", s)
     s = re.sub(r"(?i)\b(neon(?:\s+[a-z-]+){0,4}?)\s+signs\b(?!-)", r"\1 tube lights", s)
@@ -595,7 +593,7 @@ def _design(s: str) -> str:
 def _debrand(s: str) -> str:
     s = _design(BRANDS_IN_CONTEXT.sub("designer", BRANDS.sub("designer", s)))
     s = re.sub(r"\bdesigner(\s+designer)+\b", "designer", s)
-    # a brand that was the whole item ("fishnet stockings, Doc Martens" in v4b) leaves a bare word
+    # a brand that was the whole item ("fishnet stockings, Doc Martens") leaves a bare word
     return re.sub(r"(?:,\s*|\s+(?:and|with)\s+)designer(?=\s*(?:[,;.]|$))", "", s).strip(" ,")
 
 
@@ -646,9 +644,9 @@ def _role_first(s: str) -> str:
     'a firefighter, a woman in her twenties, light skin, ...'; 'a Boy-band member, 19, male, ...' ->
     'a boy-band member, a 21-year-old man, ...'. The role stays first so it reads at a glance, and
     an adult noun (man, woman) is always there: role words like "princess" or "boy-band" alone let
-    the image model draw someone too young (the user's note of Oct 24: none of them may look like
-    kids). Ages under 21 become 21, a margin above the adults rule."""
-    s = re.sub(r",\s*(\d)\d\s*s\s*,", lambda mm: f", {mm.group(1)}0s,", s)  # "45s" (st1's blacksmith) -> "40s"
+    the image model draw someone too young, and nobody may look like a child. Ages under 21 become
+    21, a margin above the adults rule."""
+    s = re.sub(r",\s*(\d)\d\s*s\s*,", lambda mm: f", {mm.group(1)}0s,", s)  # "45s" -> "40s"
     m = re.match(r"^(?:an?\s+)?([A-Za-z][A-Za-z'&/ -]{1,40}?),\s*(\d{2})\s*,\s*"
                  r"(female|male|woman|man|non-?binary|person)\b,?\s*(.*)$", s.strip(), flags=re.I)
     if m:
@@ -687,7 +685,7 @@ def _people(who: list[str]) -> list[str]:
             s = f"a {m.group(1)}-year-old {g}" + (f", {m.group(3)}" if m.group(3) else "")
         elif not re.match(r"^(a|an|the)\b", s, flags=re.I):
             s = "a " + s
-        # "a woman in her sixty-three" (n46's bible) -> "a woman aged sixty-three"
+        # "a woman in her sixty-three" -> "a woman aged sixty-three"
         s = re.sub(r"(?i)\bin (?:her|his|their) ((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-"
                    r"(?:one|two|three|four|five|six|seven|eight|nine)|\d{2})\b", r"aged \1", s)
         out.append(s)
@@ -844,10 +842,10 @@ def _same(a: dict, b: dict) -> bool:
 
 def _theme_places(bible: dict) -> str:
     """The places the World line itself names (the part after the colon), else the bible's places:
-    sx05c's extra cast drifted to a Roman market day (vinegar merchant, tax collector, herbalist)
-    on a World set at the games."""
+    without them the extra cast drifts off the World (a Roman market day, with a vinegar merchant,
+    a tax collector and a herbalist, in a World set at the games)."""
     th = bible.get("theme", "")
-    # World lines read "headline: who; where; light" (the sample lines and every stress-test line)
+    # World lines read "headline: who; where; light" (as the sample World lines do)
     parts = [x.strip(" .") for x in re.split(r"[;:]", th)[1:] if x.strip()]
     named = [parts[1]] if len(parts) >= 3 else []
     if not named:
@@ -878,13 +876,13 @@ def _role_list(text: str | None) -> list[tuple[str, str]]:
         x = re.sub(r"\s*\((?:a\s+)?(?:woman|man|female|male)\)\s*$", "", " ".join(str(x).split()), flags=re.I)
         x = x.strip(" ,.-\"'")
         x = re.sub(r"(?i)^(?:an?|the)\s+", "", _debrand(_NAME.sub("", x)))
-        # groups are more than one person ("rodeo clown's family", st2e), and a customer is generic
+        # groups are more than one person ("rodeo clown's family"), and a customer is generic
         if re.search(r"(?i)\b(family|families|kids|children|friends|crew|band|gang|group|team|couple|parents|"
                      r"customers?|passengers?|residents?|locals|tourists?|visitors?)\b", x):
             continue
         if re.search(r"(?i)\w['\u2019]s\s", x):
-            continue  # someone's relative or helper is a role made from another role (st2e: "the diner
-            # waitress's boyfriend"; sx05c: "the lion keeper's guard", "the scribe's papyrus supplier")
+            continue  # someone's relative or helper is a role made from another role ("the diner
+            # waitress's boyfriend", "the lion keeper's guard", "the scribe's papyrus supplier")
         if 2 < len(x) <= 40 and not _CROWD.search(x) and not _TWO.search(x) and x.lower() not in seen:
             seen.add(x.lower())
             out.append((x, g))
@@ -952,9 +950,9 @@ def _true_genders(chars: list[dict], theme: str, seed: int, dump, log=print) -> 
 
 
 # Roles that only work behind the scenes or keep a place running: a World built on an event is cast
-# from who performs, rules or watches it (the user, Oct 27, sx05f/g: "each character should be
-# obviously tied to the gladiator event"; Gemma added a sand-raker, an armourer, a fortune teller, a
-# silk merchant, a jewel vendor and a flute player). Kept when the World line names that kind of job.
+# from who performs, rules or watches it, so every character is obviously tied to the event (left
+# alone, Gemma adds a sand-raker, an armourer, a fortune teller, a silk merchant, a jewel vendor
+# and a flute player to gladiator games). Kept when the World line names that kind of job.
 _BACKSTAGE = re.compile(r"(?i)\b(vendors?|sellers?|merchants?|traders?|hawkers?|stall ?holders?|cleaners?|sweepers?|"
                         r"janitors?|clerks?|scribes?|secretar(?:y|ies)|accountants?|mechanics?|porters?|cooks?|chefs?|"
                         r"bakers?|labou?rers?|workers?|makers?|artists?|painters?|sculptors?|carpenters?|smiths?|"
@@ -1004,8 +1002,8 @@ _GEAR = re.compile(r"(?i)^(?:swords?|sica|shields?|nets?|tridents?|helmets?|spea
                    r"bottles?|glasses?|goblets?|coins?|purses?|scrolls?|tablets?|horses?|chariots?|lions?|dogs?)$")
 
 
-# A World built on a spectacle in front of a crowd (the user, Oct 27, on sx05h: "With less arena
-# backdrop its hard to get the gladiator event vibe"): the crowd stays behind the singer as a soft blur
+# A World built on a spectacle in front of a crowd (without the arena behind them, gladiators don't
+# read as an event): the crowd stays behind the singer as a soft blur
 _CROWD_WORLD = re.compile(r"(?i)\b(?:packed|roaring|cheering|screaming|crowded|full)\s+(?:\w+\s+){0,2}?"
                           r"(?:stands|crowd|arena|stadium|colosseum|grandstands?|tiers|audience|amphitheatre|bleachers)\b")
 
@@ -1020,8 +1018,8 @@ Behind the singers there is a big crowd of spectators. Describe what that crowd 
 
 def crowd_dress(bible: dict, seed: int = 1, out_root: str | None = None, log=print) -> str:
     """What a spectacle World's crowd wears, in concrete garments and colours ("a sea of white wool
-    togas and red and ochre tunics"): "dressed for ancient Rome" was too abstract and Krea filled
-    the stands with modern spectators (sx05j). Written once by Gemma and kept with the bible."""
+    togas and red and ochre tunics"): "dressed for ancient Rome" is too abstract, and Krea fills
+    the stands with modern spectators. Written once by Gemma and kept with the bible."""
     if bible.get("crowd_dress"):
         return bible["crowd_dress"]
     theme = bible.get("theme", "")
@@ -1047,9 +1045,8 @@ def crowd_dress(bible: dict, seed: int = 1, out_root: str | None = None, log=pri
 
 def story_positions(chars: list[dict], theme: str) -> list[int | None]:
     """Each character's place in the World line's own list of characters (None for the ones it
-    doesn't name): the World line is cast in its own order (the user, Oct 27: the gladiator video
-    "should lean heavily into gladiators singing and start with them ... then cut to people in the
-    crowd")."""
+    doesn't name): the World line is cast in its own order, so a gladiator World opens on the
+    gladiators singing and then cuts to the people in the crowd."""
     named = _named_roles(theme)
     out = []
     for c in chars:
@@ -1078,7 +1075,7 @@ def _has_role(role: str, cast: list[str]) -> bool:
 
 
 def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, log=print) -> dict:
-    """At least n characters in the bible (the user, Oct 26: a bigger cast, no repeats): new role
+    """At least n characters in the bible (a big cast, no repeats): new role
     names first, then those roles written out in batches of EXTRA_BATCH, each with the gender
     that keeps the cast about half women and half men (a role only one gender holds keeps it).
     Cached with the bible."""
@@ -1097,8 +1094,8 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
                 pass
 
     taken = [c.get("role") or c["who"].split(",")[0] for c in chars]
-    # the World line's own characters the first call left out come first (sx05g: 12 of the 16 named,
-    # without the emperor, the patrician matron, the young noblewoman and the praetorian guard)
+    # the World line's own characters the first call left out come first (it can return 12 of 16
+    # named roles, leaving out the emperor, the patrician matron and the praetorian guard)
     roles: list = [(r, _gender_of("", r, "", "") or "") for r in _named_roles(theme) if not _has_role(r, taken)]
     if roles:
         log(f"[OneShotMV] theme: the World line's own characters still to cast: {', '.join(r for r, _ in roles)}")
@@ -1123,7 +1120,7 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
     men = sum(1 for c in chars if c.get("gender") == "man")
     queue = []
     # the gender the role really had (the model's, or the role word's); only an open role is
-    # given the one the cast is short of (sx05c: the balancer made a woman the senator's bodyguard)
+    # given the one the cast is short of (balancing every role would make a woman the senator's bodyguard)
     for r, given in roles:
         g = _gender_of("", r, "", "") or given
         if not g:

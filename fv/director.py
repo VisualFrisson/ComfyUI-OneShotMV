@@ -75,23 +75,23 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            broll_style: str = "mix", staged: bool = True,
            look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "",
            cast_order: str = "as written", crowd: str = "auto", log=print,
-           lip_repair: bool = False) -> dict:  # lip_repair: retired Oct 28 (LatentSync removed), ignored;
-    # still accepted so a ComfyUI that has not restarted (old nodes.py in memory) can call in
+           lip_repair: bool = False) -> dict:  # lip_repair: accepted and ignored, so older callers
+    # (an old nodes.py still loaded in a ComfyUI that has not restarted) still work
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
     re-rolls the singer shots while LTX stays loaded; then Klein makes every look keyframe from
     the final singer takes and LTX the look clips (QC passes and Klein edits keep LTX loaded,
-    FVKeep). n46 spent 65 of 155 minutes on 12 model loads; this order loads 4 times and never
-    re-makes a look because its singer was re-rolled.
+    FVKeep). Grouping by job type instead can spend 65 of 155 minutes on 12 model loads; this
+    order loads 4 times and never re-makes a look because its singer was re-rolled.
     look_groups (staged, experimental, off by default): each drop group's looks are one LTX clip
     that switches person on the beat (the lead's pose guide, each look's keyframe pinned at its
-    cut) instead of one clip per look; the edit reads each look from it. The n46 test cut
-    cleanly (65 s instead of 156 s), but in n47 only 10 of 36 looks did (the clip left the
-    first look within its first frames, morphed instead of cutting, or showed three people), so
-    looks a group doesn't deliver get their own clip after all (_fallback_looks)."""
+    cut) instead of one clip per look; the edit reads each look from it. It is much faster when
+    it works (65 s instead of 156 s in one test), but in another only 10 of 36 looks cut cleanly
+    (the clip left the first look within its first frames, morphed instead of cutting, or showed
+    three people), so looks a group doesn't deliver get their own clip after all (_fallback_looks)."""
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
-    # left in memory: at 01:41 UTC Oct 27 the Rome Director started right after an LTX clip and
-    # ComfyUI went down without a word in its log. Start from empty memory.
+    # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
+    # in its log. Start from empty memory.
     if theme and theme.strip():
         try:
             import gc
@@ -127,7 +127,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         pk = casting.apply_theme(pk, bible)
         pk["finish"] = themes.finish_for(bible, pk.get("finish", {}))
         log("[OneShotMV] " + themes.summary(bible).replace("\n", "\n[OneShotMV] "))
-    if cuts:  # the user's cut per energy level (low / medium / high), over the pack's defaults
+    if cuts:  # the chosen cut per energy level (low / medium / high), over the pack's defaults
         pk["edit"] = dict(pk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items() if m})
     if mode == "voice":
         if pk["casting"].get("artist") and not (artist_path and os.path.exists(artist_path)):
@@ -135,10 +135,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                                twins=None if twins == "auto" else twins, framing=framing)
         p["artist_path"] = artist_path
-        if cuts:  # a re-applied theme starts from the pack again: keep the user's cuts
+        if cuts:  # a re-applied theme starts from the pack again: keep the chosen cuts
             p["cuts"] = planner.cut_modes(pk["edit"])
         if bible and (pk.get("casting") or {}).get("unique"):
-            # every shot its own character (the user, Oct 26: a bigger cast, no repeats): enough
+            # every shot its own character (a big cast, no repeats): enough
             # characters for every singer and every b-roll candidate
             from . import broll as _broll
             need = p["performers"] + 2 * _broll.slots(p, broll_share) + 2
@@ -379,8 +379,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     ids = []
     if queue:
         # at the front, like every later stage: a run's renders go before the next queued Director,
-        # so several runs queued at once finish one after another (Oct 27: five Directors queued
-        # behind sx05f ran before its portraits)
+        # so several runs queued at once finish one after another (at the back, Directors queued
+        # later would run before this run's portraits)
         first = [g for name, g in jobs
                  if not (name == "zz_assemble" and (not queue_assemble or use_qc)) and name not in deferred]
         ids = queue_chain_front(first, server_url())
@@ -444,8 +444,8 @@ def _clock(t: float) -> str:
 
 
 def plan_preview(p: dict, queued: bool = True) -> str:
-    """The plan as the user will see it, shot by shot (the user, Oct 27: show the hidden step, the
-    World the tool wrote from a short theme, before anything renders): time, energy, framing and
+    """The plan as the user will see it, shot by shot, before anything renders (it shows the World
+    the tool wrote from a short theme, which would otherwise stay hidden): time, energy, framing and
     who is in each shot, where, in what; then the World's characters left out, and how to change it."""
     th = p.get("theme") or {}
     cast = {c["id"]: c for c in p.get("cast") or []}
@@ -493,7 +493,7 @@ def plan_preview(p: dict, queued: bool = True) -> str:
 
 def _energy_map(p: dict, pk: dict) -> str:
     """The song's sections in the window, the energy level each was given and how it is cut
-    (the user, Oct 26: map the song into low / medium / high and edit each level its own way)."""
+    (the song maps into low / medium / high, and each level is edited its own way)."""
     ed = pk.get("edit") or {}
     if ed.get("cuts") != "energy" or not p.get("shots"):
         return ""
@@ -559,7 +559,7 @@ def _take_inputs(run_dir: str, path: str) -> tuple[str | None, str | None]:
     return _video_in(g), img
 
 
-# LTX lands a pinned switch a little early (n46 test: 6 and 2 frames at 50 fps), so the pins sit
+# LTX lands a pinned switch a little early (measured: 6 and 2 frames at 50 fps), so the pins sit
 # this much after the beat; _attach_groups then lines each real switch up with its beat
 PIN_LATE = 0.06
 GROUP_MAX_SHIFT = 0.14  # s: how far a look may be moved off its lip sync to fit its beat
@@ -705,8 +705,8 @@ def _attach_groups(p: dict, run_dir: str, log=print) -> None:
 def _fallback_looks(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict], set]:
     """Looks a group clip didn't deliver (no clean switch, or it didn't fit its beat) get their
     own clip, as without look groups: a keyframe from the lead's frame at the look's own start
-    (Klein) and a pose-guided LTX clip. n47: only 10 of 36 group looks came out clean (the
-    clip left the first look in its first frames, or morphed instead of cutting)."""
+    (Klein) and a pose-guided LTX clip. A group clip can deliver as few as 10 of 36 looks cleanly
+    (it leaves the first look in its first frames, or morphs instead of cutting)."""
     by_id = {r["id"]: r for r in p["renders"]}
     cast = p.get("cast", [])
     pk = casting.load_pack(p["pack"])
@@ -772,7 +772,7 @@ STEADY = "The camera holds still at the same distance; the framing never gets cl
 
 
 def _steady_prompt(g: dict) -> None:
-    """A lead re-rolled for being too close (LTX pushed in on the face, n41) loses its camera-move
+    """A lead re-rolled for being too close (LTX pushed in on the face) loses its camera-move
     sentence and holds its distance instead."""
     import re
     for node in g.values():
@@ -903,7 +903,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if not res["ok"]:
             redo.append(r)
     # re-roll budget: re-renders may add at most `qc_budget` x the run's own render frames
-    # (the user's call: a run may take up to twice as long to get lip sync right). The worst
+    # (by default a run may take up to twice as long to get lip sync right). The worst
     # takes go first: broken ones (missing, frozen, cut away...), then the weakest lip sync.
     by_id = {r["id"]: r for r in p["renders"]}
     total = sum(r.get("frames", 0) for r in p["renders"])
@@ -1007,8 +1007,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         ins["filename_prefix"] = f"{rel}/{ktag}"
                 json.dump(kg, open(os.path.join(run_dir, "jobs", f"qc{pass_idx + 1}_{ktag}.json"), "w",
                                    encoding="utf-8"), indent=1)
-                # a new portrait is a Krea job: run between LTX clips it thrashed VRAM for 20+ min
-                # (stress test st4); portraits go first, after a free-memory job
+                # a new portrait is a Krea job: run between LTX clips it can thrash VRAM for 20+ min,
+                # so portraits go first, after a free-memory job
                 (portrait_jobs if kname.startswith("p") else key_jobs).append(kg)
                 new_key = os.path.join(run_dir, f"{ktag}_00001_.png")
                 old_key = key_in(graph, os.path.join(run_dir, f"{kname}_00001_.png"))
@@ -1051,8 +1051,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                                and rep.get("id_sim", 1.0) < qc.THRESH["id_min_key"]))
                 except Exception:
                     pass  # keep the bars verdict
-                # the fault survived a re-roll on the same still (sx04w's store owner: the head out of
-                # frame in all three takes, steady camera and all): the still is the problem
+                # the fault survived a re-roll on the same still (the head out of frame in every
+                # take, even with a steady camera): the still is the problem
                 if not bad and pass_idx >= 1 and set(fails) & {"headcut", "noface", "sideways", "people", "bars"}:
                     bad = True
                 if bad:
@@ -1082,9 +1082,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             (f" ({skipped} more over the re-render budget)" if skipped else "")
     else:
         # best take of each shot: leads first, so each look then picks among the takes made from
-        # the lead take that is kept (n46: lead r037A kept its first re-roll while its looks kept
-        # takes made from the original lead and from the second re-roll, so their poses and
-        # mouths no longer followed the lead in the cut)
+        # the lead take that is kept (otherwise a lead can keep its first re-roll while its looks
+        # keep takes made from the original lead or a later re-roll, and their poses and mouths no
+        # longer follow the lead in the cut)
         for r in sorted(p["renders"], key=lambda x: x["role"] in ("B", "MB")):
             if not in_stage(r):
                 continue
@@ -1108,7 +1108,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             if takes:
                 # newest take wins ties (re-rolled twins follow their re-rolled lead clip)
                 # a take with a visual fault (frozen, headless, barred...) loses to one that only
-                # sings off the beat: sx09w kept a frozen take over two with weak lip sync
+                # sings off the beat (a frozen take must not win over two with weak lip sync)
                 fatal = {"missing", "frozen", "exposure", "bars", "headcut", "noface", "sideways", "people", "cut"}
                 best = max(enumerate(takes), key=lambda it: (not (set(it[1].get("fail") or []) & fatal),
                                                              round(it[1].get("score", 0.0), 2), it[0]))[1]
@@ -1130,8 +1130,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         for r in p["renders"]:  # twins follow their lead's mouth, so they share its offset
             lead = by_id.get(r.get("twin_of"))
             if r["role"] == "B" and lead is not None and "sync_delay" in lead:
-                # (runs from before Oct 28 may hold a LatentSync-repaired lead: its twins follow
-                # the original take's offset)
+                # (runs made before the lip repair was removed may have a repaired lead; its twins
+                # keep the original take's offset)
                 r["sync_delay"] = lead.get("sync_delay_ltx", lead["sync_delay"]) if lead.get("latentsync") \
                     else lead["sync_delay"]
             # a delay can't reach back past the clip's own lead-in (it would hold the first
@@ -1298,11 +1298,11 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                 ins = node.get("inputs", {})
                 if node.get("class_type") == "CLIPTextEncode" and isinstance(ins.get("text"), str):
                     t = ins["text"]
-                    if "mono" in it["takes"][-1]["faults"]:  # sx05c: "muted" colour went grey
+                    if "mono" in it["takes"][-1]["faults"]:  # "muted" colour can go grey
                         t = re.sub(r"(?i)\bMuted, true-to-life colour\b", "Rich, natural, true-to-life colour", t)
-                    if crowded:  # sx07c: the emptied beach club, market and rave still filled up
+                    if crowded:  # an emptied beach club, market or rave can still fill up
                         t = _wall_place(t)
-                    elif people:  # st2e: a new seed alone kept the dressing room's mirrors and the arena's crowd
+                    elif people:  # a new seed alone keeps a dressing room's mirrors or an arena's crowd
                         t = _empty_place(t)
                     ins["text"] = _insert_fix(t, fix)
                 if node.get("class_type") == "SaveImage":

@@ -713,7 +713,7 @@ class FVFreeMemory:
 class FVKeep:
     """Keeps models loaded across jobs that don't use them. ComfyUI drops a cached model when a
     job without its loader runs (a QC pass, a Klein edit), and LTX-2.3 then reloads from disk
-    (5-9 min on a slow drive, n46). The Director wires LTX's loaders in here in those jobs: they
+    (5-9 min on a slow drive). The Director wires LTX's loaders in here in those jobs: they
     come from the cache instantly, and the model stays loaded for the next video job."""
 
     @classmethod

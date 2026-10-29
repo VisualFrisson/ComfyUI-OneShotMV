@@ -161,7 +161,7 @@ def tracks_for_run(run_dir: str, renders: list[dict], log=None) -> dict:
             changed = True
         out[r["id"]] = cache[key]
     if changed:
-        try:  # write whole or not at all (a failed dump used to leave a truncated cache)
+        try:  # write whole or not at all (a failed dump would leave a truncated cache)
             txt = json.dumps(cache)
             with open(cache_p, "w", encoding="utf-8") as fh:
                 fh.write(txt)
@@ -230,8 +230,8 @@ def face_match(image, reference, max_scale: float = 2.2, log=print):
     """Move and scale an edited keyframe (IMAGE tensor, B x H x W x C) so its face sits where the
     reference frame's face is (node Face Match). The moved frame always fills the picture: the
     scale never drops below 1 and grows to cover any shift, so a face that can't be matched
-    exactly ends up a little larger rather than the edges smearing (n40: medium shots with small
-    faces needed shifts the old border padding streaked)."""
+    exactly ends up a little larger rather than the edges smearing (medium shots with small faces
+    need large shifts, and padding the borders streaks)."""
     import torch
     import torch.nn.functional as F
     a = (image[0].clamp(0, 1) * 255).byte().cpu().numpy()

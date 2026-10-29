@@ -5,9 +5,9 @@ arcface_onnx.py and face_align.py, MIT).
 
 Used by take QC (fv/qc.py):
   identity - artist runs: a look whose face is no longer the artist's (an image edit that changes
-             the hairstyle sometimes changes the person too: n39's drop look k023 became a young man)
-  framing  - the head out of frame in a wide shot (n39's walking shot r040A), or a medium shot
-             that came out as a tight close-up ("all mouth", the n30c note)
+             the hairstyle sometimes changes the person too, for example into a young man)
+  framing  - the head out of frame in a wide shot (a walking shot that loses the head), or a
+             medium shot that came out as a tight close-up ("all mouth")
 The models are looked for in ComfyUI/models/insightface/(models/)buffalo_l/."""
 from __future__ import annotations
 
@@ -212,7 +212,8 @@ def clip_report(frames_bgr: list, ref=None, n: int = 5) -> dict:
         x1, y1, x2, y2 = fs[0]["box"]
         hs.append((y2 - y1) / H)
         tops.append(y1 / H)
-        # stress test st9: a portrait drawn lying sideways, and one with the same woman twice
+        # the eye line's tilt (a portrait drawn lying sideways) and a second face of about the same
+        # size (the same person drawn twice)
         k = fs[0].get("kps")
         if k is not None:
             dx, dy = float(k[1][0] - k[0][0]), float(k[1][1] - k[0][1])

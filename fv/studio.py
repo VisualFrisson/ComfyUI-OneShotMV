@@ -224,8 +224,8 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
 
 
 # ------------------------------------------------------------------ how long a preview takes
-# Seconds per step of the Director's preview, measured on the RTX PRO 6000 (Oct 28: a new World
-# for a 111 s window took 16 min, most of it writing 53 extra characters 8 at a time). A World
+# Seconds per step of the Director's preview, measured on an RTX PRO 6000 (a new World for a
+# 111 s window takes about 16 min, most of it writing 53 extra characters 8 at a time). A World
 # already written for the same line and seed is reused, so a second preview is quick.
 T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
      "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5}
@@ -867,7 +867,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
                                         "t": time.time(), "items": changes, "estimate_min": round(est, 1)})
     json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)  # written in full before any job can read it
     # queued in order at the back: front-queueing a chain from an idle server lets its first
-    # POST (the cut) start before the rest are queued (Oct 28: the cut ran before the clip)
+    # POST (the cut) start before the rest are queued, so the cut would run before the clip
     ids = [director.queue_prompt(g) for g in chain]
     json.dump({"prompt_ids": ids}, open(os.path.join(d, f"pickup{k}_jobs.json"), "w", encoding="utf-8"))
     return {"pickup": k, "jobs": len(chain), "estimate_min": round(est, 1)}
@@ -875,7 +875,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
 
 # ------------------------------------------------------------------ soft frames: re-decode older clips
 def _decode_fix(g: dict) -> int:
-    """Set every tiled decode in a clip job to one temporal tile (graphs.ltx_render since Oct 28).
+    """Set every tiled decode in a clip job to one temporal tile, as graphs.ltx_render now builds it.
     Returns how many decodes changed; 0 means the job already decodes in one tile."""
     frames = 0
     for n in g.values():
@@ -981,7 +981,7 @@ def _fv(name: str):
     return mod
 
 
-# the 3x3 grid on the Result screen, in this order (from the user's ratings, Oct 28)
+# the 3x3 grid on the Result screen, in this order: the best-rated grades, grouped by mood
 SHOWN_LOOKS = ["neon", "technicolor", "teal_orange",    # vivid
                "golden", "romantic", "eterna",          # warm and soft
                "lowkey", "matrix", "silver"]            # moody

@@ -97,8 +97,8 @@ def _save_video(g, images, fps, prefix, audio=None):
 def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_only=False):
     """Krea 2 W5 hybrid (Turbo composes, RAW + Turbo LoRA redetails). turbo_only=True uses the
     Turbo model for both passes: one model to load instead of two (the fast preset).
-    denoise: how hard the RAW pass redetails the upscaled image; 0.40 looked too gritty in the
-    Oct 24 samples, so 0.25 keeps Turbo's cleaner composition and adds less texture."""
+    denoise: how hard the RAW pass redetails the upscaled image; 0.40 looks too gritty, so 0.25
+    keeps Turbo's cleaner composition and adds less texture."""
     g = Graph()
     turbo = g.add("UNETLoader", unet_name=M["krea_turbo"], weight_dtype="default")
     if turbo_only:
@@ -309,8 +309,8 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
         if extra:
             cr = g.add("LTXVCropGuides", positive=spos, negative=sneg, latent=vlat)
             vlat, cpos, cneg = O(cr, 2), O(cr, 0), O(cr, 1)
-    # the whole clip in one temporal tile: 64-frame tiles left a soft frame at every seam
-    # (frames 56, 112... of a 50 fps clip, Oct 28); spatial tiles keep the memory in check
+    # the whole clip in one temporal tile: 64-frame tiles leave a soft frame at every seam
+    # (frames 56, 112... of a 50 fps clip); spatial tiles keep the memory in check
     t_size = min(512, (frames + 7) // 8 * 8 + 8)
     dec = g.add("VAEDecodeTiled", samples=vlat, vae=m["vae"], tile_size=512, overlap=64,
                 temporal_size=t_size, temporal_overlap=8)
@@ -368,8 +368,8 @@ TWIN_TEXT = ("Change only the person into {who}. {detail} {wear} Light: {light}.
              "above the head, the same amount of shoulders and body in frame, the face the same size and in the "
              "same place. Keep the head position, head tilt and the open, mid-word mouth exactly as in the image. "
              "A completely different person. No text or lettering anywhere.")  # + casting.edit_realism()
-# "the same tight crop" and the close-up skin brief made Klein redraw every look as a tight,
-# mouth-shut face shot (stress test st6: 24 of 24 looks tighter than their lead's frame)
+# no "the same tight crop" and no close-up skin brief: with them Klein redraws every look as a
+# tight, mouth-shut face shot (in one test all 24 looks came out tighter than their lead's frame)
 
 
 def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
@@ -378,8 +378,8 @@ def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, p
     editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
     editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose).
     identity_path (artist runs, Klein): the artist photo as a second reference image, so a new
-    outfit, hairstyle and place keep the artist's face (without it the n39 looks drifted into
-    other people: ArcFace similarity to the artist 0.20-0.37 without, 0.33-0.63 with)."""
+    outfit, hairstyle and place keep the artist's face (without it the looks drift into other
+    people: ArcFace similarity to the artist 0.20-0.37 without, 0.33-0.63 with)."""
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
                start_seconds=float(start_s), force_fps=0.0)

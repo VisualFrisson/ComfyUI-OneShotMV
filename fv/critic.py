@@ -1,12 +1,13 @@
 """Vision check: every portrait and b-roll still is looked at before any video is made from it.
 
-The user, Oct 26: "girls with beards, guys wearing girls clothes", modern glasses in ancient Rome.
+It catches gender mismatches between the still and the role (such as facial hair on a woman or a
+man in a dress) and things out of their period (modern glasses in ancient Rome).
 Gemma 3 12B (the LTX-2.3 text encoder every install already has, run through ComfyUI's Generate
 Text with an image) answers a fixed set of yes/no questions about the picture against what the
 character should be: how many people, which gender, facial hair, glasses, the whole head in frame,
-any writing, anything from after the World's period, and whether the clothes match. The Oct 26
-test on 28 frames: glasses on all 12 frames that had them and on none of the 16 that didn't,
-the crowds counted, the bearded "priestess" caught; about 7 s a picture. Its free-form "what is
+any writing, anything from after the World's period, and whether the clothes match. On a test of
+28 frames it found glasses on all 12 frames that had them and on none of the 16 that didn't,
+counted the crowds and caught a bearded "priestess"; about 7 s a picture. Its free-form "what is
 modern" list also names the camera and the lighting, so those are filtered out.
 
 fit_face(): the drop's match cuts land the next face where the last one was. Every drop portrait
@@ -28,7 +29,7 @@ MODERN_PERIOD = ("objects, clothes or hairstyles you can see that did not exist 
                  "itself, the camera, the lighting and the picture's style")
 MODERN_NOW = "things you can see that clearly do not belong in this world; leave out the photograph itself, the camera and the lighting"
 
-# what the "modern" answer must not count: the photo itself (Oct 26 test: "camera", "modern lighting",
+# what the "modern" answer must not count: the photo itself ("camera", "modern lighting",
 # "digital camera/lighting" on clean portraits) and vague style words ("apron style", "fabric of the shirt")
 _NOT_A_THING = re.compile(r"(?i)\b(camera|lighting|light|lens|photo|photograph|picture|image|film|flash|studio|"
                           r"style|aesthetic|quality|resolution|depth of field|bokeh|blur|grain|colou?r|tone|"
@@ -85,7 +86,7 @@ def rubric(check: dict, world: str, era: str) -> str:
     mq = MODERN_PERIOD.format(era=era) if era else MODERN_NOW
     out = RUBRIC.format(who=who, wear=check.get("wear") or "their own clothes", world=world.split(":")[0].strip(),
                         modern_key="modern" if era else "out_of_place", modern_q=mq)
-    if check.get("crowd") and era:  # the crowd behind dressed for the period (sx05i: t-shirts in the Colosseum)
+    if check.get("crowd") and era:  # the crowd behind dressed for the period (no t-shirts in the Colosseum)
         out = out.replace('"outfit_matches":', f'"crowd_modern": true if anyone in the crowd or background is '
                           f'wearing clothes from after {era} (such as t-shirts, caps, hoodies, jeans or sunglasses), '
                           f'else false, "outfit_matches":')
@@ -153,8 +154,8 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait", era: str = "")
     if _yes(ans.get("text")):
         out.append("text")
     # only a period World's "from after {era}" list counts: in a present-day World the "out of place"
-    # list named the World's own things (st2e: bookshelves in a record store, bottles behind a bar,
-    # the disco ball the World line asks for)
+    # list names the World's own things (bookshelves in a record store, bottles behind a bar, the
+    # disco ball the World line asks for)
     modern = ans.get("modern") or []
     if isinstance(modern, str):
         modern = [modern] if modern.strip().lower() not in ("", "none", "[]") else []
@@ -162,7 +163,7 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait", era: str = "")
               and str(x).strip().lower() not in ("none", "nothing", "n/a")]
     # glasses are judged on their own (an eyewear-free world names them as modern too)
     things = [x for x in things if not re.search(r"(?i)\b(glasses|spectacles|sunglasses|goggles)\b", x)]
-    # only things that are clearly from a later time count: in sx05c (ancient Rome) the list named
+    # only things that are clearly from a later time count: for ancient Rome the list can name
     # aprons, headscarves, braids with threads, flour on the hands, a bun and work gloves
     m = re.search(r"\b(1[5-9]\d\d)", era or "")
     pat = MODERN_SINCE_1900 if m and int(m.group(1)) >= 1900 else CLEARLY_MODERN
@@ -194,17 +195,17 @@ MODERN_SINCE_1900 = re.compile(r"(?i)\b(smartphones?|cell ?phones?|mobile phones
 
 
 def saturation(path: str) -> float:
-    """Median colour saturation of a picture (sx05c: three Roman portraits came out nearly black and
-    white at 0.05-0.08; the next lowest was 0.11)."""
+    """Median colour saturation of a picture (portraits that come out nearly black and white read
+    0.05-0.08; colour portraits from the same run read 0.11 and up)."""
     from PIL import Image
     im = np.asarray(Image.open(path).convert("RGB").resize((256, 144))).astype(np.float32) / 255
     mx, mn = im.max(-1), im.min(-1)
-    # lit pixels only: a face against a black tunnel counted its dark background as grey and read
-    # 0.0 (sx05f, the venator and the secutor in full colour); a real black-and-white frame reads
-    # about 0.04 on its lit pixels too
+    # lit pixels only: over all pixels, a full-colour face against a black tunnel counts its dark
+    # background as grey and reads 0.0; a real black-and-white frame reads about 0.04 on its lit
+    # pixels too
     # and the most colourful of them (95th percentile): a black suit on a white runway is a colour
-    # photo with a grey median (sx06g read 0.02-0.08 on four colour portraits; their 95th
-    # percentile is 0.3-0.6, the black-and-white lanista's 0.08)
+    # photo with a grey median (0.02-0.08 on four such colour portraits; their 95th percentile is
+    # 0.3-0.6, a black-and-white portrait's 0.08)
     lit = mx > 0.12
     if lit.mean() < 0.02:
         return 0.0
@@ -229,7 +230,7 @@ def modern_items(ans: dict | None) -> list[str]:
 
 def fix_lines(fs: list[str], check: dict, era: str, ans: dict | None = None) -> str:
     """Sentences for the re-made picture's prompt, said as what should be there (naming the
-    unwanted thing draws it: 'glasses' in the period line put glasses on every other face)."""
+    unwanted thing draws it: 'glasses' in the period line puts glasses on every other face)."""
     g = (check.get("gender") or "").lower()
     out = []
     if "gender" in fs and g:
@@ -270,8 +271,8 @@ def era_of(theme: str) -> str:
 
 
 def check_era(theme: str) -> str:
-    """The era the 'from a later time' question is asked about: none for recent decades (sx07c,
-    Ibiza 1999: it called pink hair, butterfly clips and crop tops modern)."""
+    """The era the 'from a later time' question is asked about: none for recent decades (for Ibiza
+    in 1999 it calls pink hair, butterfly clips and crop tops modern)."""
     era = era_of(theme)
     m = re.search(r"\b(1[5-9]\d\d|20\d\d)", era)
     return "" if m and int(m.group(1)) >= 1980 else era
@@ -298,8 +299,8 @@ def fit_targets(boxes: list, max_scale: float = 1.6) -> tuple[float, float]:
         return 0.0, 0.42
     med = ws[len(ws) // 2]
     # a touch above the largest face, so even that one can be moved into place, but never more
-    # than a third above the typical one (the zoom costs resolution and head room)
-    # (st2e at 1.35: hats and hair touched the top of the frame on the drop)
+    # than a fifth above the typical one (the zoom costs resolution and head room: at 1.35 hats
+    # and hair touch the top of the frame on the drop)
     tw = min(max(ws) * 1.06, med * 1.2, med * max_scale)
     ty = float(np.clip(cys[len(cys) // 2], 0.36, 0.46))
     return tw, ty

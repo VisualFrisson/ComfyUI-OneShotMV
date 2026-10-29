@@ -45,14 +45,14 @@ DEFAULT_FRAMING = {"close": {"shot": "Extreme close-up portrait", "lens": "on a 
 
 
 # Dense vocals (rap, fast flows): a prompt that asks for a mouth that snaps on every syllable
-# lifted SyncNet confidence on every dense shot it was tried on (n28: 3.3-4.0 -> 4.3-4.5,
+# lifted SyncNet confidence on every dense shot it was tried on (3.3-4.0 -> 4.3-4.5,
 # 2.2-2.6 -> 4.0); on sparse stretches no prompt, face or setting helped. See fv/lipsync.py.
 ARTICULATE = ("The lips shape every syllable in time with the voice, relaxed and natural, with small natural head "
               "movements on the beat.")
-# Natural singing (Oct 26, the user: "make the images/video look more real and less AI"): "wide open
-# mouth movements" and the snapping-jaw articulation read as performed-for-the-AI. A/B on three
-# st2c singer clips (same still, seed, audio): SyncNet 5.64 / 3.75 / 5.35 against 5.59 / 3.79 / 5.48,
-# with softer mouths, blinks and the odd gesture.
+# Natural singing, so the clips look less AI-made: "wide open mouth movements" and the
+# snapping-jaw articulation read as performed-for-the-AI. A/B on three singer clips (same still,
+# seed, audio): SyncNet 5.64 / 3.75 / 5.35 against 5.59 / 3.79 / 5.48, with softer mouths, blinks
+# and the odd gesture.
 _LIPS = re.compile(r"The (?:lips (?:form|shape) each word|mouth moves sharply on every syllable)[^.]*\.")
 
 
@@ -172,10 +172,10 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
 
 # ------------------------------------------------------------------ in-scene shots
 # Medium and wide shots where the performer does something in their world (walking, leaning in
-# a doorway, working) instead of standing and singing at the lens. The n31 notes: "the walking
-# shots were a great step up from the standard portrait-looking shots".
+# a doorway, working) instead of standing and singing at the lens: they read as scenes from the
+# world rather than portraits.
 SCENE_ACTIONS = {
-    # nothing that bends toward the lens (the user's "unnaturally leaned forward" note, Oct 24)
+    # nothing that bends toward the lens (it reads as unnaturally leaned forward)
     "medium": ["leaning in a doorway", "sitting upright on a stool", "leaning back against a wall",
                "walking slowly beside the camera", "turning toward the camera", "swaying to the beat",
                "looking up between lines, then back to the camera", "resting their arms on a railing"],
@@ -184,8 +184,8 @@ SCENE_ACTIONS = {
              "working with their hands, then looking up", "walking through the scene"],
 }
 SCENE_MOVES = {
-    # close moves keep their distance: "very close" / "around the face" made LTX push in until the
-    # face filled the frame (n41, the n30c "all mouth" note)
+    # close moves keep their distance: "very close" / "around the face" make LTX push in until the
+    # face fills the frame ("all mouth")
     "close": ["The handheld camera sways gently at the same distance.",
               "The camera drifts slowly sideways, keeping its distance.",
               "The handheld camera bobs gently with the beat, keeping its distance.",
@@ -195,15 +195,14 @@ SCENE_MOVES = {
     "wide": ["The camera follows from a few meters away.", "The camera pushes in slowly from far away.",
              "The camera arcs slowly around them.", "The camera holds still on a tripod."],
 }
-# no "Cinematic": it brings letterbox and pillarbox bars (n39's cutaways; sx03's wide debutante came
-# out as a vertical picture inside black bars)
+# no "Cinematic": it brings letterbox and pillarbox bars (a wide shot can come out as a vertical
+# picture inside black bars)
 SCENE_SHOT = {"medium": ("Medium shot", "on a 35mm lens at chest height, filling the whole frame edge to edge"),
               "wide": ("Wide full-body shot", "on a 24mm lens a few meters away, filling the whole frame edge to edge")}
-# The user's realism brief (Oct 24, 12:40: "the look feels really AI"): every image prompt ends with
-# REALISM, close-up portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only
-# say no text; finish_prompt adds the photograph wording last.
-# no "fine facial hair" any more: on every portrait it helped the drop looks give women stubble
-# (the user, Oct 26: "girls with beards")
+# The realism brief, against the default AI look: every image prompt ends with REALISM, close-up
+# portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only say no text;
+# finish_prompt adds the photograph wording last.
+# no "fine facial hair": on every portrait it made the drop looks more likely to give women stubble
 REALISM_PERSON = ("Unretouched photograph with true-to-life detail: natural skin with visible pores, uneven tone "
                   "and small blemishes, slightly asymmetrical features, flyaway hairs, creased "
                   "and worn fabric, everyday wear and clutter in the surroundings.")
@@ -220,8 +219,8 @@ CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, f
 REALISM_SCENE = ("Unretouched photograph with true-to-life detail: everyday wear and clutter in the surroundings. "
                  + REALISM_CAMERA)
 REAL_PHOTO = "No text, signs or lettering anywhere."
-# one grown adult and nobody else: the Y2K retest drew two identical boy-band members in one
-# portrait and photographers in a mirror; and nobody may look like a child (user, Oct 24)
+# one grown adult and nobody else: without it Krea can draw two identical boy-band members in one
+# portrait or photographers in a mirror; and nobody may look like a child
 ONE_ADULT = "A single grown adult in frame and nobody else, no other people in mirrors or reflections."
 # the older photo wording at the end of the packs' templates, replaced by the brief
 _OLD_TAIL = re.compile(r"(?i)(?:,\s*)?(?:visible pores and natural skin texture|natural colou?r|subtle film grain|"
@@ -231,14 +230,14 @@ _OLD_TAIL = re.compile(r"(?i)(?:,\s*)?(?:visible pores and natural skin texture|
 
 def _camera_part(camera: str | None) -> str:
     """The brief's camera half: the modern unretouched look, or the world's own period camera
-    (theme bible "camera", e.g. a 35mm point-and-shoot with direct flash for 1999-2002: the user,
-    Oct 24, on Y2K v3, "I don't feel that nostalgia from the time period")."""
+    (theme bible "camera", e.g. a 35mm point-and-shoot with direct flash for 1999-2002), so the
+    pictures feel like they come from the period."""
     cam = " ".join((camera or "").split()).strip(" .")
     if not cam:
         return REALISM_CAMERA
-    # always colour: a film-camera line alone sometimes came out black-and-white (Y2K v4c, st4), and
-    # Gemma wrote "a grainy black and white image" for ancient Rome and 1926 (sx05w: half the
-    # singers in black and white)
+    # always colour: a film-camera line alone sometimes comes out black-and-white, and Gemma can
+    # write "a grainy black and white image" for ancient Rome or 1926 (then half the singers come
+    # out in black and white)
     cam = _no_mono(cam)
     return f"{REALISM_LIGHT} {cam[0].upper() + cam[1:]}. Full colour. Imperfect off-centre framing."
 
@@ -250,7 +249,7 @@ _MONO = re.compile(r"(?i),?\s*\b(?:in |a |an )?(?:grainy |soft |high-contrast |c
 def _no_mono(cam: str) -> str:
     out = _MONO.sub("", cam)
     out = re.sub(r"(?i)\bproducing\s*(?=with\b|,|$)", "producing a colour image ", out)
-    out = re.sub(r"(?i),?\s*\b(?:using|on|with)\s*(?=,|$)", "", out)  # "using black and white film," (sx04w)
+    out = re.sub(r"(?i),?\s*\b(?:using|on|with)\s*(?=,|$)", "", out)  # what "using black and white film," leaves
     out = re.sub(r"\s+,", ",", re.sub(r"\s{2,}", " ", out)).strip(" ,.")
     return out or cam
 
@@ -272,8 +271,8 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
     return " ".join(f"{p} {tail}".split())
 
 
-# sx05j's wording (the user, Oct 27: sx05k's shallow-focus, empty-ground and seated-crowd lines made
-# it "much worse": LTX filled the open ground with extras walking into the shots)
+# the crowd far behind and nobody near: wording about shallow focus, empty ground or a seated
+# crowd makes it worse (LTX fills the open ground with extras walking into the shots)
 CROWD_BEHIND = ("The only person in focus, with the packed, roaring crowd of the stands far behind as a soft "
                 "blur of distant faces and colour, nobody else near.")
 _ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in frame\.")
@@ -282,9 +281,8 @@ _ONLY_ONE = re.compile(r"(?i)An invented person, the only (?:one|person) in fram
 def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
     """A spectacle World's singer in front of the crowd (theme.crowd_world): the one-person lines
     become one person in focus with the stands behind as a blur; in a period World every spectator
-    in its clothes (sx05i: white t-shirts and a cap in the Colosseum crowd). The clip wording is
-    sx05j's (the user preferred it to sx05k's); dress, the World's own crowd costume, goes in the
-    still only: in a clip LTX acts out every person a prompt names (sx05k)."""
+    in its clothes (otherwise the Colosseum crowd wears white t-shirts and caps). Dress, the World's
+    own crowd costume, goes in the still only: in a clip LTX acts out every person a prompt names."""
     # said as what is there, never naming the unwanted clothes (naming a thing draws it)
     dressed = (f" Every spectator in the crowd is dressed in the clothes of {era}, as in a big-budget "
                "period film.") if era else ""
@@ -294,8 +292,8 @@ def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
     p = p.replace(ONE_ADULT, "A single grown adult in focus, no other people in mirrors or reflections.")
     p = re.sub(r"(?i)\bNo one else in frame\.", "No one else close; the crowd behind stays a soft blur" +
                (f", all in the clothes of {era}." if era else "."), p)
-    # a moving camera brings new people into the frame, and LTX dresses them in modern clothes (the
-    # user, Oct 27): in front of a crowd the camera stays put
+    # a moving camera brings new people into the frame, and LTX dresses them in modern clothes: in
+    # front of a crowd the camera stays put
     p = re.sub(r"(?i)\bThe (?:handheld )?camera (?:sways|drifts|bobs|tracks|arcs)[^.]*\.",
                "The camera holds almost still at the same distance.", p)
     return p
@@ -303,9 +301,8 @@ def crowd_behind(prompt: str, era: str = "", dress: str = "") -> str:
 
 def period_background(sing: str, era: str) -> str:
     """Every clip in a period World: whoever is or comes into the background is dressed for the
-    period (the user, Oct 27: as the camera moves, LTX's new background people were in modern
-    clothes). Positive words only: the clips run at cfg 1, where a negative prompt does nothing.
-    sx05j's wording, which the user preferred to sx05k's."""
+    period (as the camera moves, LTX adds background people, otherwise in modern clothes).
+    Positive words only: the clips run at cfg 1, where a negative prompt does nothing."""
     if not era or "comes into view" in sing:
         return sing
     return sing.rstrip() + f" Everyone in the background, including anyone who comes into view, is dressed in the clothes of {era}."
@@ -314,7 +311,7 @@ def period_background(sing: str, era: str) -> str:
 def edit_realism(close: bool = True) -> str:
     """For image edits that must keep the frame (the looks on the drop): the skin and fabric part of
     the brief, without the framing and depth of field. Never CLOSE_SKIN: its pores-and-veins close-up
-    made Klein zoom every look into a face shot (st6). close is kept for callers."""
+    makes Klein zoom every look into a face shot. close is kept for callers."""
     return REALISM_PERSON
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
@@ -378,14 +375,14 @@ ATTITUDE = "expressive and a little over the top"  # without a theme's own poses
 THEME_CLOSE_SING = ("Head-and-shoulders shot of {who} " + NAT_CLOSE + " {move} The framing stays "
                     "head-and-shoulders and never moves in closer. Both hands stay below the frame. No one else "
                     "in frame.")
-# themed close-ups are head-and-shoulders (n41: they lip-sync far better than medium shots and
-# don't read as "all mouth"); a pack's own 16:9 close framing still wins
+# themed close-ups are head-and-shoulders (they lip-sync far better than medium shots and don't
+# read as "all mouth"); a pack's own 16:9 close framing still wins
 THEME_CLOSE_FRAME = {"shot": "Head-and-shoulders portrait",
                      "lens": "from about one and a half metres away on a 50mm lens, with clear space above the "
                              "head and both shoulders in frame, the face about a third of the frame height"}
-# Head-and-shoulders portraits from above or below, or with a hands-on-hips pose, came out with the
-# singer bent toward the lens (the user on Y2K v4, 0:14: "unnaturally leaned forward"). An A/B at the
-# same seeds: dropping the close-up skin line changed nothing; eye level and a face-only pose fixed it.
+# Head-and-shoulders portraits from above or below, or with a hands-on-hips pose, come out with the
+# singer bent toward the lens, unnaturally leaned forward. An A/B at the same seeds: dropping the
+# close-up skin line changed nothing; eye level and a face-only pose fixed it.
 THEME_ANGLES = ["eye level", "a three-quarter angle", "eye level, a little off to one side"]
 # poses that need the body or hands, which a head-and-shoulders frame can only fit by bending the person
 _BODY_POSE = re.compile(r"(?i)\b(hands?|fingers?|fists?|hips?|arms?|elbows?|knees?|lean(?:s|ing)?|point(?:s|ing)?|cross(?:es|ing|ed)?|"
@@ -408,15 +405,15 @@ _FEET = (r"shoes?|sneakers?|trainers|sandals?|slippers?|boots?|loafers?|heels|so
          r"footwear|wedges|moccasins?|espadrilles?|platforms?|mules|pumps|stilettos?|slingbacks?|brogues|oxfords|"
          r"flats|go-go boots|high-tops|kicks")
 FEET = re.compile(rf"\b({_FEET})\b", re.I)
-# a woman's cut on a man reads as costume (the Y2K sample: men in white lace corsets)
+# a woman's cut on a man reads as costume (a man in a white lace corset)
 WOMENS_WEAR = re.compile(r"\b(dress|skirt|miniskirt|corset|bustier|bralette|bra|halter|lingerie|gown|blouse|"
                          r"camisole|tube top|bodysuit|heels|stilettos?|pumps)\b", re.I)
 MAN = re.compile(r"\b(man|men|guy|boy|gentleman|male|father|grandfather|husband)\b", re.I)
 WOMAN = re.compile(r"\b(woman|women|girl|lady|female|mother|grandmother|wife)\b", re.I)
 
 
-# Trousers in a head-and-shoulders prompt pull the camera down to the waist and cut the head off
-# (Night Shift v3's barber, twice). Close-ups name only what is above the chest.
+# Trousers in a head-and-shoulders prompt pull the camera down to the waist and cut the head off.
+# Close-ups name only what is above the chest.
 _BOTTOMS = re.compile(r"(?i)\b(pants|trousers|jeans|shorts|skirts?|miniskirts?|leggings|stockings|tights|fishnets?|"
                       r"socks|slacks|khakis|chinos|flares|bell-bottoms|belts?)\b")
 
@@ -430,9 +427,9 @@ def _top_only(wear: str) -> str:
 
 
 def _no_feet(wear: str) -> str:
-    """The outfit without its footwear, for close and medium shots (n47: a look edit drew a head
-    standing on shoes). Drops the clause that names the shoes instead of dropping the outfit:
-    filtering whole outfits left two in the Y2K and Florida samples, so everyone wore them."""
+    """The outfit without its footwear, for close and medium shots (shoes in the prompt can make a
+    look edit draw a head standing on shoes). Drops the clause that names the shoes instead of
+    dropping the outfit: filtering whole outfits can leave two, so everyone wears them."""
     if not FEET.search(wear):
         return wear
     out = wear
@@ -450,18 +447,18 @@ def _no_feet(wear: str) -> str:
 
 _OUTDOOR = re.compile(r"(?i)\b(pool|backyard|yard|garden|patio|rooftop|roof|street|beach|park|parking lot|"
                       r"field|lawn|porch|driveway|boardwalk|pier|outside|outdoors?|exterior|"
-                      # sx01w's county fair: the midway, the grandstand and the rodeo arena counted as rooms
+                      # a county fair's midway, grandstand and rodeo arena are outdoors too
                       r"midway|fairground|grandstand|arena|rodeo|racetrack|track|stadium|bleachers|wharf|dock|"
                       r"harbou?r|deck|terrace|courtyard|alley|tarmac|runway|square|plaza|campsite|shore|meadow|"
                       r"paddock|barnyard|riverbank|bridge|balcony|fire escape|sidewalk|road|lot|pit|sand)\b")
-# lights that only exist indoors: sx01w put a table lamp beside the rodeo arena and on the midway
+# lights that only exist indoors (no table lamp beside a rodeo arena)
 _INDOOR_LIGHT = re.compile(r"(?i)\b(table lamps?|desk lamps?|floor lamps?|lamps? in the room|lampshades?|chandeliers?|"
                            r"windows?|ceiling|overhead|fluorescent tubes?|pendant lamps?|sconces?|fireplace)\b")
 _SKY = re.compile(r"(?i)\b(sun|sunlight|daylight|golden hour|moon|moonlight|street ?lights?|sky)\b")
 
 
-# the hour and the year the World line sets (stress test, Oct 25: daylight through the windows of
-# a pub at last orders, st5; modern cars outside a 1977 roller rink, st6)
+# the hour and the year the World line sets (no daylight through the windows of a pub at last
+# orders, no modern cars outside a 1977 roller rink)
 _NIGHT_THEME = re.compile(r"(?i)\b(night|nights|midnight|after dark|small hours|last orders|closing time|late-night|"
                           r"nocturnal|graveyard shift|[1-4] ?a\.?m\.?)\b")
 _DAY_THEME = re.compile(r"(?i)\b(day|daytime|morning|afternoon|midday|noon|sunrise|sunny|sun)\b")
@@ -479,8 +476,8 @@ _NIGHT_SPARE = ["warm light from a lamp in the room", "hard light from a single 
 
 def time_of_day(theme: str) -> str:
     """'night', 'day' or '' (the World line doesn't say), from the World line's headline (before the
-    colon): sx06's Paris fashion show listed "a Paris street outside at night" among its places and
-    every backstage shot went dark."""
+    colon): a place list that includes "a Paris street outside at night" shouldn't turn every
+    backstage shot of a fashion show dark."""
     t = (theme or "").split(":")[0]
     return "night" if _NIGHT_THEME.search(t) else "day" if _DAY_THEME.search(t) else ""
 
@@ -516,16 +513,16 @@ def era_line(theme: str) -> str:
     else:
         era = _ERA_NAMES[m.group(4).lower()]
     cars = bool(re.search(r"\b(19|20)\d", era))  # a car brief in a medieval court would bring carts
-    # no "glasses": naming them drew glasses on every other face (sx02w, sx05w's gladiators)
+    # no "glasses": naming them draws glasses on every other face
     return (f"Hair, clothes{', vehicles' if cars else ''} and every building, fixture and object in frame are "
             f"period-accurate for {era}, nothing modern.")
 
 
 def _lights_for(lights: list[str], place: str, tod: str = "") -> list[str]:
     """The world's lights that can be where the place is: no sun or streetlights indoors, no
-    lamps, chandeliers or window light outdoors (v4b put a desk lamp at a swimming pool and studio
-    softboxes in a basement; sx01w a table lamp at the rodeo arena); string bulbs, spotlights,
-    neon and torches fit both."""
+    lamps, chandeliers or window light outdoors (a desk lamp at a swimming pool, a table lamp at
+    a rodeo arena), no studio softboxes outside a studio; string bulbs, spotlights, neon and
+    torches fit both."""
     outdoor = bool(_OUTDOOR.search(place or ""))
     out = [l for l in lights if not (_INDOOR_LIGHT.search(l) if outdoor else _SKY.search(l))]
     if outdoor and not out:
@@ -534,8 +531,8 @@ def _lights_for(lights: list[str], place: str, tod: str = "") -> list[str]:
     return out or lights
 
 
-# Drop shots cut on the beat from one new person to the next with the face in the same spot (the
-# user's match cuts, Oct 26): every drop portrait has the same framing, straight on, a little looser
+# Drop shots cut on the beat from one new person to the next with the face in the same spot (match
+# cuts): every drop portrait has the same framing, straight on, a little looser
 # than a head-and-shoulders close-up so the face can be re-centred and scaled up to one size
 # (director.fit_faces) without running out of picture.
 DROP_FRAME = {"shot": "Head-and-shoulders portrait",
@@ -551,8 +548,8 @@ _PLACE_STOP = {"in", "on", "at", "the", "a", "an", "of", "by", "near", "inside",
 
 
 def _same_place(a: str | None, b: str | None) -> bool:
-    """'in the imperial box draped in purple' and 'in the imperial box' are one place (sx05e put the
-    emperor and the senator back to back on the same purple drapes)."""
+    """'in the imperial box draped in purple' and 'in the imperial box' are one place (so the emperor
+    and the senator don't play back to back on the same purple drapes)."""
     if not a or not b:
         return False
     wa = [w for w in re.findall(r"[a-z']+", a.lower()) if w not in _PLACE_STOP]
@@ -562,16 +559,16 @@ def _same_place(a: str | None, b: str | None) -> bool:
 
 def _unique_order(chars: list[dict], n: int, rng: random.Random, n_main: int | None = None,
                   story: list | None = None) -> list[int]:
-    """Which character plays each of n shots (the user, Oct 26: a bigger cast, no repeats, a cut
-    can go to anyone of either gender, and neighbours that look alike read as blended): every
-    character once before any repeats, the World line's own characters first (n_main: those from
-    the first world call; sx05c's games day went to a vinegar merchant and a herbalist while
-    gladiators waited), each shot the other gender from the one before when one is left among
-    them, and never the same place twice in a row."""
+    """Which character plays each of n shots (a big cast with no repeats; a cut can go to anyone of
+    either gender, and neighbours that look alike read as blended): every character once before
+    any repeats, the World line's own characters first (n_main: those from the first world call,
+    so a games day doesn't go to a vinegar merchant and a herbalist while the gladiators wait),
+    each shot the other gender from the one before when one is left among them, and never the
+    same place twice in a row."""
     out, pools, prev = [], [], None
     n_main = len(chars) if n_main is None else max(0, min(n_main, len(chars)))
-    # story order: the World line's own characters in the order it names them (the user, Oct 27:
-    # gladiators first, then the crowd), the rest after them as before
+    # story order: the World line's own characters in the order it names them (gladiators first,
+    # then the crowd), the rest after them as before
     told = sorted((pos, i) for i, pos in enumerate(story or []) if pos is not None and i < len(chars))
     told = [i for _, i in told] if len(told) >= 3 else []
     first = True
@@ -633,10 +630,11 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         from .theme import story_positions
         story = story_positions(chars, th.get("theme", ""))
     assign = _unique_order(chars, n, random.Random(seed * 13 + 5), th.get("n_main", 12), story) if unique else []
-    # every character once before any repeats (the Y2K retest showed one of 14 in four of 16 shots)
+    # every character once before any repeats (a plain random pick can put one of 14 characters in
+    # four of 16 shots)
     order = []
-    # the leads first: v4b's 16 singers drew from the same cycle as the 24 looks on the drop and
-    # came out as 9 characters (one in three shots); now 13 characters give 13 different singers
+    # the leads first: if the singers drew from the same cycle as the looks on the drop, 16 singers
+    # could come out as 9 characters; cast first, 13 characters give 13 different singers
     lead_set = [i for i in dict.fromkeys(leads or []) if 0 <= i < n]
     for i in lead_set + [i for i in range(n) if i not in set(lead_set)]:
         size = sizes[i] if i < len(sizes) else "close"
@@ -660,28 +658,28 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
                 pool = [w for w in pool if not WOMENS_WEAR.search(w)] or pool
             wear = _pick(rng, pool, used, "wear")
             place = _pick(rng, th["places"], used, "place")
-        # shoes in a head-and-shoulders frame: n47's look edit drew a head standing on shoes
+        # no shoes in a head-and-shoulders frame: a look edit can draw a head standing on shoes
         if size != "wide":
             wear = _no_feet(wear)
         if size == "close":
             wear = _top_only(wear)
-        # the character's own light where the bible has one (the light of its place: v4's first
-        # preview put studio softboxes in a shopping mall), else one from the world's list
+        # the character's own light where the bible has one (the light of its place: a shared list
+        # can put studio softboxes in a shopping mall), else one from the world's list
         own = ch.get("light") if chars else None
         if own and re.search(r"(?i)\b(studio|softbox(?:es)?)\b", own) and not re.search(r"(?i)\bstudio\b", place or ""):
-            own = None  # Florida v2's piano player in a condo lounge came out in a photo studio
+            own = None  # studio light only in a studio (or a lounge's piano player ends up in one)
         if own and not light_fits(own, tod):
-            own = None  # window daylight in a pub at last orders (st5)
+            own = None  # no window daylight in a pub at last orders
         if own and _OUTDOOR.search(place or "") and _INDOOR_LIGHT.search(own):
-            own = None  # a table lamp on the midway (sx01w)
+            own = None  # no table lamp on a fair's midway
         light = own or _pick(rng, _lights_for(lights_at(th["light"], tod), place, tod), used, "light")
         light = at_hour(light, place, tod)
         short = _short_who(who)
         scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
-        # the theme's own poses, in its tone (fun, but a real photograph: the user's n43 brief);
-        # portraits take the face-only ones (_BODY_POSE)
+        # the theme's own poses, in its tone (fun, but a real photograph); portraits take the
+        # face-only ones (_BODY_POSE)
         # the character's own expression and wide-shot action when the bible has them (v6): from a
-        # shared pool, st2c's gas-station attendant spun the DJ's record and bowed like the choir singer
+        # shared pool, a gas-station attendant could spin the DJ's record and bow like the choir singer
         face = (ch.get("face") or "") if chars else ""
         if face and (scene or not _BODY_POSE.search(face)):
             attitude = face
@@ -694,21 +692,21 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         own_acts = acts
         if chars and ch.get("doing"):
             # in front of a crowd the character's own action for medium shots too: the generic
-            # "leaning in a doorway" put sx05k's champion gladiator in a doorway off the sand
+            # "leaning in a doorway" puts a champion gladiator in a doorway off the sand
             own_acts = {"medium": [ch["doing"]] if crowd else acts["medium"], "wide": [ch["doing"]]}
         if scene:
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, own_acts,
                                          attitude=attitude)
         else:
             f = DROP_FRAME if drop else THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
-            upright = "" if re.search(r"(?i)\bstand", attitude) else "standing upright, "  # "standing upright, standing rigidly" (st3)
+            upright = "" if re.search(r"(?i)\bstand", attitude) else "standing upright, "  # not "standing upright, standing rigidly"
             portrait = THEME_CLOSE.format(shot=f["shot"], lens=f["lens"], who=who, wear=wear, attitude=attitude, upright=upright,
                                           angle=DROP_ANGLE if drop else _pick(rng, THEME_ANGLES, used, "angle"),
                                           light=light[:1].upper() + light[1:], place=_place_noun(place))
             move = DROP_MOVE if drop else _pick(rng, SCENE_MOVES["close" if size == "close" else "medium"], used, "move")
             sing = THEME_CLOSE_SING.format(who=short, move=move)
-        # the period lock on the look edits too (sx03's 1813 drop looks came back in a modern suit,
-        # modern glasses and with a microphone stand)
+        # the period lock on the look edits too (without it an 1813 World's drop looks come back in
+        # a modern suit, modern glasses and with a microphone stand)
         twin = {"who": who, "detail": era, "wear": "Wearing " + wear + ".", "light": light,
                 "background": _place_noun(place)}
         if era:

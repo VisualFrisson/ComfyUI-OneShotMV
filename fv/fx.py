@@ -15,14 +15,14 @@ def _hash01(i: int, k: int) -> float:
     return ((i * 73856093) ^ (k * 19349663)) % 1000 / 1000.0
 
 
-# Audio-reactive FX level (the user, Oct 26: a drop-down none / subtle / intense). Intense is the
-# look of the first tests, with the 4 px shake (it read as a glitch) swapped for a twitch: jumps of
-# up to 8 px with motion blur, like After Effects' Twitch. Subtle (the default) tones everything
+# Audio-reactive FX level (a drop-down: none / subtle / intense). Intense is the full set, with a
+# twitch in place of a plain shake (a 4 px shake read as a glitch): jumps of up to 8 px with
+# motion blur, like After Effects' Twitch. Subtle (the default) tones everything
 # down and never twitches; none leaves the picture alone (the grade and grain still apply).
 LEVELS = ["none", "subtle", "intense"]
 INTENSE = {"flash": 0.55, "rgb": 9, "zoom": 0.05, "shake": 0, "twitch": 8, "bloom": 1.0, "ghost": 0.6,
            "insert_flash": 0.75, "drop_strobe": 1.0, "trail": 0.0, "echo": 1.0}
-# no echo on subtle (the user, Oct 27: the hi-hat echo stays on intense only)
+# no echo on subtle: the hi-hat echo is for intense only
 SUBTLE = {"flash": 0.3, "rgb": 2, "zoom": 0.025, "shake": 0, "twitch": 0, "bloom": 0.6, "ghost": 0.0,
           "insert_flash": 0.45, "drop_strobe": 0.4, "trail": 0.0, "echo": 0.0}
 

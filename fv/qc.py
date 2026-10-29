@@ -1,45 +1,46 @@
 """Take QC: catch the renders that would spoil a cut, so they can be re-rolled automatically.
 
-Checks per clip (numpy + OpenCV only, a few seconds per clip):
+Checks per clip (numpy and OpenCV, plus SCRFD / ArcFace and SyncNet where noted; a few seconds
+per clip):
   missing  - the file is not there or has far fewer frames than planned
   frozen   - almost no motion (LTX sometimes returns a near-still image)
   exposure - many frames blown to white or crushed to black
   cut      - a hard scene change inside the clip: LTX sometimes cuts away to another person or
              place mid-take (one consecutive-frame difference far above the clip's own typical
-             motion; calibrated on n5/n11, where the bad takes jump to 0.24-0.30 and good ones stay
+             motion; on the calibration takes the bad ones jump to 0.24-0.30 and good ones stay
              below 0.16)
   drift    - voice renders: the shot slides into another one (LTX dissolving from the close-up
              into a wide shot, often of someone else); over the second half of the clip the face
-             is under 55% of its starting size (bad takes 0.25-0.49, good ones 0.59 and up on n11)
+             is under 55% of its starting size (bad takes 0.25-0.49, good ones 0.59 and up)
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
   people   - motion renders: a second person in the shot (an image edit sometimes turns one
              dancer into two); faces of at least 40% the main face's size in half the sampled frames
   noface   - voice renders: no face in most sampled frames (the head walked out of the top of a
-             wide shot: n39's r040A; SCRFD via fv/identity.py)
-  sideways - the head lies on its side (eye line over 50 degrees off level: st9's skipping-rope
-             regular, drawn sideways in the portrait itself)
+             wide shot; SCRFD via fv/identity.py)
+  sideways - the head lies on its side (eye line over 50 degrees off level, usually because the
+             portrait itself was drawn sideways)
   people   - also on voice leads: a second face at least 0.6 the main one's size in half the
-             sampled frames (st9's woman boxer drawn twice)
-  bars     - near-black pillar or letter box bars on both sides (sx03's wide debutante: Krea drew a
-             vertical picture inside the 16:9 frame); the portrait is re-made
+             sampled frames (the same person drawn twice)
+  bars     - near-black pillar or letter box bars on both sides (Krea sometimes draws a vertical
+             picture inside the 16:9 frame); the portrait is re-made
   headcut  - medium and wide shots: the face box starts above the frame (the top of the head cut
-             off, n41's walking shot)
-  tooclose - a shot whose face fills too much of the frame (the n30c note, "all mouth"): close
-             over 0.95 of the frame height, medium over 0.75, wide over 0.45 (n39 leads: close
-             1.0-1.1, medium 0.59-0.92, wide 0.18; the head-and-shoulders close-up since n41
-             lands at about 0.65-0.85)
+             off)
+  tooclose - a shot whose face fills too much of the frame ("all mouth"): close over 0.95 of the
+             frame height, medium over 0.75, wide over 0.45 (measured leads: close 1.0-1.1,
+             medium 0.59-0.92, wide 0.18; the head-and-shoulders close-up lands at about
+             0.65-0.85)
   identity - artist runs: the face is no longer the artist's (ArcFace similarity to the artist
-             photo). A look is judged on its keyframe, under 0.45 (0.40 let n41's brunette looks through) (n39: the artist's portraits
-             0.60-0.82, looks edited without the artist photo 0.08-0.40, with it 0.33-0.63); a
-             lead on its clip, under 0.20 (LTX softens faces, more so in medium shots: n40's
-             lead clips 0.29-0.60, n39's drifted looks' clips 0.17-0.32; a lead comes from an
-             identity-checked portrait, so this only catches gross failures). Skipped on small
-             faces.
+             photo). A look is judged on its keyframe, under 0.45 (0.40 let looks of another
+             person through; the artist's portraits score 0.60-0.82, looks edited without the
+             artist photo 0.08-0.40, with it 0.33-0.63); a lead on its clip, under 0.20 (LTX
+             softens faces, more so in medium shots: good lead clips score 0.29-0.60, clips of
+             drifted looks 0.17-0.32; a lead comes from an identity-checked portrait, so this
+             only catches gross failures). Skipped on small faces.
   sync     - lead clips: SyncNet says the mouth doesn't follow the words (fv/lipsync.py; needs the
              SyncNet weights, skipped without them, and on stretches with little singing).
-             Calibrated on 14 earlier runs (the user's notes): the runs heard as decent score a
+             Calibrated on 14 earlier runs rated by ear: the runs heard as decent score a
              median confidence of 5.8-7.0, the ones heard as bad 1.4-4.7, with a wide spread
              inside every run; takes under 4.5, or more than 9 frames off, are re-rolled.
              Takes sung on under 55% of their frames are scored but not failed: on sparse
@@ -81,7 +82,7 @@ def switch_frames(path: str, pins: list[int], before: int = 12, after: int = 6) 
     that starts the new person (the largest frame-to-frame change in [pin - before, pin + after])
     and how clearly it stands out from the clip's ordinary motion (a hard cut is many times the
     median change; a morph spreads over several frames and stays low). LTX lands the cut within
-    a few frames of the pin (n46 test: 1 and 6 frames early at 50 fps)."""
+    a few frames of the pin (measured: 1 and 6 frames early at 50 fps)."""
     import cv2
     frames, _ = _read(path, size=128)
     th = [cv2.resize(f, (48, 80), interpolation=cv2.INTER_AREA).astype(np.float32) / 255 for f in frames]
@@ -245,7 +246,7 @@ def extra_people(frames, n: int = 6) -> float:
 def black_bars(gray) -> float:
     """How much of the frame near-black bars take on BOTH sides (pillar box: columns; letter box:
     rows), as a share of the width or height. gray: (H, W) or (N, H, W), 0..1. Real bars are flat
-    black (sx03's p000: 0.001); a dark night scene's edges stay above the 0.012 line."""
+    black (about 0.001); a dark night scene's edges stay above the 0.012 line."""
     a = np.asarray(gray, dtype=np.float32)
     a = a.mean(0) if a.ndim == 3 else a
 
@@ -286,10 +287,9 @@ def frame_bars(a) -> tuple[float, float]:
 
 def clip_bars(g) -> tuple[float, float]:
     """(share of frames with bars, biggest bar) for gray frames (N, H, W): pillar box, letter box
-    or a picture shrinking inside black, counted frame by frame so bars that grow count (st3's
-    cutaways pulled back into a black frame over a second; sx03's pillarboxed debutante; st9's
-    letterboxed cutaway). Only bars on both sides count: a dark strip on one side was always
-    scenery (sx02w's black galley curtain; st9's dark lockers framing the shot)."""
+    or a picture shrinking inside black, counted frame by frame so bars that grow count (a
+    cutaway that pulls back into a black frame over a second). Only bars on both sides count: a
+    dark strip on one side is scenery (a black curtain, dark lockers framing the shot)."""
     fr = [_frame_lr(a) for a in g]
     if not fr:
         return 0.0, 0.0
@@ -373,11 +373,11 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
                 if framing is not None and rep.get("face_frac", 1.0) < THRESH["noface"]:
                     r["fail"].append("noface")
                 elif framing in ("medium", "wide") and rep.get("head_top", 1.0) < 0.0:
-                    r["fail"].append("headcut")  # the top of the head out of frame (n41's walking shot)
+                    r["fail"].append("headcut")  # the top of the head out of frame
                 if rep.get("tilt", 0.0) > THRESH["tilt"]:
                     r["fail"].append("sideways")
                 if voice and framing in ("close", "medium", "wide") and rep.get("second_face", 0.0) >= 0.5:
-                    r["fail"].append("people")  # a lead with a second, same-sized face (st9's twin boxers)
+                    r["fail"].append("people")  # a lead with a second, same-sized face
                 lim = THRESH["tooclose"].get(framing or "")
                 if lim and rep.get("face_h", 0.0) > lim:
                     r["fail"].append("tooclose")
