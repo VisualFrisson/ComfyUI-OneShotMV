@@ -313,8 +313,13 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     cmd = [ffmpeg_exe(), "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{dw}x{dh}",
            "-r", str(fps), "-i", "-", "-ss", str(plan["song_t0"]), "-t", str(plan["duration"]),
            "-i", os.path.join(run_dir, "song.wav"), "-map", "0:v", "-map", "1:a", "-c:v", "libx264",
-           "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "256k",
-           "-shortest", out_path]
+           # CRF 16 with a 40 Mbps ceiling: the 1080p film grain is noise, and uncapped it pushed cuts
+           # past 100 Mbps, which browsers can't play smoothly. -tune grain keeps the grain under the
+           # cap; level 4.2 matches that bitrate, so hardware decoders take it; faststart lets the
+           # Studio's player start before the whole file has loaded.
+           "-crf", "16", "-preset", "medium", "-tune", "grain", "-maxrate", "40M", "-bufsize", "60M",
+           "-profile:v", "high", "-level:v", "4.2", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+           "-c:a", "aac", "-b:a", "256k", "-shortest", out_path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     prev, previews = None, []
     starts = {}

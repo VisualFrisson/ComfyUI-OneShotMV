@@ -1177,7 +1177,6 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         nb = sum(1 for r in p["renders"] if r.get("role") == "R")
         msg = f"QC pass {pass_idx}: {len(report) - len(bad)}/{len(report)} takes pass" + \
               (f"; kept best take for {', '.join(bad)}" if bad else "") + \
-              (f"; lip-sync repair {', '.join(fixed)}" if fixed else "") + \
               (f"; {nb} b-roll cutaway(s) queued" if post else "") + looks_msg + \
               ("; assembling" if then_assemble and stage != "leads" else "")
     if ref is not None:
