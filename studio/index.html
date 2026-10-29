@@ -429,6 +429,7 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 .orow select:hover,.orow input:hover{border-color:var(--line3)}
 .seg.mini{flex-wrap:nowrap;gap:4px}
 .modelrow{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
+.modelrow .mlabel{font-size:15px}
 #mnote.warn{color:var(--warn)}
 .seg.mini .opt{min-height:30px;padding:0 10px;font-size:12px}
 option{background:var(--panel2);color:var(--text)}
@@ -781,7 +782,7 @@ async function viewBrief(){
       <h2 class="side-h">Quality</h2>
       <div class="stack" role="group" aria-label="Quality" id="tiers"></div>
       <p class="tiny" style="margin:8px 0 0" id="etanote"></p>
-      <div class="modelrow"><div class="orow"><span>Models</span><div class="seg mini" role="group" aria-label="Model set" id="mset"></div></div>
+      <div class="modelrow"><div class="orow"><span class="mlabel">Model Versions</span><div class="seg mini" role="group" aria-label="Model set" id="mset"></div></div>
         <p class="tiny" id="mnote" style="margin:4px 0 0"></p></div>
     </section>
     <section class="card">
