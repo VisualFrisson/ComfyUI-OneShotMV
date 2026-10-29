@@ -1072,7 +1072,6 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
             # renders that wait on a new keyframe run after the keyframe jobs
             (twin_jobs if (r["role"] == "B" or needs_key) else lead_jobs).append(g)
         # grouped by model: LTX, Klein, LTX (renders after their keys)
-        from . import graphs
         jobs = lead_jobs + key_jobs + fb_keys + twin_jobs + fb_clips
         if portrait_jobs:
             jobs = [graphs.free_memory("before QC portrait re-rolls").nodes] + portrait_jobs + jobs
@@ -1160,7 +1159,6 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         if stage == "leads":
             # the singer takes are final: keep the best b-roll candidates, then make the looks from
             # the final singer takes (Klein keyframes, LTX look clips) and check them
-            from . import graphs
             if p.get("broll_candidates"):
                 try:
                     from . import broll
@@ -1175,7 +1173,6 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                                                                 then_assemble=then_assemble, stage="looks",
                                                                 keep=keep).nodes], server_url())
         elif queue and then_assemble and queue_rerolls:
-            from . import graphs
             queued = queue_chain_front(post + [graphs.free_memory("before assembly").nodes,
                                                graphs.assemble(run_dir=run_dir, prefix=p.get("run_rel", "")).nodes],
                                        server_url())
