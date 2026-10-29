@@ -197,8 +197,9 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 }
 @media (max-width:600px){nav.steps{display:none}.topright .toplink:last-child{display:none}}
 
-/* ================================================================ the "neon" look (Oct 28 brief:
-   "Neon on blue-grey"). Everything above is the classic look; this block only overrides it. */
+/* ================================================================ the Neon layout: the condensed type,
+   gradient accents and dark surfaces. The rules above are the base styles; this block overrides them,
+   and the palettes further down swap its colours. */
 html[data-look="neon"]{
   --bg:#0d1015;--chrome:#0a0d11;--panel:#12161c;--panel2:#181d24;--panel3:#212731;--line:#222832;--line2:#323a46;--line3:#3c4552;
   --text:#eef0f4;--muted:#a3acb8;--dim:#7a8491;
@@ -1365,7 +1366,7 @@ async function viewVideos(){
 }
 
 // ---------------------------------------------------------------- app icon
-// A crosshair with a sound wave in its sights, on a tile in the palette's gradient (picked Oct 29).
+// The logo: a crosshair with a sound wave in its sights, on a tile in the palette's gradient.
 const LOGO = id => `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${id}" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">` +
   `<stop offset="0" style="stop-color:var(--g1)"/><stop offset=".36" style="stop-color:var(--g2)"/><stop offset=".68" style="stop-color:var(--g3)"/><stop offset="1" style="stop-color:var(--g4)"/></linearGradient></defs>` +
   `<rect width="32" height="32" rx="7" fill="url(#${id})"/><circle cx="16" cy="16" r="9.6" fill="none" stroke="#0b0d10" stroke-width="2.2"/>` +

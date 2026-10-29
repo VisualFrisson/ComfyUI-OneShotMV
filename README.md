@@ -83,7 +83,9 @@ also drag a file from `example_workflows/` onto the canvas.
 - `OneShotMV_App.json` opens in ComfyUI's App mode: a song, a World line and a few settings, then
   Run. App / Graph at the top left shows the graph behind it.
 - `OneShotMV_Voice.json` is the Director with every setting.
-- `OneShotMV_Recut.json` cuts a finished run again with other FX.
+- `OneShotMV_Recut.json` cuts a finished run again with other FX or without the finish.
+- `OneShotMV_Motion.json` is the experimental motion mode (one dance, many dancers). It needs the
+  extra models listed under "Models that only other packs and modes use".
 
 Turn `queue_renders` off and run once to see the plan in the summary without rendering anything.
 Then turn it on and run again; the song analysis and the World are cached, so the second run
@@ -108,7 +110,7 @@ packages alone. It asks for the song (drag the file in), the World line and the 
 also pass options:
 
 ```
-run_sdk.bat --song "D:\music\track.wav" --theme "the gladiator games in ancient Rome" --seconds 40
+run_sdk.bat --song "song.wav" --theme "the gladiator games in ancient Rome" --seconds 40
 ```
 
 Anywhere else:
@@ -177,13 +179,22 @@ about every beat on intense.
    cd ComfyUI/custom_nodes
    git clone https://github.com/VisualFrisson/ComfyUI-OneShotMV
    ```
-   Then run `pip install -r requirements.txt` with ComfyUI's Python (it adds numpy, OpenCV and
-   imageio-ffmpeg).
+   Then install its three Python packages (numpy, OpenCV and imageio-ffmpeg) with ComfyUI's
+   Python. For ComfyUI portable on Windows, from the pack folder:
+   ```
+   ..\..\..\python_embeded\python.exe -m pip install -r requirements.txt
+   ```
+   Otherwise `pip install -r requirements.txt` in ComfyUI's environment.
 2. Install these node packs: [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo),
-   [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (Sage attention and the LTX
-   attention tuner) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers).
-3. Download the models listed under [Models and licences](#models-and-licences) into ComfyUI's
-   model folders, then edit `fv/models.json` so the file names match yours.
+   [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (the LTX attention tuner and Sage
+   attention) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers). OneShot MV
+   was built on ComfyUI 0.39; it needs a recent ComfyUI for the core Generate Text node, Krea 2
+   and App mode.
+3. Download the models listed under [Models and licences](#models-and-licences). Diffusion models
+   go in `models/diffusion_models`, LoRAs in `models/loras`, text encoders in
+   `models/text_encoders`, VAEs in `models/vae`, the LTX-2.3 checkpoint in `models/checkpoints`
+   and its upscaler in `models/latent_upscale_models`. Sub-folders are fine: OneShot MV looks each
+   file up by name. If you rename a file, change its name in `fv/models.json`.
 4. Optional, but recommended, the checks:
    - Lip sync (SyncNet): put `syncnet_v2.model` and `sfd_face.pth` in `ComfyUI/models/syncnet/`.
      They come from the [Oxford VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/)
@@ -191,7 +202,11 @@ about every beat on intense.
      Without them the take check skips lip sync.
    - Framing: insightface's buffalo_l face models (`det_10g.onnx`, `w600k_r50.onnx`, for
      non-commercial research use only) in `ComfyUI/models/insightface/models/buffalo_l/`. They run
-     with onnxruntime. Without them the framing checks are skipped.
+     with onnxruntime (`pip install onnxruntime-gpu` with ComfyUI's Python). Without them the
+     framing checks are skipped.
+   - Speed: [SageAttention](https://github.com/thu-ml/SageAttention) makes the LTX clips faster.
+     If it isn't installed, the jobs run without it. The default kernel in `fv/models.json`
+     (`ltx23_sage`) needs an RTX 40 or 50 series card; set it to `auto` on older cards.
    - The vocal and drum stems use torchaudio's Hybrid Demucs, which downloads its weights the
      first time it runs.
 
@@ -285,7 +300,7 @@ Models that only other packs and modes use (a default run never loads them):
 |---|---|---|---|
 | FLUX.2 [klein] 9B fp8, its Qwen3 8B text encoder and the FLUX.2 small-decoder VAE | Look keyframes in the `eras` and `artist` packs; motion mode | FLUX Non-Commercial License (outputs may be used commercially); the VAE is Apache-2.0 | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8), [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B), [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder) |
 | LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks; motion mode | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
-| DWPose and YOLOX-L (TorchScript) | Pose guides for looks and motion mode | Apache-2.0 | Downloaded by comfyui_controlnet_aux |
+| DWPose and YOLOX-L (TorchScript) | Pose guides for looks and motion mode | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), which these packs and modes also need |
 | Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | Portraits in the `artist` pack | Check the licence on the model page before commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 | LTX-2.5 22B distilled, its VAEs, upscaler and Gemma 4 text encoder | Motion mode at the `fast` preset | LTX-2.x Community License | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
 
