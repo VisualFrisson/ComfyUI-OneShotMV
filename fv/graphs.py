@@ -78,12 +78,22 @@ def _set_files(name: str) -> dict:
     return m
 
 
+def reserved_gb() -> float:
+    """GPU memory ComfyUI was told to leave alone with --reserve-vram (0 if not set)."""
+    try:
+        from comfy.cli_args import args  # type: ignore
+        return float(args.reserve_vram or 0)
+    except Exception:
+        return 0.0
+
+
 def vram_gb() -> float:
-    """The GPU's total memory in GB (0 without CUDA)."""
+    """The GPU memory ComfyUI may use in GB: the card's total minus any --reserve-vram (0 without CUDA)."""
     try:
         import torch
         if torch.cuda.is_available():
-            return torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory / 2 ** 30
+            total = torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory / 2 ** 30
+            return max(total - reserved_gb(), 0.0)
     except Exception:
         pass
     return 0.0
@@ -112,7 +122,8 @@ def pick_models(requested: str | None = "auto") -> str:
 def models_report() -> dict:
     """For the Studio: the GPU's memory, the set "auto" picks, and the missing files of each set."""
     idx = _model_index()
-    return {"vram_gb": round(vram_gb(), 1), "auto": pick_models("auto"), "full_min_gb": FULL_MIN_GB,
+    return {"vram_gb": round(vram_gb(), 1), "reserved_gb": round(reserved_gb(), 1),
+            "auto": pick_models("auto"), "full_min_gb": FULL_MIN_GB,
             "missing": {n: missing_files(n, idx) for n in MODEL_SETS}}
 
 

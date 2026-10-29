@@ -92,7 +92,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     # the model set ("24gb" fp8 files, or "full" bf16 files on 48 GB cards): every job this run
     # queues, and every later pass, uses the same one (p["models"])
     model_set = graphs.use_models(models)
-    log(f"[OneShotMV] models: the {'full' if model_set == 'full' else '24 GB'} set ({graphs.vram_gb():.0f} GB GPU)")
+    log(f"[OneShotMV] models: the {'full' if model_set == 'full' else '24 GB'} set ({graphs.vram_gb():.0f} GB of GPU memory to use)")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
     # in its log. Start from empty memory.

@@ -850,7 +850,7 @@ async function viewBrief(){
     if (!r){ $("#mnote").textContent = "Checking your GPU…"; return; }
     const use = cur === "auto" ? r.auto : cur, name = use === "full" ? "full models (bf16)" : "24 GB models (fp8)";
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
-    let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB: ` : "";
+    let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}: ` : "";
     t += cur === "auto" ? `Auto uses the ${name}.` : `Uses the ${name}.`;
     if (use === "full" && r.vram_gb && r.vram_gb < r.full_min_gb) t += " The full models want 48 GB or more, so this may be slow or run out of memory.";
     const miss = (r.missing || {})[use] || [];
