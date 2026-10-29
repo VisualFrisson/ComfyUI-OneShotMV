@@ -452,15 +452,32 @@ html[data-look="neon"][data-pal="ember"]{
 .lookwrap{position:relative}
 .looksw{display:flex;align-items:center;gap:8px;cursor:pointer}
 .looksw .lsw{width:28px;height:10px;border-radius:3px;background:var(--grad)}
-.lookmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:190px;padding:4px;border-radius:12px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 20px 50px rgba(0,0,0,.55)}
+.lookmenu{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:30;padding:4px;border-radius:12px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 20px 50px rgba(0,0,0,.55)}
 .lookmenu.hide{display:none}
-.lookmenu button{display:flex;align-items:center;gap:10px;width:100%;padding:5px 8px;min-height:30px;border-radius:7px;background:none;border:0;color:var(--text);font:inherit;font-size:14px;font-weight:700;text-align:left;cursor:pointer}
+.lookmenu button{display:flex;align-items:center;gap:8px;width:100%;padding:5px 7px;min-height:28px;border-radius:7px;background:none;border:0;color:var(--text);font:inherit;font-size:14px;font-weight:700;text-align:left;cursor:pointer}
 .lookmenu button:hover{background:var(--panel2)}
 .lookmenu button[aria-checked=true]{background:var(--panel2)}
-.lookmenu .pv{display:block;width:44px;height:12px;border-radius:4px;flex:none}
+.lookmenu .pv{display:block;width:28px;height:10px;border-radius:3px;flex:none}
 .lookmenu .nm{flex:1}
-.lookmenu .ck{color:var(--muted);font-size:13px}
+.lookmenu .ck{color:var(--muted);font-size:12px}
+html[data-look="neon"] .lookmenu button{font-size:13px}
 html[data-look="neon"] .lookmenu button{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.06em}
+/* the project name: its own card on the Brief, a title line on the other screens */
+.projcard .label{display:block;margin-bottom:12px}
+#pname{font-size:20px;font-weight:700;padding:12px 14px}
+#pname.bad,#nmi.bad{border-color:var(--bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 25%,transparent)}
+.proj{margin:16px 0 0;font-size:28px;line-height:1.05;font-weight:700;color:var(--text)}
+.overlay .box.namebox{text-align:left;max-width:520px}
+.namebox #nmi{font-size:18px;font-weight:600}
+html[data-look="neon"] .proj{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.03em}
+html[data-look="neon"] .sub{margin-top:8px}
+html[data-look="neon"] h1 + .sub{margin-top:12px}
+/* card headings everywhere match the Brief's side headings */
+html[data-look="neon"] .label{font-size:20px;line-height:1;letter-spacing:.02em}
+/* time estimates inside the big buttons: condensed, larger, easy to read */
+.eta-b{font-family:var(--sans);font-size:15px;font-weight:700;letter-spacing:.02em;opacity:.85;text-transform:none;white-space:nowrap}
+.btn.two .eta-b{font-size:14px;letter-spacing:.02em}
+html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:none}
 </style>
 </head>
 <body>
@@ -495,7 +512,7 @@ const WORLDS = [
 ];
 const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (intense)"];
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
-const DEFAULT_BRIEF = {song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
+const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
   cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2};
 
 // ---------------------------------------------------------------- state
@@ -658,6 +675,26 @@ const gpuName = g => String(g || "").replace(/^NVIDIA\s+/i, "").replace(/\s+(Bla
 const dur = s => { s = Math.max(0, Math.round(s)); if (s < 90) return s + " s"; const m = Math.round(s / 60); return mins(m); };
 function estimate(b){ const sec = +b.seconds > 0 ? +b.seconds : (S.analysis ? S.analysis.duration : 30); return 6 + (b.preset === "quality" ? 2 : 1) * sec; }
 function saveBrief(){ store.set("brief", S.brief); }
+// the project name: saved with the run (studio.json); in demo mode the brief's name stands in
+const projectOf = r => (r && r.project) || (DEMO && r ? ((store.get("briefs", {})[r.run] || {}).name || "") : "");
+const fileStem = r => (projectOf(r).replace(/[^\w\- ]+/g, "").replace(/\s+/g, " ").trim().slice(0, 80)) || r.run;
+// asks for the project name before the first step forward; resolves with the name, or null
+function askName(){
+  return new Promise(res => {
+    const d = document.createElement("div");
+    d.className = "overlay"; d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-labelledby", "nmh");
+    d.innerHTML = `<form class="box namebox"><h2 class="label" id="nmh">Name your project</h2>
+      <p class="muted" style="margin:10px 0 16px">It goes on every screen and on the files you download.</p>
+      <input id="nmi" type="text" maxlength="80" autocomplete="off" placeholder="Like “Gladiator Games”" aria-labelledby="nmh">
+      <div class="row" style="justify-content:flex-end;gap:10px;margin-top:18px"><button type="button" class="btn" id="nmc">Cancel</button><button type="submit" class="btn primary" id="nmok">Continue</button></div></form>`;
+    document.body.appendChild(d);
+    const i = d.querySelector("#nmi"), done = v => { d.remove(); res(v); };
+    setTimeout(() => i.focus(), 0);
+    d.querySelector("form").onsubmit = e => { e.preventDefault(); const v = i.value.trim(); if (!v){ i.classList.add("bad"); i.focus(); return; } done(v); };
+    d.querySelector("#nmc").onclick = () => done(null);
+    d.addEventListener("keydown", e => { if (e.key === "Escape") done(null); });
+  });
+}
 function stopTimer(){ if (S.timer){ clearInterval(S.timer); S.timer = null; } }
 function setSteps(cur){
   const names = ["The Brief","The Plan","Rendering","Result"];
@@ -702,6 +739,11 @@ async function viewBrief(){
   <div class="head"><div><h1>The Brief</h1><p class="sub">One song and one line about the world it lives in. OneShot MV casts it, plans the cut and renders the video.</p></div></div>
   <div class="cols">
    <div class="colmain">
+    <section class="card projcard">
+      <label class="label" for="pname">Project name</label>
+      <input id="pname" type="text" maxlength="80" autocomplete="off" placeholder="Name this video, like “Gladiator Games”">
+      <p class="note" style="margin-top:10px">Shown on every screen and used for the files you download.</p>
+    </section>
     <section class="card" aria-labelledby="songh">
       <div class="row"><h2 class="label" id="songh">Song</h2><span id="songname" style="font-weight:700;font-size:16px"></span><span id="songmeta" class="mono muted" style="font-size:12px"></span>
         <span style="margin-left:auto" class="row"><button class="btn sm hide" id="playbtn" type="button">Play this part</button><button class="btn sm hide" id="replace" type="button">New song</button></span></div>
@@ -753,14 +795,17 @@ async function viewBrief(){
       </details>
     </section>
     <section class="card stack cta">
-      <button class="btn primary big two" id="go-preview" type="button"><span class="lbl">Preview the plan <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9h10M10 5l4 4-4 4"/></svg></span><span class="mono eta-b" id="eta-prev"></span></button>
+      <button class="btn primary big two" id="go-preview" type="button"><span class="lbl">Preview the plan <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 9h10M10 5l4 4-4 4"/></svg></span><span class="eta-b" id="eta-prev"></span></button>
       <p class="center muted" style="margin:0;font-size:13px" id="eta-why">See the World the tool writes and every shot before the long render.</p>
-      <button class="btn two" id="go-render" type="button"><span class="lbl">Skip the preview, make the video</span><span class="mono eta-b" id="eta-all"></span></button>
+      <button class="btn two" id="go-render" type="button"><span class="lbl">Skip the preview, make the video</span><span class="eta-b" id="eta-all"></span></button>
     </section>
     <p class="tiny" style="margin:0 4px">Use music you have the rights to. Every face is invented.</p>
    </aside>
   </div>`;
 
+  // project name
+  const pn = $("#pname"); pn.value = b.name || "";
+  pn.oninput = () => { b.name = pn.value; pn.classList.remove("bad"); saveBrief(); };
   // world tiles + text
   const ta = $("#world");
   ta.value = b.theme;
@@ -934,6 +979,13 @@ async function upload(file){
 async function start(render, briefOverride){
   const b = Object.assign({}, briefOverride || S.brief);
   if (!b.song){ toast("Pick a song first."); return; }
+  if (!String(b.name || "").trim()){
+    const pn = $("#pname"); if (pn) pn.classList.add("bad");
+    const n = await askName(); if (!n) return;
+    b.name = n; if (!String(S.brief.name || "").trim()){ S.brief.name = n; saveBrief(); }
+    if (pn){ pn.value = S.brief.name; pn.classList.remove("bad"); }
+  }
+  b.name = String(b.name).trim();
   b.render = !!render;
   try{
     overlay(render ? "Starting the video" : "Writing the plan", render ? "Analysing the song, writing the World and queueing every shot. This takes a minute or two." : "Analysing the song, writing the World and planning every shot. Nothing renders yet.");
@@ -973,7 +1025,7 @@ async function viewPlan(run){
   const est = brief ? estimate(Object.assign({}, brief)) : r.estimate_min;
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
-  <div class="head"><div><h1>The plan</h1><p class="sub">${esc(w.headline || "House look")} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
+  <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(w.headline || "House look")} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
     <span class="mono muted" style="font-size:12px">Nothing is rendered yet</span></div>
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
@@ -998,7 +1050,7 @@ async function viewPlan(run){
     <a class="btn" href="#/">Change the World</a>
     <button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="mono" style="font-size:12px;font-weight:600;opacity:.75">≈ ${mins(est)}</span></button>
+    <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
   if (brief){
@@ -1028,7 +1080,7 @@ function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : "
 function renderSkeleton(r){
   const app = $("#app");
   app.innerHTML = `
-  <div class="head"><div><h1>Making your video</h1><p class="sub">${esc(r.world.headline || "House look")} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
+  <div class="head"><div><h1>Making your video</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(r.world.headline || "House look")} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600" id="elapsed"></div><div class="muted" style="font-size:14px" id="left"></div></div></div>
   <div id="stall"></div>
   <div class="progress" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="pbar"><div id="pfill" style="width:0"></div></div>
@@ -1076,7 +1128,7 @@ function renderUpdate(r){
 
 // ---------------------------------------------------------------- 4. Result
 const pickKey = run => "pickups." + run;
-let REFINE_OPEN = "fx";  // the open Post Processing panel on the Result screen
+let REFINE_OPEN = null;  // the open Post Processing panel on the Result screen (all closed at first)
 async function viewResult(run){
   setSteps(3);
   const app = $("#app");
@@ -1090,10 +1142,10 @@ async function viewResult(run){
   const F0 = Object.assign({fx: Object.assign({}, fx0)}, r.finish || {});
   const E = Object.assign({}, F0, {fx: Object.assign({}, fx0)});
   app.innerHTML = `
-  <div class="head"><div><h1>${esc(r.world.headline || "Your video")}</h1><p class="sub">${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
+  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(r.world.headline || "House look") + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
     <div class="row"><a class="btn" href="#/">New video</a>
-      <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(r.run)}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
-      <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(r.run)}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
+      <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(fileStem(r))}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
+      <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(fileStem(r))}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
   <div id="pkbanner"></div>
   <div class="cols">
     <div class="colmain" style="gap:16px">
@@ -1197,7 +1249,7 @@ async function viewResult(run){
       <button type="button" class="btn sm ghost" data-ed="${x.n}">Edit</button><button type="button" class="btn sm ghost" data-rm="${x.n}" aria-label="Remove shot ${x.n}">✕</button></li>`).join("");
     $("#pklist").querySelectorAll("[data-rm]").forEach(el => el.onclick = () => { P.list = P.list.filter(x => x.n !== +el.dataset.rm); store.set(pickKey(run), P.list); drawPk(); });
     $("#pklist").querySelectorAll("[data-ed]").forEach(el => el.onclick = () => selectShot(+el.dataset.ed));
-    $("#shoot").innerHTML = `Shoot ${P.list.length} pickup${P.list.length > 1 ? "s" : ""} <span class="mono eta-b">about ${mins(pkEstimate())}</span>`;
+    $("#shoot").innerHTML = `Shoot ${P.list.length} pickup${P.list.length > 1 ? "s" : ""} <span class="eta-b">about ${mins(pkEstimate())}</span>`;
     primary();
   }
   // Download always carries the gradient; Shoot and Apply light up when they have work to do
@@ -1238,7 +1290,7 @@ async function viewResult(run){
   gi.oninput = () => { E.grain = Math.round(+gi.value * 0.2 * 10) / 1000; drawSliders(); drawApply(); drawGrain(); };
   gs.oninput = () => { E.grain_size = +gs.value; drawSliders(); drawApply(); drawGrain(); };
   vg.oninput = () => { E.vignette = +vg.value / 100; drawSliders(); drawApply(); };
-  const drawApply = () => { const a = $("#apply"), d = dirty(); a.disabled = !d || shooting; a.textContent = d ? "Apply changes · about 2 min" : "No changes yet"; primary(); };
+  const drawApply = () => { const a = $("#apply"), d = dirty(); a.disabled = !d || shooting; a.innerHTML = d ? 'Apply changes <span class="eta-b">about 2 min</span>' : "No changes yet"; primary(); };
   drawFxSeg(); drawGrades(); drawSliders(); drawApply();
   // one panel open at a time; the open one is remembered across cuts
   const openPanel = k => { REFINE_OPEN = k;
@@ -1306,8 +1358,8 @@ async function viewVideos(){
     $("#vg").innerHTML = runs.length ? runs.map(v => {
       const st = v.video ? ["ok","Done","result"] : (v.rendered ? ["run","Rendering","render"] : ["pre","Plan","plan"]);
       return `<a class="vcard" href="#/${st[2]}/${encodeURIComponent(v.run)}"><div class="th">${v.thumb ? `<img src="${esc(v.thumb)}" alt="" loading="lazy">` : ""}</div>
-        <div class="bd"><div class="row" style="justify-content:space-between;gap:8px"><b style="font-size:15px">${esc(v.world || "House look")}</b><span class="badge ${st[0]}">${st[1]}</span></div>
-        <div class="tiny mono" style="margin-top:4px">${esc(v.when.replace("T"," "))} · ${esc(v.format||"")} · ${v.seconds}s</div><div class="tiny" style="margin-top:2px;word-break:break-all">${esc(v.run)}</div></div></a>`;
+        <div class="bd"><div class="row" style="justify-content:space-between;gap:8px"><b style="font-size:15px">${esc(v.project || v.world || "House look")}</b><span class="badge ${st[0]}">${st[1]}</span></div>
+        ${v.project ? `<div class="tiny" style="margin-top:4px">${esc(v.world || "House look")}</div>` : ""}<div class="tiny mono" style="margin-top:4px">${esc(v.when.replace("T"," "))} · ${esc(v.format||"")} · ${v.seconds}s</div><div class="tiny" style="margin-top:2px;word-break:break-all">${esc(v.run)}</div></div></a>`;
     }).join("") : `<p class="muted">No runs yet. <a href="#/">Make your first video.</a></p>`;
   }catch(e){ $("#vg").innerHTML = `<p class="banner">${esc(e.message)}</p>`; }
 }

@@ -288,6 +288,16 @@ def _estimate(b: dict) -> dict:
             "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win)}
 
 
+def _project(d: str) -> str:
+    """The project name the user gave in the Studio ("" for runs made elsewhere)."""
+    return str((_load(os.path.join(d, "studio.json"), {}) or {}).get("project") or "")
+
+
+def _file_stem(name: str) -> str:
+    """A project name as a file name: letters, digits, spaces, dashes and underscores."""
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\- ]+", "", name)).strip()[:80]
+
+
 def _jobs_dir() -> str:
     d = os.path.join(_out(), "oneshot-mv", "studio_jobs")
     os.makedirs(d, exist_ok=True)
@@ -398,6 +408,14 @@ def _job(pid: str) -> dict:
         for it in node_out.get("text", []) or []:
             if isinstance(it, dict) and it.get("filename") == "jobs.json":
                 run = it.get("subfolder", "").rstrip("/").split("/")[-1]
+    if run and rec.get("project"):
+        try:
+            sj = os.path.join(_run_dir(run), "studio.json")
+            if not os.path.isfile(sj):
+                with open(sj, "w", encoding="utf-8") as f:
+                    json.dump({"project": rec["project"]}, f)
+        except Exception:
+            pass
     return {"state": "done", "run": run}
 
 
@@ -602,7 +620,7 @@ def _run(name: str) -> dict:
              "camera": th.get("camera", ""), "places": th.get("places") or [], "light": th.get("light") or [],
              "grade": th.get("grade") or {}, "characters": len(chars), "left_out": left[:30]}
     return {
-        "run": os.path.basename(d), "stage": stage, "stages": stages, "pct": pct,
+        "run": os.path.basename(d), "project": _project(d), "stage": stage, "stages": stages, "pct": pct,
         "elapsed_min": round(elapsed, 1), "estimate_min": round(est), "left_min": 0 if done else round(max(0.0, est - elapsed)),
         "queued_jobs": queued_jobs, "stalled": bool(started and not done and queued_jobs == 0),
         "brief": {"format": p.get("format"), "preset": p.get("preset"), "seconds": round(float(p.get("duration") or 0), 1),
@@ -1164,7 +1182,7 @@ def _runs() -> list[dict]:
         done = _load(os.path.join(d, "done.json"))
         th = p.get("theme") or {}
         thumb = _newest([x for x in glob.glob(os.path.join(d, "p0*_00001_.png")) if "_fit" not in x][:3])
-        out.append({"run": os.path.basename(d), "world": (th.get("theme", "").split(":")[0].split(",")[0]).strip(),
+        out.append({"run": os.path.basename(d), "project": _project(d), "world": (th.get("theme", "").split(":")[0].split(",")[0]).strip(),
                     "format": p.get("format"), "seconds": round(float(p.get("duration") or 0), 1),
                     "rendered": bool((p.get("timing") or {}).get("queued")),
                     "video": _view(done["video"]) if done and os.path.isfile(done.get("video", "")) else "",
@@ -1205,7 +1223,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
         return web.json_response(await _blocking(_runs))
     if route.startswith("xml/"):
         path = await _blocking(_xml, route[4:])
-        return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{os.path.basename(os.path.dirname(path))}.xml"',
+        stem = _file_stem(_project(os.path.dirname(path))) or os.path.basename(os.path.dirname(path))
+        return web.FileResponse(path, headers={"Content-Disposition": f'attachment; filename="{stem}.xml"',
                                                 "Cache-Control": "no-store"})
     if route.startswith("look/"):
         shot = q.get("shot")
@@ -1234,10 +1253,14 @@ async def _api(request: web.Request, route: str) -> web.Response:
                 est = await _blocking(_estimate, body)
             except Exception as e:
                 est = {"error": str(e)}
+            project = str(body.get("name") or "").strip()[:80]
+            if project and not body.get("run_name"):
+                slug = re.sub(r"[^a-z0-9]+", "-", project.lower()).strip("-")[:40] or "video"
+                body["run_name"] = f"{slug}-{_dt.datetime.now().strftime('%Y%m%d-%H%M')}"
             pid = await _blocking(_queue_graph, _director_graph(body))
             import time
             with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
-                json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render"))}, f)
+                json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render")), "project": project}, f)
             return web.json_response({"prompt_id": pid, "estimate": est})
         if route == "recut":
             d = _run_dir(body.get("run", ""))
