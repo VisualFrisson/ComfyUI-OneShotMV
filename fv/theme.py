@@ -227,7 +227,7 @@ def _role_words(chars: list) -> set:
 
 
 def _no_others(v: list, roles: set) -> list:
-    """Drop actions and poses that name a character (Pink Pony Club st2b: 'The waitress refills a
+    """Drop actions and poses that name a character (stress test st2b: 'The waitress refills a
     coffee cup' in the mother's portrait drew the waitress next to her, seven portraits with two
     people), or start with 'The ...'; keep the list if that would empty it."""
     pat = re.compile(r"(?i)\b(" + "|".join(re.escape(r) for r in sorted(roles, key=len, reverse=True)) + r")s?\b") \
@@ -380,7 +380,7 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
 
 
 def _ing(s: str) -> str:
-    """'twirls her lasso' -> 'twirling her lasso' (Gemma 3 wrote the Pink Pony actions this way)."""
+    """'twirls her lasso' -> 'twirling her lasso' (Gemma 3 wrote a stress test's actions this way)."""
     m = re.match(r"([A-Za-z]+)(\b.*)$", s)
     if not m or m.group(1).lower().endswith("ing") or not m.group(1).lower().endswith("s"):
         return s
@@ -413,7 +413,7 @@ _HEAD_DOWN = re.compile(r"(?i)\b(bow(?:s|ed|ing)?|eyes (?:closed|shut)|looking d
 def _own(s: str, ing: bool = False) -> str:
     """A character's own action or expression, scrubbed like the shared lists: no props in the hands
     or at the mouth, nobody else, no crowd. Gemma 3 wrote one action per character even when asked
-    for a shared list (Pink Pony Club: 'The cowgirl twirls her lasso', 'The radio DJ spins a
+    for a shared list (stress test st2b: 'The cowgirl twirls her lasso', 'The radio DJ spins a
     record'); shuffled into a pool, st2c's gas-station attendant spun the DJ's record."""
     s = " ".join(str(s or "").split()).strip(" ,.")
     s = re.sub(r"(?i)^(?:is|are|while|she is|he is|they are|she|he|they)\s+", "", s)

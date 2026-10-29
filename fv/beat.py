@@ -364,7 +364,7 @@ def label_sections(sections: list[dict]) -> None:
     analyze() rescales them). The user's rule (Oct 27): low energy (intro, break, outro) is only for
     the intro and minimal bridges; once the song gets going, medium (verse, build) is the norm; the
     drop and the clearly louder sections are high (chorus). The tertiles this replaces called a loud
-    rap verse a break (Big Dawgs 0:21-0:37, 0.5 dB under the song's median)."""
+    rap verse a break (a test track's verse, 0:21-0:37, 0.5 dB under the song's median)."""
     if not sections:
         return
     en = np.array([s["energy"] for s in sections], dtype=float)
@@ -383,17 +383,17 @@ def label_sections(sections: list[dict]) -> None:
             s["label"] = "intro"
         elif i == last:
             # quiet: the outro (low); loud: usually the last chorus, which plan._intense counts as
-            # high when loud (Pink Pony Club from 3:19, Electric Love from 3:03)
+            # high when loud (two test tracks' last choruses, from 3:19 and 3:03)
             s["label"] = "outro"
         elif e <= med - 4.5:
-            s["label"] = "break"  # Pink Pony Club's bridge, 5 dB under the song's usual level
+            s["label"] = "break"  # a test track's bridge, 5 dB under the song's usual level
         else:
             s["label"] = "verse"
         nxt = sections[i + 1] if i + 1 < len(sections) else None
         if nxt is not None and nxt.get("is_drop") and s["label"] not in ("chorus", "intro"):
             s["label"] = "build"
     # a quiet bar or two early on means the song hasn't got going yet: everything up to it is the
-    # intro (Big Dawgs: beat in at 0:05, a dropout at 0:16, the verse at 0:21; the user hears 0-0:22
+    # intro (a rap test track: beat in at 0:05, a dropout at 0:16, the verse at 0:21; the user hears 0-0:22
     # as the intro)
     early = [i for i, s in enumerate(sections) if s["label"] in ("intro", "break") and s["start"] < 25.0
              and i < last]

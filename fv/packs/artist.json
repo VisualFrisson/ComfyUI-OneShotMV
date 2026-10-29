@@ -215,7 +215,7 @@
   "insert_off_beat": 0.35,
   "insert_twin_share": 0.7,
   "drop_size": "close",
-  "_note_sizes": "n40: close-ups lip-sync far better than medium shots (SyncNet median 6.7 against 3.9 on LISA), and the artist looks frame themselves head-and-shoulders, so drops and most sung quiet shots are close; the close framing is head-and-shoulders (face about half the frame height), not the old face-filling close-up ('all mouth', the n30c note)",
+  "_note_sizes": "n40: close-ups lip-sync far better than medium shots (SyncNet median 6.7 against 3.9 on a pop test track), and the artist looks frame themselves head-and-shoulders, so drops and most sung quiet shots are close; the close framing is head-and-shoulders (face about half the frame height), not the old face-filling close-up ('all mouth', the n30c note)",
   "quiet_sizes": {"wide": 0.3, "medium": 0.3, "close": 0.4}
  },
  "fx": {

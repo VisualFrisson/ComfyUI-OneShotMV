@@ -2,7 +2,7 @@
 
 Voice mode
   * The song is cut into shots on bar lines: `shot_bars_loud` bars in loud sections,
-    `shot_bars_quiet` in quiet ones (the edamame edit: 2 bars loud, 1 bar quiet).
+    `shot_bars_quiet` in quiet ones (the reference AI edit: 2 bars loud, 1 bar quiet).
   * Every shot gets a new performer (A) lip-synced to that stretch of the vocal stem.
   * In loud sections a pose-matched twin (B: same pose, same vocals, new person) is rendered
     too, and the edit flashes to B on every `insert_every_beats`-th beat for a few frames,
@@ -49,7 +49,7 @@ def choose(tl: dict, seconds: float, start: float) -> tuple[float, float]:
 
 def assign_framing(shots: list[dict], framing: str, seed: int, drop_size: str = "close",
                    quiet_weights: dict | None = None) -> None:
-    """'close': every shot a close-up (the edamame look). 'mixed': quiet stretches lean wide and
+    """'close': every shot a close-up (the reference AI edit's look). 'mixed': quiet stretches lean wide and
     medium, loud ones punch in close (with an occasional medium), never the same size twice in
     a row in quiet sections. With phases (the hold grammar): quiet shots move between wide,
     medium and close (`quiet_weights`, a pack's edit `quiet_sizes`); builds tighten (medium,
@@ -85,7 +85,7 @@ def _intense(s: dict) -> bool:
     alone can't tell them apart in songs that stay loud throughout (rap verses are as loud as
     the hook); without labels, the loud sections count."""
     if s.get("label"):
-        # a final chorus is often labelled "outro" (Pink Pony Club from 3:10, st2d: the last chorus,
+        # a final chorus is often labelled "outro" (a test track from 3:10, st2d: the last chorus,
         # 4 dB under the loudest section, planned as all holds): a loud outro counts too
         return s.get("is_drop") or s["label"] in INTENSE or \
             (s["label"] == "outro" and s.get("loud") and s.get("energy", 0.0) >= 0.6)
@@ -99,7 +99,7 @@ def _phases(secs: list[dict], bar_len: float, build_bars: float, medium: tuple =
     breaks and quiet outros its low energy; beat.label_sections labels by energy tertile)."""
     hot = [s for s in secs if _intense(s)]
     mid = [s for s in secs if medium and not _intense(s) and s.get("label") in medium]
-    # a window that opens inside a chorus (a song loud from end to end: sx01, Electric Love, was
+    # a window that opens inside a chorus (a song loud from end to end: sx01, a test track, was
     # one 32 s chorus, so every shot was a close-up on the beat and no cutaway could go in) still
     # gets its build: the first `build_bars` bars, at most a third of the window
     total = max((s["end"] for s in secs), default=0.0)
@@ -138,7 +138,7 @@ def cut_modes(ed: dict) -> dict:
 
 def subtle_beats(bar_len: float, beat_len: float) -> int:
     """'To the music, subtle': two or four beats, whichever lands nearer 1.2 s, and never faster
-    than twice the intense cut (Big Dawgs, tracked at double time, 180 BPM: half a bar was 0.67 s,
+    than twice the intense cut (a rap test track, tracked at double time, 180 BPM: half a bar was 0.67 s,
     the same pace as intense; now a bar of 1.33 s, against 0.67 s for intense)."""
     k = min((2, 4), key=lambda b: abs(b * beat_len - 1.2))
     return max(k, 2 * intense_beats(beat_len))
@@ -199,7 +199,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     modes = cut_modes(ed) if energy else {}
     if energy:  # the level's cut: bars, or one-bar groups cut to the music below
         nbars = {ph: 2 if modes[LEVEL_OF[ph]] == "every 2 bars" else 1 for ph in nbars}
-        if bar_len < 1.4:  # a double-time grid (Big Dawgs at 180 BPM: 1.33 s bars): bars in pairs, or
+        if bar_len < 1.4:  # a double-time grid (a rap test track at 180 BPM: 1.33 s bars): bars in pairs, or
             # "every bar" is the same pace as the subtle cut on the drop and the drop doesn't lift
             nbars = {ph: 2 * n for ph, n in nbars.items()}
     sec_starts = sorted(s["start"] for s in secs)
@@ -335,7 +335,7 @@ def plan_voice(tl: dict, pack: dict, *, fmt: str = "16:9", preset: str = "qualit
 
 def voice_edl(shots: list[dict], renders: list[dict], beats: list[float], ed: dict, out_fps: float,
               seed: int, faces: dict | None = None, delay: float = 0.0) -> list[dict]:
-    """The cut. Every shot plays its lead performer (A). Loud shots get the edamame flicker:
+    """The cut. Every shot plays its lead performer (A). Loud shots get the reference edit's flicker:
     on most beats (and many off-beats) a 3-5 frame insert of another face, then a 2-3 frame
     ghost back to A. Inserts alternate between the shot's pose-matched twin (B: same pose,
     same words) and other performers' clips (sampled mid-clip; at 3-5 frames lip sync is

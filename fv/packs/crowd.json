@@ -2,7 +2,7 @@
  "name": "crowd",
  "label": "Crowd (close-up faces)",
  "mode": "voice",
- "about": "A different stranger sings every line straight into the lens: extreme close-ups, wide lens, flash and practical light against saturated walls. Measured from the edamame AI edit.",
+ "about": "A different stranger sings every line straight into the lens: extreme close-ups, wide lens, flash and practical light against saturated walls. Measured from a reference AI edit.",
  "casting": {
   "template": "{shot} of {who_full}, {detail}, singing straight into the lens with the mouth open mid-word, shot from {angle} {lens}, {light}, {background}, {wear}, visible pores and natural skin texture. Candid {time} photograph, natural colour, subtle film grain.",
   "who": [
