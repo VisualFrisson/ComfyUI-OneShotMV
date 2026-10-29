@@ -130,6 +130,8 @@ def main() -> int:
     ap.add_argument("--cuts-high", default=CUTS[2], choices=CUTS, help="cuts in high-energy sections")
     ap.add_argument("--cast-order", default="as written", choices=["as written", "mixed"])
     ap.add_argument("--crowd", default="auto", choices=["auto", "on", "off"])
+    ap.add_argument("--models", default="auto", choices=["auto", "24gb", "full"],
+                    help="24gb: the fp8 model set; full: the bf16 set (48 GB+ GPUs); auto picks by GPU memory")
     ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become b-roll cutaways")
     ap.add_argument("--qc", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
     ap.add_argument("--run-name", default="")
@@ -184,7 +186,7 @@ def main() -> int:
         for k, v in (("theme", a.theme), ("seconds", a.seconds), ("start", a.start), ("format", a.format),
                      ("preset", a.preset), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
                      ("cuts_medium", a.cuts_medium), ("cuts_high", a.cuts_high), ("cast_order", a.cast_order),
-                     ("crowd", a.crowd), ("broll_share", a.broll), ("qc_retries", a.qc),
+                     ("crowd", a.crowd), ("models", a.models), ("broll_share", a.broll), ("qc_retries", a.qc),
                      ("run_name", a.run_name), ("queue_renders", not a.preview), ("queue_assemble", True)):
             wf.set_input(d, k, v)
         say("Director: analysing the song, writing the World, planning the shots")

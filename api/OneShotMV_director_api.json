@@ -34,7 +34,8 @@
    "cuts_high": "to the music (subtle)",
    "audio_fx": "subtle",
    "cast_order": "as written",
-   "crowd": "auto"
+   "crowd": "auto",
+   "models": "auto"
   }
  }
 }

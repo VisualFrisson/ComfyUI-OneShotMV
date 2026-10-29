@@ -16,15 +16,12 @@ MODEL_FOLDERS = ("checkpoints", "diffusion_models", "unet", "loras", "text_encod
 MODEL_EXT = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
 
 
-def _resolve_models(m: dict) -> dict:
-    """Each model file in models.json as this ComfyUI lists it. A name that isn't found as written is
-    looked up by its file name in the model folders, so the files can sit in any sub-folder and the
-    path separator doesn't matter. Names that aren't found are left as written (the job then says
-    which file is missing)."""
+def _model_index():
+    """(names ComfyUI lists, {file name: listed name}) across the model folders; None outside ComfyUI."""
     try:
         import folder_paths  # type: ignore
     except Exception:
-        return m
+        return None
     have, by_name = set(), {}
     for kind in MODEL_FOLDERS:
         if kind not in getattr(folder_paths, "folder_names_and_paths", {}):
@@ -36,15 +33,97 @@ def _resolve_models(m: dict) -> dict:
         for n in names:
             have.add(n)
             by_name.setdefault(os.path.basename(n.replace("\\", "/")).lower(), n)
+    return have, by_name
 
-    def fix(v):
+
+def _resolve_models(m: dict, idx=None) -> tuple[dict, list]:
+    """Each model file as this ComfyUI lists it, and the files it can't find. A name that isn't
+    found as written is looked up by its file name in the model folders, so the files can sit in
+    any sub-folder and the path separator doesn't matter. Names that aren't found are left as
+    written (the job then says which file is missing)."""
+    idx = idx if idx is not None else _model_index()
+    if idx is None:
+        return dict(m), []
+    have, by_name = idx
+    missing = []
+
+    def fix(k, v):
         if not isinstance(v, str) or not v.lower().endswith(MODEL_EXT) or v in have:
             return v
         alt = v.replace("\\", os.sep).replace("/", os.sep)
-        return alt if alt in have else by_name.get(os.path.basename(v.replace("\\", "/")).lower(), v)
+        if alt in have:
+            return alt
+        hit = by_name.get(os.path.basename(v.replace("\\", "/")).lower())
+        if hit is None:
+            missing.append((k, os.path.basename(v.replace("\\", "/"))))
+        return hit or v
 
-    return {k: [[fix(x[0]), *x[1:]] if isinstance(x, list) else fix(x) for x in v] if isinstance(v, list) else fix(v)
-            for k, v in m.items()}
+    out = {k: [[fix(k, x[0]), *x[1:]] if isinstance(x, list) else fix(k, x) for x in v] if isinstance(v, list)
+           else fix(k, v) for k, v in m.items()}
+    return out, missing
+
+
+# ---- model sets: "24gb" (models.json, fp8, the default) and "full" (models_full.json on top, bf16)
+MODEL_SETS = ("24gb", "full")
+FULL_MIN_GB = 46          # the full set wants a 48 GB card or bigger
+RUN_KEYS = ("krea_turbo", "krea_raw", "krea_turbo_lora", "krea_te", "krea_vae", "ltx23_ckpt", "ltx23_te",
+            "ltx23_upscaler", "ltx23_loras")  # what a default voice run loads
+
+
+def _set_files(name: str) -> dict:
+    m = json.load(open(os.path.join(HERE, "models.json"), encoding="utf-8"))
+    if name == "full":
+        m.update({k: v for k, v in json.load(open(os.path.join(HERE, "models_full.json"), encoding="utf-8")).items()
+                  if not k.startswith("_")})
+    return m
+
+
+def vram_gb() -> float:
+    """The GPU's total memory in GB (0 without CUDA)."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory / 2 ** 30
+    except Exception:
+        pass
+    return 0.0
+
+
+def missing_files(name: str, idx=None) -> list:
+    """The files of a model set that a default run needs and this ComfyUI doesn't have."""
+    m = {k: v for k, v in _set_files(name).items() if k in RUN_KEYS}
+    return sorted(set(f for _, f in _resolve_models(m, idx)[1]))
+
+
+def pick_models(requested: str | None = "auto") -> str:
+    """The model set for a run: the requested one, or with "auto" the full set on cards with 48 GB or
+    more when its files are installed, otherwise the 24 GB set."""
+    if requested in MODEL_SETS:
+        return requested
+    idx = _model_index()
+    big = vram_gb() >= FULL_MIN_GB
+    if big and not missing_files("full", idx):
+        return "full"
+    if missing_files("24gb", idx) and big:
+        return "full"  # neither set complete: the one this card can run
+    return "24gb"
+
+
+def models_report() -> dict:
+    """For the Studio: the GPU's memory, the set "auto" picks, and the missing files of each set."""
+    idx = _model_index()
+    return {"vram_gb": round(vram_gb(), 1), "auto": pick_models("auto"), "full_min_gb": FULL_MIN_GB,
+            "missing": {n: missing_files(n, idx) for n in MODEL_SETS}}
+
+
+def use_models(name: str | None = "auto") -> str:
+    """Point M at a model set (in place, so every module that holds graphs.M sees it)."""
+    name = pick_models(name)
+    resolved, _ = _resolve_models(_set_files(name))
+    M.clear()
+    M.update(resolved)
+    M["_set"] = name
+    return name
 
 
 def _have_sage() -> bool:
@@ -56,7 +135,8 @@ def _have_sage() -> bool:
         return False
 
 
-M = _resolve_models(json.load(open(os.path.join(HERE, "models.json"), encoding="utf-8")))
+M: dict = {}
+use_models("auto")
 
 R8_S2 = "0.909, 0.880, 0.840, 0.780, 0.700, 0.600, 0.500, 0.400, 0.250, 0.100, 0.0"
 R8_S3 = "0.909375, 0.725, 0.421875, 0.0"

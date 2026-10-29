@@ -472,6 +472,16 @@
       "name": "crowd"
      },
      "link": null
+    },
+    {
+     "localized_name": "models",
+     "name": "models",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "models"
+     },
+     "link": null
     }
    ],
    "outputs": [
@@ -522,6 +532,7 @@
     "subtle",
     false,
     "as written",
+    "auto",
     "auto"
    ],
    "title": "OneShot MV: Director"

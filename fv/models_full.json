@@ -1,0 +1,8 @@
+{
+ "_doc": "The full-precision files (bf16) that replace the default set's fp8 files on GPUs with 48 GB or more. Everything not listed here comes from models.json.",
+ "krea_turbo": "krea2_turbo_bf16.safetensors",
+ "krea_raw": "krea2_raw_bf16.safetensors",
+ "krea_te": "qwen3vl_4b_bf16.safetensors",
+ "ltx23_ckpt": "ltx-2.3-22b-dev.safetensors",
+ "ltx23_te": "gemma_3_12B_it.safetensors"
+}

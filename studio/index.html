@@ -428,6 +428,8 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 .orow input{width:68px;padding:0 10px;text-align:right;cursor:text}
 .orow select:hover,.orow input:hover{border-color:var(--line3)}
 .seg.mini{flex-wrap:nowrap;gap:4px}
+.modelrow{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
+#mnote.warn{color:var(--warn)}
 .seg.mini .opt{min-height:30px;padding:0 10px;font-size:12px}
 option{background:var(--panel2);color:var(--text)}
 html[data-look="neon"] .side-h{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.02em;font-weight:700;
@@ -514,7 +516,7 @@ const WORLDS = [
 const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (intense)"];
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
-  cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2};
+  cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto"};
 
 // ---------------------------------------------------------------- state
 const store = {
@@ -779,6 +781,8 @@ async function viewBrief(){
       <h2 class="side-h">Quality</h2>
       <div class="stack" role="group" aria-label="Quality" id="tiers"></div>
       <p class="tiny" style="margin:8px 0 0" id="etanote"></p>
+      <div class="modelrow"><div class="orow"><span>Models</span><div class="seg mini" role="group" aria-label="Model set" id="mset"></div></div>
+        <p class="tiny" id="mnote" style="margin:4px 0 0"></p></div>
     </section>
     <section class="card">
       <details class="adv">
@@ -836,6 +840,24 @@ async function viewBrief(){
     $("#etanote").textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`;
   };
   drawFmt(); drawTiers();
+
+  // model set: Auto picks the full models on a 48 GB+ GPU when they're installed, else the 24 GB set
+  const drawModels = () => {
+    const r = S.models, cur = b.models || "auto";
+    $("#mset").innerHTML = [["auto", "Auto"], ["24gb", "24 GB"], ["full", "Full"]].map(([k, n]) => `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
+    $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); });
+    if (!r){ $("#mnote").textContent = "Checking your GPU…"; return; }
+    const use = cur === "auto" ? r.auto : cur, name = use === "full" ? "full models (bf16)" : "24 GB models (fp8)";
+    const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
+    let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB: ` : "";
+    t += cur === "auto" ? `Auto uses the ${name}.` : `Uses the ${name}.`;
+    if (use === "full" && r.vram_gb && r.vram_gb < r.full_min_gb) t += " The full models want 48 GB or more, so this may be slow or run out of memory.";
+    const miss = (r.missing || {})[use] || [];
+    if (miss.length) t += ` Missing ${miss.length === 1 ? "one file" : miss.length + " files"}: ${miss.slice(0, 3).join(", ")}${miss.length > 3 ? ` and ${miss.length - 3} more` : ""}. The README lists the downloads.`;
+    $("#mnote").textContent = t; $("#mnote").classList.toggle("warn", !!miss.length);
+  };
+  drawModels();
+  if (S.models) drawModels(); else api("models").then(r => { S.models = r; if ($("#mset")) drawModels(); }).catch(() => { S.models = null; });
 
   // advanced
   for (const k of ["cuts_low","cuts_medium","cuts_high","crowd","cast_order"]) { const el = $("#"+k); el.value = b[k]; el.onchange = () => { b[k] = el.value; saveBrief(); }; }

@@ -360,6 +360,17 @@ def _progress(pid: str, rec: dict) -> dict:
 
 
 # ------------------------------------------------------------------ start, job, recut, cancel
+def _director_has(name: str) -> bool:
+    """Whether the loaded Director node has this input (a ComfyUI that hasn't restarted since an
+    update still runs the old node)."""
+    try:
+        import nodes as comfy_nodes  # type: ignore
+        it = comfy_nodes.NODE_CLASS_MAPPINGS["FVDirector"].INPUT_TYPES()
+        return name in it.get("required", {}) or name in it.get("optional", {})
+    except Exception:
+        return False
+
+
 def _director_graph(b: dict) -> dict:
     cuts = {k: b.get(k) for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)}
     d = {"audio": ["1", 0], "mode": "voice", "pack": "crowd", "format": b.get("format", "16:9"),
@@ -370,6 +381,8 @@ def _director_graph(b: dict) -> dict:
          "broll_share": float(b.get("broll", 0.125)), "broll_style": "mix", "qc_retries": int(b.get("qc", 2)),
          "staged": True, "audio_fx": b.get("fx", "subtle"), "cast_order": b.get("cast_order", "as written"),
          "crowd": b.get("crowd", "auto"), **cuts}
+    if b.get("models") in ("auto", "24gb", "full") and _director_has("models"):
+        d["models"] = b["models"]
     return {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
             "2": {"class_type": "FVDirector", "inputs": d}}
 
@@ -1193,6 +1206,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
         if not b.get("song"):
             return web.json_response({"error": "pick a song first"}, status=400)
         return web.json_response(await _blocking(_estimate, b))
+    if route == "models":  # the GPU's memory, the set "auto" picks, and each set's missing files
+        return web.json_response(await _blocking(lambda: _fv("graphs").models_report()))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
     if route.startswith("xml/"):

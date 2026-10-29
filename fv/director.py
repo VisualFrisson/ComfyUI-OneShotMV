@@ -75,7 +75,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
            broll_style: str = "mix", staged: bool = True,
            look_groups: bool = False, cuts: dict | None = None, audio_fx: str = "",
            cast_order: str = "as written", crowd: str = "auto", log=print,
-           lip_repair: bool = False) -> dict:  # lip_repair: accepted and ignored, so older callers
+           lip_repair: bool = False, models: str = "auto") -> dict:  # lip_repair: accepted and ignored, so older callers
     # (an old nodes.py still loaded in a ComfyUI that has not restarted) still work
     """staged (voice runs queued here, with QC): the 4-load order. Krea makes every portrait and
     the b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC
@@ -89,6 +89,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     it works (65 s instead of 156 s in one test), but in another only 10 of 36 looks cut cleanly
     (the clip left the first look within its first frames, morphed instead of cutting, or showed
     three people), so looks a group doesn't deliver get their own clip after all (_fallback_looks)."""
+    # the model set ("24gb" fp8 files, or "full" bf16 files on 48 GB cards): every job this run
+    # queues, and every later pass, uses the same one (p["models"])
+    model_set = graphs.use_models(models)
+    log(f"[OneShotMV] models: the {'full' if model_set == 'full' else '24 GB'} set ({graphs.vram_gb():.0f} GB GPU)")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
     # in its log. Start from empty memory.
@@ -367,6 +371,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
             p["critic"]["deferred"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs)
                                        if n in p["critic"]["later"]]
         p["timing"] = {"queued": _dt.datetime.now().isoformat(timespec="seconds")}
+    p["models"] = model_set
     emap = _energy_map(p, pk)  # kept in the plan too (p["energy_map"])
     json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
     for i, (name, g) in enumerate(jobs):
@@ -825,6 +830,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     from . import qc
     pj = os.path.join(run_dir, "plan.json")
     p = json.load(open(pj, encoding="utf-8"))
+    graphs.use_models(p.get("models") or "auto")  # re-rolls and b-roll use the run's model set
     if stage not in ("all", "leads", "looks"):
         stage = "all"
     keep = p.get("preset") if stage != "all" else None
@@ -1243,6 +1249,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
     from . import critic, graphs
     pj = os.path.join(run_dir, "plan.json")
     p = json.load(open(pj, encoding="utf-8"))
+    graphs.use_models(p.get("models") or "auto")  # the vision check's language model and re-makes
     cr = p.get("critic") or {}
     items = cr.get("items", [])
     th = p.get("theme") or {}

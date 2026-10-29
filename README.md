@@ -124,7 +124,7 @@ python sdk_run.py --recut "<run folder>" --fx none
 ```
 
 `python sdk_run.py --help` lists every option: length and start, format, preset, seed, FX, the
-cut for each energy level, cast order, crowd, b-roll share and take-check rounds. `--preview`
+cut for each energy level, cast order, crowd, b-roll share, take-check rounds and the model set. `--preview`
 prints the plan without rendering. To use another deployment that has the OneShot MV nodes, set
 `COMFY_BASE_URL`, and `COMFY_API_KEY` if it needs one.
 
@@ -168,6 +168,7 @@ Some things that help:
 | B-roll share | 0 to 0.5 of the shots | 0.125 |
 | Take-check rounds | 0 to 3 | 2 |
 | Seed | any number | 1 |
+| Models | auto, 24gb (fp8), full (bf16, 48 GB+ GPUs) | auto |
 
 "To the music" cuts on the beat to a new face in the same spot: about every half bar on subtle,
 about every beat on intense.
@@ -190,11 +191,12 @@ about every beat on intense.
    attention) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers). OneShot MV
    was built on ComfyUI 0.39; it needs a recent ComfyUI for the core Generate Text node, Krea 2
    and App mode.
-3. Download the models listed under [Models and licences](#models-and-licences). Diffusion models
-   go in `models/diffusion_models`, LoRAs in `models/loras`, text encoders in
-   `models/text_encoders`, VAEs in `models/vae`, the LTX-2.3 checkpoint in `models/checkpoints`
-   and its upscaler in `models/latent_upscale_models`. Sub-folders are fine: OneShot MV looks each
-   file up by name. If you rename a file, change its name in `fv/models.json`.
+3. Download a model set (see [Two model sets](#two-model-sets)): the 24 GB set for most cards,
+   the full set if your GPU has 48 GB or more. Diffusion models go in `models/diffusion_models`,
+   LoRAs in `models/loras`, text encoders in `models/text_encoders`, VAEs in `models/vae`, the
+   LTX-2.3 checkpoint in `models/checkpoints` and its upscaler in `models/latent_upscale_models`.
+   Sub-folders are fine: OneShot MV looks each file up by name. If you rename a file, change its
+   name in `fv/models.json` (24 GB set) or `fv/models_full.json` (full set).
 4. Optional, but recommended, the checks:
    - Lip sync (SyncNet): put `syncnet_v2.model` and `sfd_face.pth` in `ComfyUI/models/syncnet/`.
      They come from the [Oxford VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/)
@@ -212,7 +214,14 @@ about every beat on intense.
 
 ### Hardware and time
 
-OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB). Times on that card:
+The default model set is made for 24 GB GPUs (RTX 3090, 4090 or 5090) and wants at least 64 GB of
+system RAM, because ComfyUI keeps part of LTX-2.3 in RAM while it renders. The full set wants a
+GPU with 48 GB or more. The Studio's Quality box, the Director's `models` setting and
+`sdk_run.py --models` choose the set; Auto uses the full set on a 48 GB+ GPU when its files are
+installed, and the 24 GB set otherwise. The Studio also lists any files the chosen set is missing.
+
+OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB) with the full set. Times on that
+card:
 
 | Video | Time |
 |---|---|
@@ -221,8 +230,9 @@ OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB). Times on that
 | Re-cut (post processing) | about 2 min |
 | Re-shoot one shot | about 10 to 15 min, mostly model loading |
 
-On a cold start, loading LTX-2.3 and its Gemma 3 text encoder (about 65 GB) takes 5 to 9 minutes
-from a SATA SSD and about a minute from NVMe. Smaller GPUs are untested.
+On a cold start, loading LTX-2.3 and its Gemma 3 text encoder (about 65 GB with the full set)
+takes 5 to 9 minutes from a SATA SSD and about a minute from NVMe. The 24 GB set has not been
+timed on a 24 GB card yet; expect it to be slower than the times above.
 
 ## What a run leaves behind
 
@@ -235,8 +245,8 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 
 - No OneShot MV button or page: restart ComfyUI once after installing, and look in the console
   for import errors from the pack.
-- "Model not found": the names in `fv/models.json` have to match your files as ComfyUI lists
-  them, sub-folders included.
+- "Model not found" or "Value not in list": a file of the chosen model set is missing. The
+  Studio's Quality box lists the missing files; download them, or pick the other set.
 - The lip-sync or framing checks were skipped: their weights aren't installed (Install, step 4).
   The video is still made.
 - A run stopped partway: the Studio's Rendering screen says so, and the ComfyUI console shows the
@@ -276,6 +286,22 @@ Gemma 3) allow commercial use, outputs included. The optional insightface face m
 non-commercial research only, and LTX's licence asks you to label what you publish as
 AI-generated. Read each licence before you rely on it.
 
+### Two model sets
+
+The 24 GB set (the default) uses fp8 files; the full set uses the original bf16 files. Both use the
+same LoRAs, upscaler and VAE.
+
+| Model | 24 GB set (default) | Full set (48 GB+) | Download |
+|---|---|---|---|
+| LTX-2.3 22B dev | `ltx-2.3-22b-dev-fp8.safetensors`, 29.1 GB | `ltx-2.3-22b-dev.safetensors`, 46.1 GB | [Lightricks/LTX-2.3-fp8](https://huggingface.co/Lightricks/LTX-2.3-fp8), [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
+| Gemma 3 12B IT | `gemma_3_12B_it_fp8_scaled.safetensors`, 13.2 GB | `gemma_3_12B_it.safetensors`, 24.4 GB | [Comfy-Org/ltx-2](https://huggingface.co/Comfy-Org/ltx-2/tree/main/split_files/text_encoders) |
+| Krea 2 Turbo | `krea2_turbo_fp8_scaled.safetensors`, 13.1 GB | `krea2_turbo_bf16.safetensors`, 26.3 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Krea 2 Raw | `krea2_raw_fp8_scaled.safetensors`, 13.1 GB | `krea2_raw_bf16.safetensors`, 26.3 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Qwen3-VL 4B (Krea 2's text encoder) | `qwen3vl_4b_fp8_scaled.safetensors`, 5.2 GB | `qwen3vl_4b_bf16.safetensors`, 8.9 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Both sets | The LTX-2.3 distilled LoRA 384 v1.1 (7.6 GB), the IC-LoRA Detailer (about 2.4 GB), Crisp and Soft Enhance (about 0.7 GB), the spatial upscaler x2 v1.1 (1.0 GB), the Krea 2 Turbo LoRA (0.5 GB) and the Qwen-Image VAE (0.25 GB) | | See the table below |
+
+In all, the 24 GB set is about 86 GB to download and the full set about 144 GB.
+
 A default run (voice mode, `crowd` pack) uses:
 
 | Model | Used for | Licence | Download |
@@ -304,7 +330,7 @@ Models that only other packs and modes use (a default run never loads them):
 | Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | Portraits in the `artist` pack | Check the licence on the model page before commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 | LTX-2.5 22B distilled, its VAEs, upscaler and Gemma 4 text encoder | Motion mode at the `fast` preset | LTX-2.x Community License | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
 
-File names and folders are set in `fv/models.json`.
+File names are set in `fv/models.json` and `fv/models_full.json`.
 
 ## Licence
 

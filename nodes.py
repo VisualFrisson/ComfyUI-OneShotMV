@@ -288,6 +288,10 @@ class FVDirector:
                       "tooltip": "People behind the singers. auto: a soft-focus crowd when the World is a packed "
                                  "spectacle (arena, stadium, crowded stands), otherwise nobody else in frame; "
                                  "on / off: always / never"}),
+            "models": (["auto", "24gb", "full"], {"default": "auto",
+                       "tooltip": "Which model files to use. 24gb: the fp8 set (models.json), made for 24 GB GPUs. "
+                                  "full: the bf16 set (models_full.json), for 48 GB or more. auto: the full set on "
+                                  "a 48 GB+ GPU when its files are installed, otherwise the 24 GB set."}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -304,7 +308,7 @@ class FVDirector:
             dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
             framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix",
             staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
-            cast_order="as written", crowd="auto"):
+            cast_order="as written", crowd="auto", models="auto"):
         _reload()
         if artist_image is not None:
             artist_image_path = _save_image_input(artist_image)
@@ -322,7 +326,7 @@ class FVDirector:
                               look_groups=look_groups,
                               cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high},
                               audio_fx=audio_fx or "", cast_order=cast_order or "as written",
-                              crowd=crowd or "auto")
+                              crowd=crowd or "auto", models=models or "auto")
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
