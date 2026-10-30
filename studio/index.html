@@ -1040,7 +1040,7 @@ async function start(render, briefOverride){
         overlay(); location.hash = (render ? "#/render/" : "#/plan/") + encodeURIComponent(j.run); return;
       }
     }
-  }catch(e){ overlay(); toast("It didn't start: " + e.message, 9000); }
+  }catch(e){ overlay(); toast("It didn't start: " + e.message, Math.max(9000, 70 * e.message.length)); }
 }
 
 // ---------------------------------------------------------------- 2. The Plan

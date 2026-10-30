@@ -107,6 +107,25 @@ def missing_files(name: str, idx=None) -> list:
     return sorted(set(f for _, f in _resolve_models(m, idx)[1]))
 
 
+LOADER_INPUTS = ("unet_name", "ckpt_name", "clip_name", "lora_name", "vae_name", "model_name", "text_encoder")
+
+
+def missing_in_jobs(job_graphs, idx=None) -> list:
+    """The model files these jobs load that this ComfyUI doesn't list (a name _resolve_models
+    couldn't find stays as written, so ComfyUI would refuse the job). [] outside ComfyUI."""
+    idx = idx if idx is not None else _model_index()
+    if idx is None:
+        return []
+    have = idx[0]
+    out = set()
+    for g in job_graphs:
+        for n in g.values():
+            for k, v in (n.get("inputs") or {}).items():
+                if k in LOADER_INPUTS and isinstance(v, str) and v.lower().endswith(MODEL_EXT) and v not in have:
+                    out.add(os.path.basename(v.replace("\\", "/")))
+    return sorted(out)
+
+
 def pick_models(requested: str | None = "auto") -> str:
     """The model set for a run: the requested one, or with "auto" the full set on cards with 48 GB or
     more when its files are installed, otherwise the 24 GB set."""

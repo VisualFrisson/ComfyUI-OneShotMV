@@ -259,6 +259,10 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 
 - No OneShot MV button or page: restart ComfyUI once after installing, and look in the console
   for import errors from the pack.
+- "It didn't start", naming node packs or model files: install the packs it names and restart
+  ComfyUI, or download the files. A file saved under another name counts as missing. Before
+  October 30 the pack only said "HTTP Error 400: Bad Request"; update it, or look in the ComfyUI
+  console after "invalid prompt" or "Failed to validate prompt" for the reason.
 - "Model not found" or "Value not in list": a file of the chosen model set is missing. The
   line under Model Versions in the Studio lists the missing files; download them, or pick the
   other set.

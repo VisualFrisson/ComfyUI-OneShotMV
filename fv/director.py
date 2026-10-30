@@ -10,6 +10,7 @@ import datetime as _dt
 import json
 import os
 import re
+import urllib.error
 import urllib.request
 
 import numpy as np
@@ -39,8 +40,87 @@ def queue_prompt(graph: dict, url: str | None = None, client_id: str = "oneshot-
     data = json.dumps(body).encode()
     req = urllib.request.Request((url or server_url()) + "/prompt", data=data,
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode()).get("prompt_id", "")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode()).get("prompt_id", "")
+    except urllib.error.HTTPError as e:  # ComfyUI's reply says why; urllib alone says "Bad Request"
+        try:
+            reply = json.loads(e.read().decode("utf-8", "replace"))
+        except Exception:
+            reply = None
+        raise QueueRefused(_refused(reply, e.code)) from e
+
+
+# the node classes a run can use that don't come with ComfyUI itself, and the pack of each
+NODE_PACKS = {"ClownsharKSampler_Beta": "RES4LYF", "LTX2AttentionTunerPatch": "ComfyUI-KJNodes",
+              "PathchSageAttentionKJ": "ComfyUI-KJNodes", "LTXICLoRALoaderModelOnly": "ComfyUI-LTXVideo",
+              "LTXAddVideoICLoRAGuide": "ComfyUI-LTXVideo", "DWPreprocessor": "comfyui_controlnet_aux"}
+
+
+class QueueRefused(RuntimeError):
+    """ComfyUI refused a job; the message says why in plain words."""
+
+
+def _what_is_missing(nodes_=(), files=(), other=(), model_set: str = "") -> str:
+    packs: dict = {}
+    for c in sorted(set(nodes_)):
+        packs.setdefault(NODE_PACKS.get(c, ""), []).append(c)
+    named = [f"{p} ({', '.join(cs)})" for p, cs in sorted(packs.items()) if p]
+    parts = []
+    if named:
+        listed = named[0] if len(named) == 1 else ", ".join(named[:-1]) + " and " + named[-1]
+        parts.append(f"Install the node pack{'s' if len(named) > 1 else ''} {listed}, then restart ComfyUI.")
+    if packs.get(""):
+        parts.append(f"Update ComfyUI; it has no {', '.join(packs[''])} node.")
+    if files:
+        which = {"24gb": " of the 24 GB set", "full": " of the full set"}.get(model_set, "")
+        parts.append(f"Model files{which} that ComfyUI can't find: {', '.join(sorted(set(files)))}. "
+                     "A file saved under another name counts as missing.")
+    return " ".join(parts + list(other))
+
+
+def _refused(reply, code: int) -> str:
+    """ComfyUI's refusal ({"error": ..., "node_errors": ...}, server.py) in plain words."""
+    if not isinstance(reply, dict):
+        return f"ComfyUI refused a OneShot MV job (HTTP {code}); the ComfyUI console says why."
+    err = reply.get("error") if isinstance(reply.get("error"), dict) else {}
+    nodes_, files, other = [], [], []
+    if err.get("type") == "missing_node_type":
+        nodes_.append((err.get("extra_info") or {}).get("class_type") or "?")
+    for ne in (reply.get("node_errors") or {}).values():
+        cls = ne.get("class_type", "")
+        for e in ne.get("errors") or []:
+            x = e.get("extra_info") or {}
+            name, val = x.get("input_name", ""), x.get("received_value")
+            if e.get("type") == "value_not_in_list" and name in graphs.LOADER_INPUTS:
+                files.append(os.path.basename(str(val).replace("\\", "/")))
+            elif e.get("type") == "value_not_in_list" and name == "sampler_name":
+                other.append(f"The sampler '{val}' comes with RES4LYF: install it, then restart ComfyUI.")
+            elif e.get("type") == "value_not_in_list":
+                other.append(f"{cls} has no '{val}' for {name}: update ComfyUI.")
+            else:
+                other.append(f"{cls}: {e.get('message', '')}" + (f" ({str(e['details'])[:160]})" if e.get("details") else "") + ".")
+    if not (nodes_ or files or other):
+        other.append(f"{err.get('message') or f'HTTP {code}'}; the ComfyUI console says more.")
+    return "ComfyUI refused a OneShot MV job. " + _what_is_missing(nodes_, files, dict.fromkeys(other),
+                                                                   graphs.M.get("_set", ""))
+
+
+def check_jobs(job_graphs, model_set: str = "") -> None:
+    """Before a run queues anything: every node its jobs use is installed and every model file they
+    load is listed, or nothing is queued and the error says what to install (ComfyUI would refuse
+    the job anyway, after part of the run was already queued). Does nothing outside ComfyUI."""
+    try:
+        import nodes as _comfy_nodes
+        reg = _comfy_nodes.NODE_CLASS_MAPPINGS
+    except Exception:
+        return
+    no_nodes = {n.get("class_type") for g in job_graphs for n in g.values()} - {None}
+    no_nodes = sorted(c for c in no_nodes if c not in reg)
+    no_files = graphs.missing_in_jobs(job_graphs)
+    if no_nodes or no_files:
+        raise ValueError("It can't render yet, so nothing was queued. " +
+                         _what_is_missing(no_nodes, no_files, (), model_set))
 
 
 def _node_available(name: str) -> bool:
@@ -364,6 +444,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     else:
         jobs.append(("free_before_assemble", graphs.free_memory("before assembly").nodes))
     jobs.append(("zz_assemble", graphs.assemble(run_dir=run_dir, prefix=rel).nodes))
+    if queue:  # all of the run can run here, or none of it is queued
+        check_jobs([g for _, g in jobs], model_set)
     if staged:
         p["deferred_jobs"] = [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs) if n in deferred
                               and n not in (p.get("critic") or {}).get("later", [])]
