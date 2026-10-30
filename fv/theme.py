@@ -427,17 +427,8 @@ def _own(s: str, ing: bool = False) -> str:
 
 
 def cache_dir(out_root: str) -> str:
-    """output/oneshot-mv/themes. Installs from before the pack's rename keep their cache in
-    output/frissonvision/themes; the first call copies it here so cached Worlds and casts still apply."""
-    new = os.path.join(out_root, "oneshot-mv", "themes")
-    old = os.path.join(out_root, "frissonvision", "themes")
-    if not os.path.isdir(new) and os.path.isdir(old):
-        try:
-            import shutil
-            shutil.copytree(old, new)
-        except Exception:
-            return old
-    return new
+    """output/oneshot-mv/themes: the cached Worlds and casts."""
+    return os.path.join(out_root, "oneshot-mv", "themes")
 
 
 def _key(theme: str, seed: int) -> str:

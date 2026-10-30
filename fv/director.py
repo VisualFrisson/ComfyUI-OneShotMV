@@ -1135,10 +1135,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         for r in p["renders"]:  # twins follow their lead's mouth, so they share its offset
             lead = by_id.get(r.get("twin_of"))
             if r["role"] == "B" and lead is not None and "sync_delay" in lead:
-                # (runs made before the lip repair was removed may have a repaired lead; its twins
-                # keep the original take's offset)
-                r["sync_delay"] = lead.get("sync_delay_ltx", lead["sync_delay"]) if lead.get("latentsync") \
-                    else lead["sync_delay"]
+                r["sync_delay"] = lead["sync_delay"]
             # a delay can't reach back past the clip's own lead-in (it would hold the first
             # frame at the cut)
             if "sync_delay" in r:
