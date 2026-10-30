@@ -162,7 +162,7 @@ Some things that help:
 |---|---|---|
 | Length and start | seconds (0 = the whole song); a start time, or auto | 30 s from the strongest stretch |
 | Format | 16:9 (1920×1080), 9:16 (1080×1920), 1:1 (1080×1080) | 16:9 |
-| Quality | quality (50 fps renders), fast (25 fps) | quality |
+| Quality | quality (50 fps renders), fast (25 fps, for checking the cast and the cut; lip sync is weaker) | quality |
 | Cuts, per energy level | every 2 bars, every bar, to the music (subtle), to the music (intense) | low: every 2 bars; medium: every bar; high: to the music (subtle) |
 | Audio-reactive FX | none, subtle, intense (per energy level in the Studio) | subtle |
 | Cast order | as written, mixed | as written |
@@ -241,8 +241,9 @@ The 24 GB time comes from the same card with ComfyUI held to 24 GB (`--reserve-v
 `--highvram`). It is about 1.6 times the full set, and most of the extra time is the lip-sync
 clips: LTX-2.3 fp8 and its LoRAs are larger than 24 GB, so ComfyUI swaps part of them in from
 system RAM on every step (about 2 minutes a clip instead of 45 seconds). The Fast setting saves
-little on a 24 GB card. A real 24 GB card has less compute than the RTX PRO 6000, so expect it to
-take longer still.
+little on a 24 GB card, and in our test about half its first takes barely moved their mouths
+(re-takes fixed few of them), so use Quality for anything you'll show. A real 24 GB card has
+less compute than the RTX PRO 6000, so expect it to take longer still.
 
 ## What a run leaves behind
 
