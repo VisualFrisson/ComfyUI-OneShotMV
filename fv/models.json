@@ -1,7 +1,7 @@
 {
- "_doc": "The model files of the default set, sized for a 24 GB GPU (fp8). models_full.json swaps in the full-precision files for GPUs with 48 GB or more. Each file is found by name in ComfyUI's model folders, sub-folders included; change a name here only if you renamed the file.",
+ "_doc": "The model files of the default set, sized for a 24 GB GPU (fp8). One Krea 2 Turbo file does both still passes (Raw and its Turbo LoRA are full-set only). models_full.json swaps in the full-precision files for GPUs with 48 GB or more. Each file is found by name in ComfyUI's model folders, sub-folders included; change a name here only if you renamed the file.",
  "krea_turbo": "krea2_turbo_fp8_scaled.safetensors",
- "krea_raw": "krea2_raw_fp8_scaled.safetensors",
+ "krea_raw": "krea2_turbo_fp8_scaled.safetensors",
  "krea_turbo_lora": "krea2_turbo_lora_rank_64_bf16.safetensors",
  "krea_te": "qwen3vl_4b_fp8_scaled.safetensors",
  "krea_vae": "qwen_image_vae.safetensors",

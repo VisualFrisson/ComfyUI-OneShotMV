@@ -216,9 +216,10 @@ about every beat on intense.
 
 The default model set is made for 24 GB GPUs (RTX 3090, 4090 or 5090) and wants at least 64 GB of
 system RAM, because ComfyUI keeps part of LTX-2.3 in RAM while it renders. The full set wants a
-GPU with 48 GB or more. The Studio's Quality box, the Director's `models` setting and
-`sdk_run.py --models` choose the set; Auto uses the full set on a 48 GB+ GPU when its files are
-installed, and the 24 GB set otherwise. The Studio also lists any files the chosen set is missing.
+GPU with 48 GB or more. Model Versions in the Studio's Quality box, the Director's `models`
+setting and `sdk_run.py --models` choose the set. Auto uses the full set on a 48 GB+ GPU when its
+files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram` counts
+against the card. The Studio also lists any files the chosen set is missing.
 
 OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB) with the full set. Times on that
 card:
@@ -229,10 +230,17 @@ card:
 | 1:51, quality | about 6 h 45 min |
 | Re-cut (post processing) | about 2 min |
 | Re-shoot one shot | about 10 to 15 min, mostly model loading |
+| 1:04, quality, 24 GB set on the same card held to 24 GB | about 3 h 35 min |
 
 On a cold start, loading LTX-2.3 and its Gemma 3 text encoder (about 65 GB with the full set)
-takes 5 to 9 minutes from a SATA SSD and about a minute from NVMe. The 24 GB set has not been
-timed on a 24 GB card yet; expect it to be slower than the times above.
+takes 5 to 9 minutes from a SATA SSD and about a minute from NVMe.
+
+The 24 GB time comes from the same card with ComfyUI held to 24 GB (`--reserve-vram 72`, without
+`--highvram`). It is about 1.6 times the full set, and most of the extra time is the lip-sync
+clips: LTX-2.3 fp8 and its LoRAs are larger than 24 GB, so ComfyUI swaps part of them in from
+system RAM on every step (about 2 minutes a clip instead of 45 seconds). The Fast setting saves
+little on a 24 GB card. A real 24 GB card has less compute than the RTX PRO 6000, so expect it to
+take longer still.
 
 ## What a run leaves behind
 
@@ -246,7 +254,8 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 - No OneShot MV button or page: restart ComfyUI once after installing, and look in the console
   for import errors from the pack.
 - "Model not found" or "Value not in list": a file of the chosen model set is missing. The
-  Studio's Quality box lists the missing files; download them, or pick the other set.
+  line under Model Versions in the Studio lists the missing files; download them, or pick the
+  other set.
 - The lip-sync or framing checks were skipped: their weights aren't installed (Install, step 4).
   The video is still made.
 - A run stopped partway: the Studio's Rendering screen says so, and the ComfyUI console shows the
@@ -288,25 +297,26 @@ AI-generated. Read each licence before you rely on it.
 
 ### Two model sets
 
-The 24 GB set (the default) uses fp8 files; the full set uses the original bf16 files. Both use the
-same LoRAs, upscaler and VAE.
+The 24 GB set (the default) uses fp8 files and one Krea 2 Turbo model for both passes of every
+still. The full set uses the original bf16 files, with Krea 2 Raw and the Turbo LoRA for the second
+pass. Both use the same LTX LoRAs, upscaler and VAE.
 
 | Model | 24 GB set (default) | Full set (48 GB+) | Download |
 |---|---|---|---|
 | LTX-2.3 22B dev | `ltx-2.3-22b-dev-fp8.safetensors`, 29.1 GB | `ltx-2.3-22b-dev.safetensors`, 46.1 GB | [Lightricks/LTX-2.3-fp8](https://huggingface.co/Lightricks/LTX-2.3-fp8), [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
 | Gemma 3 12B IT | `gemma_3_12B_it_fp8_scaled.safetensors`, 13.2 GB | `gemma_3_12B_it.safetensors`, 24.4 GB | [Comfy-Org/ltx-2](https://huggingface.co/Comfy-Org/ltx-2/tree/main/split_files/text_encoders) |
 | Krea 2 Turbo | `krea2_turbo_fp8_scaled.safetensors`, 13.1 GB | `krea2_turbo_bf16.safetensors`, 26.3 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
-| Krea 2 Raw | `krea2_raw_fp8_scaled.safetensors`, 13.1 GB | `krea2_raw_bf16.safetensors`, 26.3 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Krea 2 Raw and the Turbo LoRA (rank 64) | not used | `krea2_raw_bf16.safetensors`, 26.3 GB, and `krea2_turbo_lora_rank_64_bf16.safetensors`, 0.5 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
 | Qwen3-VL 4B (Krea 2's text encoder) | `qwen3vl_4b_fp8_scaled.safetensors`, 5.2 GB | `qwen3vl_4b_bf16.safetensors`, 8.9 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
-| Both sets | The LTX-2.3 distilled LoRA 384 v1.1 (7.6 GB), the IC-LoRA Detailer (about 2.4 GB), Crisp and Soft Enhance (about 0.7 GB), the spatial upscaler x2 v1.1 (1.0 GB), the Krea 2 Turbo LoRA (0.5 GB) and the Qwen-Image VAE (0.25 GB) | | See the table below |
+| Both sets | The LTX-2.3 distilled LoRA 384 v1.1 (7.6 GB), the IC-LoRA Detailer (about 2.4 GB), Crisp and Soft Enhance (about 0.7 GB), the spatial upscaler x2 v1.1 (1.0 GB) and the Qwen-Image VAE (0.25 GB) | | See the table below |
 
-In all, the 24 GB set is about 86 GB to download and the full set about 144 GB.
+In all, the 24 GB set is about 73 GB to download and the full set about 144 GB.
 
 A default run (voice mode, `crowd` pack) uses:
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
-| Krea 2 Turbo and Raw, the Turbo LoRA (rank 64), the Qwen3-VL 4B text encoder and the Qwen-Image VAE | Every portrait and b-roll still | Krea 2 Community License: commercial use of the model and its images only for companies under US$1M annual revenue (Qwen3-VL and the VAE are Apache-2.0 upstream) | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Krea 2 Turbo, the Qwen3-VL 4B text encoder and the Qwen-Image VAE (full set: also Krea 2 Raw and the Turbo LoRA) | Every portrait and b-roll still | Krea 2 Community License: commercial use of the model and its images only for companies under US$1M annual revenue (Qwen3-VL and the VAE are Apache-2.0 upstream) | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
 | LTX-2.3 22B dev, the distilled LoRA 384 v1.1 and the spatial upscaler x2 v1.1 | Every clip: lip sync and b-roll | LTX-2 Community License: free under US$10M annual revenue; label output as machine-generated; no impersonation without consent | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
 | LTX-2 19B IC-LoRA Detailer | Fine detail in every clip | LTX-2 Community License | [Lightricks/LTX-2-19b-IC-LoRA-Detailer](https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer) |
 | LTX2.3 Crisp Enhance and Soft Enhance (community LoRAs by vrgamedevgirl84) | Sharpness and detail in every clip | No licence stated by the author. To run without them, remove them from `ltx23_loras` in `fv/models.json` | [CivitAI: LTX 2.3 Enhancers](https://civitai.com/models/2535622/ltx-23-enhancers) |

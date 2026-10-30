@@ -102,6 +102,8 @@ def vram_gb() -> float:
 def missing_files(name: str, idx=None) -> list:
     """The files of a model set that a default run needs and this ComfyUI doesn't have."""
     m = {k: v for k, v in _set_files(name).items() if k in RUN_KEYS}
+    if m.get("krea_raw") == m.get("krea_turbo"):
+        m.pop("krea_turbo_lora", None)  # one Krea file for both passes: the Turbo LoRA isn't used
     return sorted(set(f for _, f in _resolve_models(m, idx)[1]))
 
 
