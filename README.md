@@ -162,7 +162,7 @@ Some things that help:
 |---|---|---|
 | Length and start | seconds (0 = the whole song); a start time, or auto | 30 s from the strongest stretch |
 | Format | 16:9 (1920×1080), 9:16 (1080×1920), 1:1 (1080×1080) | 16:9 |
-| Quality | quality (50 fps renders), fast (25 fps, for checking the cast and the cut; lip sync is weaker) | quality |
+| Quality | quality (clips rendered at 50 fps, 30 first-stage steps), fast (25 fps, 20 steps; for checking the cast and the cut, lip sync is weaker) | quality |
 | Cuts, per energy level | every 2 bars, every bar, to the music (subtle), to the music (intense) | low: every 2 bars; medium: every bar; high: to the music (subtle) |
 | Audio-reactive FX | none, subtle, intense (per energy level in the Studio) | subtle |
 | Cast order | as written, mixed | as written |
@@ -171,6 +171,9 @@ Some things that help:
 | Take-check rounds | 0 to 3 | 2 |
 | Seed | any number | 1 |
 | Models | auto, 24gb (fp8), full (bf16, 48 GB+ GPUs) | auto |
+
+Quality and fast render the clips at the same size, and both cut the video at 25 fps and deliver
+it at 1080p. Quality renders the clips at 50 fps, which gives the mouths smoother timing.
 
 "To the music" cuts on the beat to a new face in the same spot: about every half bar on subtle,
 about every beat on intense.
