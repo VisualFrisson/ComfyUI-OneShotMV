@@ -429,7 +429,9 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 .orow select:hover,.orow input:hover{border-color:var(--line3)}
 .seg.mini{flex-wrap:nowrap;gap:4px}
 .modelrow{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
-.modelrow .mlabel{font-size:15px}
+.modelrow .mlabel{font-size:15px;flex:none;overflow:visible}
+.modelrow .seg.mini .opt{white-space:nowrap;padding:0 9px}
+.modelrow .orow{flex-wrap:wrap;row-gap:6px}
 #mnote.warn{color:var(--warn)}
 .seg.mini .opt{min-height:30px;padding:0 10px;font-size:12px}
 option{background:var(--panel2);color:var(--text)}

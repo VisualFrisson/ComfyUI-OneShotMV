@@ -43,6 +43,8 @@ All three drive the same nodes, and every run shows up in the Studio under Your 
 With ComfyUI running, open http://127.0.0.1:8188/oneshot-mv/ or click **OneShot MV** in
 ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to install.
 
+![The Studio: the Brief, the Plan, Rendering and the Result](media/studio_screens.jpg)
+
 1. **The Brief.** Name the project, then drop in a song. The waveform shows the low, medium and
    high energy sections and the stretch the video will use; click it to start somewhere else.
    Pick a length, a World (four examples, or write your own) and a format. The buttons say how
