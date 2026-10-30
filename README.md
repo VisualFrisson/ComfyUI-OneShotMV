@@ -5,7 +5,7 @@ Rome"). It listens to the song, invents a cast for that world, plans every shot 
 energy, and renders a lip-synced music video where a different invented person sings each line.
 Everything runs locally in ComfyUI on open-weights models.
 
-![Twelve of the invented people from one full-song run](media/crowd_grid.jpg)
+![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
 
 > Made for Comfy's Open Source Higgsfield challenge. Every face in this repo and in the videos it
 > makes is invented. Use music you have the rights to.
