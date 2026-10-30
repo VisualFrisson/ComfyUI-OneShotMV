@@ -17,7 +17,7 @@ FORMATS = {
     "1:1": {"quality": (1024, 1024), "fast": (768, 768), "deliver": (1080, 1080)},
 }
 for _f in FORMATS.values():
-    _f["fast_voice"] = _f["quality"]
+    _f["fast_voice"] = _f["fast"]  # singing at fast: the smaller size too
 FORMAT_NAMES = list(FORMATS)  # 16:9 first: the default
 
 PRESETS = {
@@ -31,8 +31,10 @@ PRESETS = {
     # fast: LTX-2.5 lips lead by only ~0.12 s (peak over 11 clips), so a small nudge
     "fast": {"stages": 2, "fps": 25, "engine": "ltx25_distilled", "sync_delay": 0.05},
     # fast for singing: LTX-2.5's lip sync scores lower under SyncNet, so voice runs at "fast"
-    # keep the quality model and its full size, at 25 fps and fewer first-stage steps
-    "fast_voice": {"stages": 3, "fps": 25, "engine": "ltx23_r8", "sync_delay": 0.16, "steps1": 20},
+    # keep the quality model (LTX-2.3 and its LoRAs) at the fast size: two stages (1/2 -> full,
+    # the second with the quality schedule's last 3 steps), 25 fps, 20 first-stage steps
+    "fast_voice": {"stages": 2, "fps": 25, "engine": "ltx23_r8", "sync_delay": 0.16, "steps1": 20,
+                   "key_strengths": (0.7, 0.8)},
 }
 PRESET_NAMES = ["quality", "fast"]  # what users pick; fast_voice is chosen for voice + fast
 

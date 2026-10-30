@@ -833,14 +833,20 @@ async function viewBrief(){
   // format, quality
   const drawFmt = () => {
     $("#fmts").innerHTML = [["16:9",40,23],["9:16",20,34],["1:1",28,28]].map(f => `<button type="button" class="fmt" data-f="${f[0]}" aria-pressed="${b.format===f[0]}"><i aria-hidden="true" style="width:${f[1]}px;height:${f[2]}px"></i>${f[0]}</button>`).join("");
-    $("#fmts").querySelectorAll(".fmt").forEach(el => el.onclick = () => { b.format = el.dataset.f; saveBrief(); drawFmt(); });
+    $("#fmts").querySelectorAll(".fmt").forEach(el => el.onclick = () => { b.format = el.dataset.f; saveBrief(); drawFmt(); drawTiers(); });
   };
+  // the clips' render size per format (fv/formats.py); both presets are upscaled to the delivery size
+  const RSIZE = {quality: {"16:9": "1280×768", "9:16": "768×1280", "1:1": "1024×1024"},
+                 fast: {"16:9": "896×512", "9:16": "512×896", "1:1": "768×768"}};
+  const DSIZE = {"16:9": "1920×1080", "9:16": "1080×1920", "1:1": "1080×1080"};
   const drawTiers = () => {
-    const t = [["quality","Quality","1080p · 50 fps","The sharpest detail and the best lip sync."],["fast","Fast","1080p · 25 fps","A quicker test of the cast and the cut."]];
+    const f = RSIZE.quality[b.format] ? b.format : "16:9";
+    const t = [["quality","Quality",RSIZE.quality[f],"50 fps clips: the sharpest detail and the best lip sync."],
+               ["fast","Fast",RSIZE.fast[f],"Smaller 25 fps clips in fewer steps. For checking the cast and the cut; lip sync is weaker."]];
     $("#tiers").innerHTML = t.map(x => { const e = estimate(Object.assign({}, b, {preset:x[0]})); return `<button type="button" class="tier" data-q="${x[0]}" aria-pressed="${b.preset===x[0]}"><span class="t"><span><b>${x[1]}</b><span class="mono muted" style="font-size:12px;margin-left:8px">${x[2]}</span></span><span class="eta">≈ ${mins(e)}</span></span><small>${x[3]}</small></button>`; }).join("");
     $("#tiers").querySelectorAll(".tier").forEach(el => el.onclick = () => { b.preset = el.dataset.q; saveBrief(); drawTiers(); });
     const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song";
-    $("#etanote").textContent = `Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`;
+    $("#etanote").textContent = `Both are upscaled to ${DSIZE[f]}. Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`;
   };
   drawFmt(); drawTiers();
 

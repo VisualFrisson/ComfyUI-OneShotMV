@@ -162,7 +162,7 @@ Some things that help:
 |---|---|---|
 | Length and start | seconds (0 = the whole song); a start time, or auto | 30 s from the strongest stretch |
 | Format | 16:9 (1920×1080), 9:16 (1080×1920), 1:1 (1080×1080) | 16:9 |
-| Quality | quality (clips rendered at 50 fps, 30 first-stage steps), fast (25 fps, 20 steps; for checking the cast and the cut, lip sync is weaker) | quality |
+| Quality | quality (clips at 1280×768 for 16:9, 50 fps, three stages), fast (896×512, 25 fps, two stages with fewer steps; for checking the cast and the cut, lip sync is weaker) | quality |
 | Cuts, per energy level | every 2 bars, every bar, to the music (subtle), to the music (intense) | low: every 2 bars; medium: every bar; high: to the music (subtle) |
 | Audio-reactive FX | none, subtle, intense (per energy level in the Studio) | subtle |
 | Cast order | as written, mixed | as written |
@@ -172,8 +172,9 @@ Some things that help:
 | Seed | any number | 1 |
 | Models | auto, 24gb (fp8), full (bf16, 48 GB+ GPUs) | auto |
 
-Quality and fast render the clips at the same size, and both cut the video at 25 fps and deliver
-it at 1080p. Quality renders the clips at 50 fps, which gives the mouths smoother timing.
+Both are upscaled to 1080p (1920×1080, 1080×1920 or 1080×1080) and cut at 25 fps. Quality renders
+the clips at 50 fps, which gives the mouths smoother timing; 9:16 and 1:1 use the same sizes turned
+or squared (768×1280 and 1024×1024 at quality, 512×896 and 768×768 at fast).
 
 "To the music" cuts on the beat to a new face in the same spot: about every half bar on subtle,
 about every beat on intense.
@@ -243,9 +244,8 @@ takes 5 to 9 minutes from a SATA SSD and about a minute from NVMe.
 The 24 GB time comes from the same card with ComfyUI held to 24 GB (`--reserve-vram 72`, without
 `--highvram`). It is about 1.6 times the full set, and most of the extra time is the lip-sync
 clips: LTX-2.3 fp8 and its LoRAs are larger than 24 GB, so ComfyUI swaps part of them in from
-system RAM on every step (about 2 minutes a clip instead of 45 seconds). The Fast setting saves
-little on a 24 GB card, and in our test about half its first takes barely moved their mouths
-(re-takes fixed few of them), so use Quality for anything you'll show. A real 24 GB card has
+system RAM on every step (about 2 minutes a clip instead of 45 seconds). Fast renders
+smaller clips in fewer steps; use Quality for anything you'll show. A real 24 GB card has
 less compute than the RTX PRO 6000, so expect it to take longer still.
 
 ## What a run leaves behind

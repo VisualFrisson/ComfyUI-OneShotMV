@@ -344,7 +344,7 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
             k = g.add("ImageScale", image=O(im), upscale_method="lanczos", width=w, height=h, crop="center")
             per.append(O(g.add("LTXVPreprocess", image=O(k), img_compression=33)))
         extra.append((per, int(idx), float(st)))
-    ks = key_strengths or ((0.7, 0.75, 0.8) if pr["stages"] == 3 else (0.9, 0.9))
+    ks = key_strengths or pr.get("key_strengths") or ((0.7, 0.75, 0.8) if pr["stages"] == 3 else (0.9, 0.9))
     w1, h1 = sizes[0]
     lat = g.add("EmptyLTXVLatentVideo", width=w1, height=h1, length=frames, batch_size=1)
     lat_ref = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[0], latent=O(lat),
@@ -384,7 +384,8 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     sep = g.add("LTXVSeparateAVLatent", av_latent=O(s))
     crop = g.add("LTXVCropGuides", positive=p_ref, negative=n_ref, latent=O(sep, 0))
     vlat, cpos, cneg = O(crop, 2), O(crop, 0), O(crop, 1)
-    plan = ([("dpmpp_sde", R8_S2), ("dpmpp_2m_sde", R8_S3)] if pr["engine"] == "ltx23_r8"
+    # the upscale stages: LTX-2.3 runs the quality schedule's last (stages - 1) of them
+    plan = ([("dpmpp_sde", R8_S2), ("dpmpp_2m_sde", R8_S3)][-(pr["stages"] - 1):] if pr["engine"] == "ltx23_r8"
             else [("euler_ancestral", D25_S2)])
     for i, (sname, sigs) in enumerate(plan, start=1):
         up = g.add("LTXVLatentUpsampler", samples=vlat, upscale_model=m["ups"], vae=m["vae"])
