@@ -114,6 +114,28 @@ def test_a_creature_is_named_once():
     assert c["who"] == "an ice shard creature formed from jagged, translucent ice fragments, with deep-set eyes"
 
 
+def test_a_creature_line_reads_as_one_creature():
+    """From the first real elemental preview: Gemma's look repeats or swaps the name, and holds the
+    creature to a person's height."""
+    r = theme.rules(ELEMENTS)
+    cs = theme._characters([
+        _char("granite lichen creature", look="a hulking boulder creature of cracked grey granite", kind="creature"),
+        _char("Heather blossom creature", look="tightly packed purple heather flowers, about the height of a man",
+              kind="creature"),
+        _char("moss creature", look="almost as tall as a person, with a back of ferns", kind="creature"),
+        _char("boulder creature", look="hulking boulder creature of cracked grey granite", kind="creature"),
+        _char("granite lichen creature", look="a granite lichen creature, a hulking boulder creature of cracked "
+              "grey granite, with deep-set eyes", kind="creature"),
+        _char("heather blossom creature", look="a Heather blossom creature of purple heather", kind="creature"),
+    ], rules=r)
+    assert [c["who"] for c in cs] == ["a granite lichen creature of cracked grey granite",
+                                      "a heather blossom creature, tightly packed purple heather flowers",
+                                      "a moss creature, with a back of ferns",
+                                      "a hulking boulder creature of cracked grey granite",
+                                      "a granite lichen creature of cracked grey granite, with deep-set eyes",
+                                      "a heather blossom creature of purple heather"]
+
+
 # ------------------------------------------------------------------ a creature World, to the clips
 def test_a_creature_world_stays_creatures_even_when_the_model_writes_people(gemma, monkeypatch):
     asked, st = gemma

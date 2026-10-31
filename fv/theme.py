@@ -466,13 +466,10 @@ def _characters(v, allow_eyewear: bool = False, rules: dict | None = None) -> li
             look = look[:1].lower() + look[1:] if look[:2].istitle() or look[:1].isupper() and look[1:2].islower() else look
             if creatures:  # no gender, age, skin or hair: what it is made of and its face, as written
                 look = ", ".join(x for x in re.split(r",\s*|;\s*", look)  # a person's skin tone or hairdo,
-                                 if x.strip() and not _HUMAN_LOOK.search(x))      # written anyway: the whole clause
+                                 if x.strip() and not _HUMAN_LOOK.search(x)       # written anyway: the whole clause
+                                 and not _PERSON_SIZE.search(x))                  # "about the height of a man"
                 rname = _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role))
-                lk = re.sub(r"(?i)^(?:an?|the)\s+", "", look)
-                if lk.lower().startswith(rname.lower()):  # "an ice shard creature formed from ...": named once
-                    who = f"{_article(lk)} {lk}"
-                else:
-                    who = f"{_article(rname)} {rname}" + (f", {look}" if look else "")
+                who = _creature_who(rname, look)
                 extra = {"role": rname, "kind": "creature", "gender": "",
                          "age": "", "look": look}
             else:
@@ -1185,6 +1182,38 @@ _LOOK_WORDS = re.compile(r"(?i)\b(?:skin|skinned|hair|haired|beard|bearded|moust
 _HUMAN_LOOK = re.compile(r"(?i)\b(?:(?:pale|fair|olive|tan(?:ned)?|dark|deep|light|brown|black|ruddy|rosy|sun-darkened|"
                          r"weathered)\s+(?:skin|complexion)|complexion|hair(?:do|cut|line)?|beards?|bearded|moustaches?|"
                          r"mustaches?|stubble|eyebrows|cheekbones|jawline|weathered face|wrinkled face|build)\b")
+# a creature's size held to a person's: the person comes out in the portrait
+_PERSON_SIZE = re.compile(r"(?i)\b(?:height|tall|size|big|large|small)\b.*\b(?:man|woman|person|human|adults?|child|"
+                          r"people|men|women)\b")
+# a look that starts with a creature's name, "hulking boulder creature of ...": the name, the rest
+_LOOK_HEAD = re.compile(r"(?i)^((?:[\w'-]+\s+){0,4}?creature)\b(.*)$")
+
+
+def _lower_first(x: str) -> str:
+    return x[0].lower() + x[1:] if x[:1].isupper() and x[1:2].islower() else x  # "Heather blossom creature"
+
+
+def _creature_who(rname: str, look: str) -> str:
+    """A creature's who line, named once. The model's look often starts with a name of its own: the
+    role again ("an ice shard creature formed from ice"), the role with an adjective ("hulking
+    boulder creature of granite", kept), or another creature ("a hulking boulder creature" for the
+    granite lichen creature, which then reads as two)."""
+    rname = _lower_first(rname)
+    m = _LOOK_HEAD.match(re.sub(r"(?i)^(?:an?|the)\s+", "", look))
+    if not m:
+        return f"{_article(rname)} {rname}" + (f", {look}" if look else "")
+    head, rest = m.group(1), m.group(2)
+    if rname.lower() not in head.lower():
+        head = rname
+    if re.match(r"(?i)^\s*,\s*(?:an?|the)\s", rest):  # "a granite lichen creature, a hulking boulder creature of"
+        m2 = _LOOK_HEAD.match(re.sub(r"(?i)^\s*,\s*(?:an?|the)\s+", "", rest))
+        rest = m2.group(2) if m2 else rest
+    head = _lower_first(head)
+    rest = rest.rstrip(" ,")
+    rest = rest if rest[:1] in ",;" or not rest else " " + rest.lstrip()
+    return f"{_article(head)} {head}{rest}"
+
+
 _DRESSED = re.compile(r"(?i)\b(?:wears?|wearing|dressed|clothes|clothing|carr(?:y|ies|ying)|holding|cloak|cape|robe|"
                       r"shawl|crown|hat|hood|coat|gown|armou?r|helmet|mask)\b")
 
