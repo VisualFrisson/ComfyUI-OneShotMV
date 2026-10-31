@@ -83,7 +83,10 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     from .critic import check_era
     era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
     for c in out:
-        c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera)
+        creature = (c.get("check") or {}).get("kind") == "creature"
+        c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera, creature=creature)
+        if creature:
+            continue  # no crowd and no period-dressed people behind a creature
         if (c.get("check") or {}).get("crowd"):
             dress = ((pack.get("casting") or {}).get("theme") or {}).get("crowd_dress") or ""
             c["portrait"], c["sing"] = crowd_behind(c["portrait"], era, dress), crowd_behind(c["sing"], era, dress)
@@ -183,6 +186,12 @@ SCENE_ACTIONS = {
              "dancing alone with small loose moves", "pacing slowly", "turning in a slow circle",
              "working with their hands, then looking up", "walking through the scene"],
 }
+# a creature's own kind of movement when the bible gives it none (the people's leaning, sitting and
+# walking would give it arms, legs and a stool)
+CREATURE_ACTIONS = {"medium": ["turning slowly toward the camera", "settling in place as it sings",
+                               "shifting gently with the music", "rising a little on every held note"],
+                    "wide": ["moving slowly through its place", "turning slowly where it is",
+                             "drifting a little closer to the camera", "settling into its place"]}
 SCENE_MOVES = {
     # close moves keep their distance: "very close" / "around the face" make LTX push in until the
     # face fills the frame ("all mouth")
@@ -219,6 +228,11 @@ CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, f
 REALISM_SCENE = ("Unretouched photograph with true-to-life detail: everyday wear and clutter in the surroundings. "
                  + REALISM_CAMERA)
 REAL_PHOTO = "No text, signs or lettering anywhere."
+# a creature World (theme.rules: no people): the brief without skin, hair and the one-adult line,
+# which pulled every creature back into a person
+ONE_CREATURE = "A single creature in frame and nobody else: no people anywhere, not even far away or in reflections."
+REALISM_CREATURE = ("Unretouched photograph with true-to-life detail: real, tactile texture in everything it is made of, "
+                    "small natural imperfections, everyday wear in the surroundings.")
 # one grown adult and nobody else: without it Krea can draw two identical boy-band members in one
 # portrait or photographers in a mirror; and nobody may look like a child
 ONE_ADULT = "A single grown adult in frame and nobody else, no other people in mirrors or reflections."
@@ -254,9 +268,10 @@ def _no_mono(cam: str) -> str:
     return out or cam
 
 
-def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera: str | None = None) -> str:
+def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera: str | None = None,
+                  creature: bool = False) -> str:
     """An image prompt with the realism brief at the end (CLOSE_SKIN too for close-ups); camera: the
-    world's period camera in place of the modern look."""
+    world's period camera in place of the modern look; creature: a creature's brief (no skin or hair)."""
     p = _OLD_TAIL.sub("", prompt)
     p = re.sub(r"\s*,\s*,", ",", p)
     p = re.sub(r"\s+([,.])", r"\1", p)
@@ -267,6 +282,8 @@ def finish_prompt(prompt: str, size: str = "close", people: bool = True, camera:
     cam = _camera_part(camera)
     if not people:
         return " ".join(f"{p} {REALISM_SCENE.replace(REALISM_CAMERA, cam)}".split())
+    if creature:
+        return " ".join(f"{p} {ONE_CREATURE} {REALISM_CREATURE} {cam}".split())
     tail = ONE_ADULT + " " + REALISM_PERSON + " " + cam + (" " + CLOSE_SKIN if size == "close" else "")
     return " ".join(f"{p} {tail}".split())
 
@@ -316,6 +333,21 @@ def edit_realism(close: bool = True) -> str:
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
                   + REAL_PHOTO)
+# a creature sings with whatever mouth it has: no lips, jaw or breathing, it opens on the voice
+CREATURE_SCENE = ("{shot} {lens} of {who}, {action}, singing toward the camera with its mouth open mid-note, "
+                  "{attitude}. {wear}Setting: {place}. {light}. An invented creature, the only one in frame, and no "
+                  "people anywhere. " + REAL_PHOTO)
+CREATURE_VOICE = ("singing: its mouth opens on every sung phrase, wider on louder notes, and closes in the silences, "
+                  "while the rest of it stays itself and moves gently with the music.")
+CREATURE_MOVES = {  # SCENE_MOVES without head-and-shoulders, waist-up and "them"
+    "close": ["The handheld camera sways gently at the same distance.",
+              "The camera drifts slowly sideways, keeping its distance.", "The camera holds steady at the same distance."],
+    "medium": ["The camera tracks slowly alongside.", "The camera holds at the same distance.",
+               "The handheld camera sways with the rhythm.", "The camera arcs slowly around it."],
+    "wide": ["The camera follows from a few meters away.", "The camera pushes in slowly from far away.",
+             "The camera arcs slowly around it.", "The camera holds still on a tripod."]}
+CREATURE_SCENE_SING = {"medium": "Medium shot of {who} {action}, " + CREATURE_VOICE + " {move} No people in frame.",
+                       "wide": "Wide shot of {who} {action}, " + CREATURE_VOICE + " {move} No people in frame."}
 SCENE_SING = {
     "medium": "Medium shot of {who} {action}, " + NAT_MED + " {move} No one else in frame.",
     "wide": "Wide shot of {who} {action}, singing along, the lips forming the words, moving freely with the "
@@ -324,17 +356,17 @@ SCENE_SING = {
 
 
 def _scene_shot(rng, used, size: str, who: str, short: str, place: str, light: str, wear: str = "",
-                actions: dict | None = None, attitude: str = "") -> tuple[str, str]:
+                actions: dict | None = None, attitude: str = "", creature: bool = False) -> tuple[str, str]:
     """(portrait prompt, singing prompt) for an in-scene medium or wide shot."""
     acts = (actions or SCENE_ACTIONS).get(size) or SCENE_ACTIONS[size]
     action = _pick(rng, acts, used, "scene_action_" + size)
     shot, lens = SCENE_SHOT[size]
     light = light[:1].upper() + light[1:] if light else "Natural light"
-    portrait = SCENE_PORTRAIT.format(shot=shot, lens=lens, who=who, action=action, place=place, light=light,
-                                     wear=("Wearing " + wear + ". ") if wear else "",
-                                     attitude=attitude or ATTITUDE)
-    move = _pick(rng, SCENE_MOVES[size], used, "scene_move_" + size)
-    sing = SCENE_SING[size].format(who=short, action=action, move=move)
+    portrait = (CREATURE_SCENE if creature else SCENE_PORTRAIT).format(
+        shot=shot, lens=lens, who=who, action=action, place=place, light=light,
+        wear=("Wearing " + wear + ". ") if wear else "", attitude=attitude or ATTITUDE)
+    move = _pick(rng, (CREATURE_MOVES if creature else SCENE_MOVES)[size], used, "scene_move_" + size)
+    sing = (CREATURE_SCENE_SING if creature else SCENE_SING)[size].format(who=short, action=action, move=move)
     return " ".join(portrait.split()), " ".join((sing[0].upper() + sing[1:]).split())
 
 
@@ -384,6 +416,16 @@ THEME_CLOSE_FRAME = {"shot": "Head-and-shoulders portrait",
 # singer bent toward the lens, unnaturally leaned forward. An A/B at the same seeds: dropping the
 # close-up skin line changed nothing; eye level and a face-only pose fixed it.
 THEME_ANGLES = ["eye level", "a three-quarter angle", "eye level, a little off to one side"]
+CREATURE_CLOSE = ("{shot} of {who}, {attitude}, singing straight into the lens with its mouth open mid-note, shot from "
+                  "{angle} {lens}. {wear}{light}. Background: {place}. An invented creature, the only one in frame, and "
+                  "no people anywhere. " + REAL_PHOTO)
+CREATURE_CLOSE_SING = ("Close shot of {who} " + CREATURE_VOICE + " {move} It stays in the middle of the frame at the same "
+                       "size and never moves in closer. No people in frame.")
+# its face at eye level in the middle of the frame (the same place in every close-up, as the drop's
+# face-matched cuts want for people)
+CREATURE_FRAME = {"shot": "Close portrait",
+                  "lens": "from about one and a half metres away on a 50mm lens, its face at eye level in the middle of "
+                          "the frame with clear space around it"}
 # poses that need the body or hands, which a head-and-shoulders frame can only fit by bending the person
 _BODY_POSE = re.compile(r"(?i)\b(hands?|fingers?|fists?|hips?|arms?|elbows?|knees?|lean(?:s|ing)?|point(?:s|ing)?|cross(?:es|ing|ed)?|"
                         r"pos(?:e|es|ing)|stance|bend(?:s|ing)?|bent|crouch(?:ing)?|kneel(?:ing)?|squat(?:ting)?|"
@@ -623,7 +665,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
     from .theme import crowd_world
     mode = c.get("crowd_mode") or "auto"
     crowd = crowd_world(th.get("theme", "")) if mode == "auto" else mode == "on"
-    chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and ch.get("wear")]
+    chars = [ch for ch in (th.get("characters") or []) if ch.get("who") and (ch.get("wear") or ch.get("kind") == "creature")]
     unique = bool(c.get("unique")) and bool(chars)
     story = None
     if unique and c.get("story", True):
@@ -675,6 +717,7 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
         light = own or _pick(rng, _lights_for(lights_at(th["light"], tod), place, tod), used, "light")
         light = at_hour(light, place, tod)
         short = _short_who(who)
+        creature = bool(chars) and ch.get("kind") == "creature"
         scene = size == "wide" or (size == "medium" and rng.random() < 0.5)
         # the theme's own poses, in its tone (fun, but a real photograph); portraits take the
         # face-only ones (_BODY_POSE)
@@ -690,13 +733,23 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             attitude = _pick(rng, poses, used, "pose" if scene else "pose_close")
         attitude = attitude[:1].lower() + attitude[1:]
         own_acts = acts
-        if chars and ch.get("doing"):
+        if creature:  # its own movement in every shot, never the people's
+            own_acts = {k: [ch["doing"]] if ch.get("doing") else v for k, v in CREATURE_ACTIONS.items()}
+        elif chars and ch.get("doing"):
             # in front of a crowd the character's own action for medium shots too: the generic
             # "leaning in a doorway" puts a champion gladiator in a doorway off the sand
             own_acts = {"medium": [ch["doing"]] if crowd else acts["medium"], "wide": [ch["doing"]]}
         if scene:
             portrait, sing = _scene_shot(rng, used, size, who, short, _place_noun(place), light, wear, own_acts,
-                                         attitude=attitude)
+                                         attitude=attitude, creature=creature)
+        elif creature:
+            portrait = CREATURE_CLOSE.format(shot=CREATURE_FRAME["shot"], lens=CREATURE_FRAME["lens"], who=who,
+                                             attitude=attitude, wear=("Wearing " + wear + ". ") if wear else "",
+                                             angle=DROP_ANGLE if drop else "eye level",
+                                             light=light[:1].upper() + light[1:], place=_place_noun(place))
+            move = "The camera holds steady at the same distance." if drop else \
+                _pick(rng, CREATURE_MOVES["close" if size == "close" else "medium"], used, "move")
+            sing = CREATURE_CLOSE_SING.format(who=short, move=move)
         else:
             f = DROP_FRAME if drop else THEME_CLOSE_FRAME if size == "close" else (fr.get(size) or DEFAULT_FRAMING["close"])
             upright = "" if re.search(r"(?i)\bstand", attitude) else "standing upright, "  # not "standing upright, standing rigidly"
@@ -718,6 +771,8 @@ def _cast_theme(c: dict, n: int, seed: int, sizes: list[str], leads: list[int] |
             entry["check"] = {"role": ch.get("role") or short, "gender": ch.get("gender", ""), "age": ch.get("age", ""),
                               "look": ch.get("look", ""), "wear": wear, "eyewear": bool(ch.get("eyewear")),
                               "place": _place_noun(place)}
+            if creature:
+                entry["check"]["kind"] = "creature"
             if crowd:
                 entry["check"]["crowd"] = True
         if ci is not None:
