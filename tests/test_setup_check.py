@@ -141,6 +141,16 @@ def test_a_cut_with_no_singing_clips_says_why_instead_of_cutting(monkeypatch):
     assert "None of the" in str(e.value) and "nothing to cut" in str(e.value)
 
 
+def test_krea_raw_keeps_its_lora_backups_in_ram(monkeypatch):
+    """Oct 31: the full set's RAW pass ran at 150-300 s a step under --highvram (the LoRA's weight
+    backups filled the card); LTX already had Weight Backups to RAM, the stills didn't."""
+    fc.install(monkeypatch)
+    graphs.use_models("full")
+    g = graphs.krea2_portrait(prompt="p", seed=1, prefix="t/p000", size1=(1024, 576), size2=(1600, 900)).nodes
+    lora = next(n for n in g.values() if n["class_type"] == "LoraLoaderModelOnly")
+    assert g[str(lora["inputs"]["model"][0])]["class_type"] == "FVOffloadToCPU"
+
+
 # ------------------------------------------------------------------ the Studio
 @pytest.fixture
 def studio(monkeypatch):

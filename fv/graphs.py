@@ -333,7 +333,10 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_on
         lora = turbo
     else:
         raw = g.add("UNETLoader", unet_name=M["krea_raw"], weight_dtype="default")
-        lora = g.add("LoraLoaderModelOnly", model=O(raw), lora_name=M["krea_turbo_lora"], strength_model=0.6)
+        # with --highvram the LoRA's weight backups stay on the GPU: Turbo + RAW + its backup + the
+        # text encoder came to 89 GB on a 96 GB card and the RAW pass ran at 150-300 s a step (Oct 31)
+        lora = g.add("LoraLoaderModelOnly", model=_ram_backups(g, O(raw)), lora_name=M["krea_turbo_lora"],
+                     strength_model=0.6)
     clip = g.add("CLIPLoader", clip_name=M["krea_te"], type="krea2", device="default")
     vae = g.add("VAELoader", vae_name=M["krea_vae"])
     pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
