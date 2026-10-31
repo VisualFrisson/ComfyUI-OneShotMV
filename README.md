@@ -33,7 +33,7 @@ Everything runs locally in ComfyUI on open-weights models.
 | | Who it's for | What it is |
 |---|---|---|
 | The Studio (recommended) | Everyone | An app inside ComfyUI: the brief, the plan, live rendering, the result, post processing and re-shoots. |
-| The ComfyUI workflow | People who build in ComfyUI | The Director node with every setting, or the same run in ComfyUI's App mode. |
+| The ComfyUI workflow | People who build in ComfyUI | The Director node: a song, a World and the same settings the Studio has, also in ComfyUI's App mode. |
 | The Comfy SDK | Scripts and automation | `run_sdk.bat` or `sdk_run.py`: one command takes a song and a World line to an MP4. |
 
 All three drive the same nodes, and every run shows up in the Studio under Your videos.
@@ -82,15 +82,13 @@ simulated there in seconds, and nothing is sent to ComfyUI.
 Open an example from Templates in the left sidebar, under Extensions, ComfyUI-OneShotMV. You can
 also drag a file from `example_workflows/` onto the canvas.
 
+- `OneShotMV.json` is the Director: a song and a World line, then the Studio's settings.
 - `OneShotMV_App.json` opens in ComfyUI's App mode: a song, a World line and a few settings, then
   Run. App / Graph at the top left shows the graph behind it.
-- `OneShotMV_Voice.json` is the Director with every setting.
 - `OneShotMV_Recut.json` cuts a finished run again with other FX or without the finish.
-- `OneShotMV_Motion.json` is the experimental motion mode (one dance, many dancers). It needs the
-  extra models listed under "Models that only other packs and modes use".
 
-Turn `queue_renders` off and run once to see the plan in the summary without rendering anything.
-Then turn it on and run again; the song analysis and the World are cached, so the second run
+Turn `preview_only` on and run once to see the plan in the summary without rendering anything.
+Then turn it off and run again; the song analysis and the World are cached, so the second run
 starts faster. The Director queues every job itself, and the video lands in
 `output/oneshot-mv/runs/<run>/final_<format>.mp4`.
 
@@ -125,7 +123,7 @@ python sdk_run.py --song track.wav --format 9:16 --fx intense --cuts-high "to th
 python sdk_run.py --recut "<run folder>" --fx none
 ```
 
-`python sdk_run.py --help` lists every option: length and start, format, preset, seed, FX, the
+`python sdk_run.py --help` lists every option: length and start, format, quality, seed, FX, the
 cut for each energy level, cast order, crowd, b-roll share, take-check rounds and the model set. `--preview`
 prints the plan without rendering. To use another deployment that has the OneShot MV nodes, set
 `COMFY_BASE_URL`, and `COMFY_API_KEY` if it needs one.

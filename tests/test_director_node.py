@@ -64,6 +64,33 @@ def test_the_sdk_graph_sends_what_the_node_has(node):
     assert set(req) <= set(d) and set(d) <= set(req + opt)
 
 
+@pytest.mark.parametrize("name", ["OneShotMV.json", "OneShotMV_App.json"])
+def test_the_example_workflows_fit_the_node(node, name):
+    """A saved workflow stores the node's widget values by position; a value in the wrong place
+    loads as the wrong setting (or fails validation)."""
+    w = json.load(open(os.path.join(ROOT, "example_workflows", name), encoding="utf-8"))
+    d = next(n for n in w["nodes"] if n["type"] == "FVDirector")
+    it = node.INPUT_TYPES()
+    specs = [(k, v) for part in ("required", "optional") for k, v in it[part].items()
+             if isinstance(v[0], list) or v[0] in ("STRING", "FLOAT", "INT", "BOOLEAN")]
+    vals = list(d["widgets_values"])
+    for k, spec in specs:
+        v = vals.pop(0)
+        if isinstance(spec[0], list):
+            assert v in spec[0], (k, v)
+        else:
+            assert isinstance(v, {"STRING": str, "FLOAT": (int, float), "INT": int, "BOOLEAN": bool}[spec[0]]), (k, v)
+        if k == "seed":
+            assert vals.pop(0) in ("fixed", "increment", "decrement", "randomize")
+    assert vals == []
+    assert {n["type"] for n in w["nodes"]} <= {"MarkdownNote", "LoadAudio", "FVDirector", "PreviewAny"}
+
+
+def test_no_motion_workflow():
+    assert sorted(os.listdir(os.path.join(ROOT, "example_workflows"))) == [
+        "OneShotMV.json", "OneShotMV_App.json", "OneShotMV_Recut.json"]
+
+
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself
     sys.exit(pytest.main([__file__, "-q", f"--confcutdir={HERE}", f"--rootdir={HERE}", "--import-mode=importlib",
                           "-p", "no:cacheprovider"]))
