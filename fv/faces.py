@@ -23,6 +23,8 @@ def _cascade():
         try:
             _CASCADE = cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades,
                                                           "haarcascade_frontalface_default.xml"))
+            if _CASCADE.empty():  # the file isn't there: an empty classifier fails on first use
+                _CASCADE = False
         except Exception:
             _CASCADE = False
     return _CASCADE
@@ -134,6 +136,20 @@ def track(path: str, every: int = 3, size: int = 320) -> dict | None:
                 u = (i - a) / (c - a)
                 boxes[i] = [round(boxes[a][j] * (1 - u) + boxes[c][j] * u, 4) for j in range(3)]
     return {"fps": fps, "n": k, "every": every, "boxes": boxes}
+
+
+def why_no_tracks(run_dir: str, renders: list[dict]) -> str:
+    """Why tracks_for_run found nothing, in one line. OpenCV only gets the blame when it really has no
+    face detector: in a run whose clips all failed, that hint sent a user off to reinstall OpenCV."""
+    clips = [r for r in renders if os.path.exists(os.path.join(run_dir, os.path.basename(
+        str(r.get("path", "")).replace("\\", "/")))) and r.get("path")]
+    if not clips:
+        return "no clips rendered to look for faces in."
+    if not method():
+        return ("no face detector is available: the SyncNet weights (with their S3FD detector) aren't "
+                "installed and this OpenCV build has no face cascades (OpenCV 5 dropped them). Installing the "
+                "SyncNet weights fixes it; so does pip install \"opencv-python<5\".")
+    return f"no faces were found in the {len(clips)} rendered clips."
 
 
 def tracks_for_run(run_dir: str, renders: list[dict], log=None) -> dict:

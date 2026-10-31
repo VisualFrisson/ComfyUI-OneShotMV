@@ -277,6 +277,11 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
   other set.
 - The lip-sync or framing checks were skipped: their weights aren't installed (Install, step 4).
   The video is still made.
+- "Flashes will not be face-aligned": the console says why. "No face detector is available"
+  means the SyncNet weights (Install, step 4) aren't installed and your OpenCV is version 5,
+  which has no face files: install the weights, or `pip install "opencv-python<5"`. "No clips
+  rendered" means the clips failed for another reason (the first error in the console), not
+  OpenCV.
 - A run stopped partway, or jobs failed while it renders: the Studio's Rendering screen shows the
   last error, and the ComfyUI console has all of it. Clips that didn't render are re-shot by the
   take check; if none of the singing clips rendered, the cut stops and says so. Runs queued

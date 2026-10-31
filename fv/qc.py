@@ -129,6 +129,8 @@ def _faces(gray):
     if _CASCADE is None:
         try:
             _CASCADE = cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml"))
+            if _CASCADE.empty():  # OpenCV 5 ships no cascade files: the classifier is empty and throws on use,
+                _CASCADE = False  # which failed the whole take check (sync, frozen, cuts) for every clip
         except Exception:  # OpenCV builds without the cascade module: skip the mouth check
             _CASCADE = False
     if _CASCADE is False:
