@@ -1,26 +1,21 @@
-"""OneShot MV planners: song timeline + style pack -> renders + edit decision list.
+"""OneShot MV planner: song timeline + style pack -> renders + edit decision list.
 
-Voice mode
   * The song is cut into shots on bar lines: `shot_bars_loud` bars in loud sections,
     `shot_bars_quiet` in quiet ones (the reference AI edit: 2 bars loud, 1 bar quiet).
   * Every shot gets a new performer (A) lip-synced to that stretch of the vocal stem.
   * In loud sections a pose-matched twin (B: same pose, same vocals, new person) is rendered
     too, and the edit flashes to B on every `insert_every_beats`-th beat for a few frames,
     ghosting back to A. With probability `pingpong` the shot's second half switches to B.
-Motion mode
-  * Delegates the cut pattern to dsplan (a new character every N beats); each segment is a
-    pose-guided render of the dance clip from a character keyframe.
 
 Times in the plan are seconds relative to the window start; `song_t0` maps back to the song."""
 from __future__ import annotations
 
-import math
 import os
 import random
 
 import numpy as np
 
-from . import beat, dsplan, formats
+from . import beat, formats
 
 
 def _sections_with_loudness(w: dict, thr: float) -> list[dict]:
@@ -590,100 +585,3 @@ def _match_insert(fz, faces, by_id, lead, tf, shot, same, has_b, delay, ed, rng)
     else:
         c = rng.choice(others) if others else twins[0]
     return c[1], c[2], fz.align(lf, c[3])
-
-
-def plan_motion(tl: dict, pack: dict, *, clip_frames: int, clip_fps: float, fmt: str = "16:9",
-                preset: str = "quality", seconds: float = 16.0, start: float = -1.0,
-                seed: int = 1, switch_every: str | None = None, clip_offset_s: float = 0.0,
-                pad: float = 0.12, out_fps: float = 24.0) -> dict:
-    """A new character every `switch_every`; each segment is its own pose-guided render that
-    starts on the cut, so every cut is pose-aligned (a match cut)."""
-    ed = pack["edit"]
-    switch_every = switch_every or ed.get("switch_every", "2 beats")
-    n_cast = len(pack["casting"]["cast"])
-    looks = [f"c{i:02d}" for i in range(n_cast)]
-    rng = random.Random(seed)
-    rng.shuffle(looks)
-    clip_offset = int(round(clip_offset_s * clip_fps))
-    p = dsplan.plan_dropshift(tl, clip_frames=clip_frames, fps=clip_fps, looks=looks,
-                              max_seconds=seconds, song_start=start, mode="every-n-bars",
-                              switch_every=switch_every, render_mode="segments",
-                              clip_offset=clip_offset)
-    t0, t1 = p["window"]
-    w = p["timeline"]
-    secs = _sections_with_loudness(w, ed.get("loud_threshold", 0.6))
-    rfps = formats.PRESETS[preset]["fps"]
-    renders = []
-    for r in p["renders"]:
-        ts = r["f0"] / clip_fps
-        dur = (r["f1"] - r["f0"]) / clip_fps
-        renders.append({"id": r["id"], "role": "M", "performer": int(r["look"][1:]),
-                        "t_start": round(ts, 4), "src_start": round(r["src_f0"] / clip_fps, 4),
-                        "frames": formats.ltx_frames(dur + pad, rfps), "fps": rfps})
-    shots = []
-    phase = dsplan.section_phase(w, ed.get("build_bars", 4))
-    for s in p["segments"]:
-        f0 = int(round(s["f0"] / clip_fps * out_fps))
-        f1 = int(round(s["f1"] / clip_fps * out_fps))
-        if f1 <= f0:
-            continue
-        shots.append({"index": len(shots), "t0": round(f0 / out_fps, 4), "t1": round(f1 / out_fps, 4),
-                      "loud": _loud_at(secs, f0 / out_fps + 0.01), "A": s.get("render"),
-                      "phase": phase(f0 / out_fps + 0.01)})
-    # motion twins: the same stretch of the dance rendered as a second character, so the fast
-    # flicker inserts are pose-perfect match cuts
-    mt = ed.get("motion_twins", "off")
-    if mt in ("loud", "all", "drop"):
-        by_id = {r["id"]: r for r in renders}
-        for sh in shots:
-            a = by_id.get(sh["A"])
-            if a is None or (mt == "loud" and not sh["loud"]) or (mt == "drop" and sh["phase"] != "drop"):
-                continue
-            other = (a["performer"] + max(1, n_cast // 2) + sh["index"] % 3) % n_cast
-            b = dict(a, id=len(renders), role="MB", performer=other, twin_of=a["id"])
-            renders.append(b)
-            sh["B"] = b["id"]
-    beats = sorted(set(round(b, 4) for b in w["beats"] if 0 <= b < t1 - t0))
-    edl = motion_edl(shots, beats, ed, out_fps, seed)
-    return {"version": 1, "mode": "motion", "pack": pack["name"], "format": fmt, "preset": preset,
-            "seed": seed, "song_t0": t0, "song_t1": t1, "duration": round(t1 - t0, 4),
-            "out_fps": out_fps, "render_fps": rfps, "clip_fps": clip_fps, "tempo": w["tempo"],
-            "timeline": w, "sections": secs, "shots": shots, "renders": renders, "edl": edl,
-            "switch_every": switch_every, "performers": n_cast}
-
-
-def motion_edl(shots: list[dict], beats: list[float], ed: dict, out_fps: float, seed: int,
-               renders: list[dict] | None = None) -> list[dict]:
-    """Motion cut: each segment plays its character; segments with a twin flicker to it on
-    beats and off-beats (3-4 frames, then a short ghost back). Same dance, same moment, so
-    every flicker is a match cut."""
-    rng = random.Random(seed * 104729 + 11)
-    bad = {r["id"] for r in renders or [] if r.get("unusable")}  # twins QC could not save
-    fr = ed.get("insert_frames", [3, 4])
-    lo, hi = (fr, fr) if isinstance(fr, (int, float)) else (int(fr[0]), int(fr[1]))
-    ghost_n = int(ed.get("ghost_frames", 2))
-    beat_len = (beats[1] - beats[0]) if len(beats) > 1 else 0.5
-    edl = []
-    for s in shots:
-        f0, f1 = int(round(s["t0"] * out_fps)), int(round(s["t1"] * out_fps))
-        edl.append({"f0": f0, "f1": f1, "render": s["A"], "kind": "main"})
-        if "B" not in s or s["B"] in bad:
-            continue
-        slots = []
-        for b in beats:
-            if s["t0"] + 0.1 < b < s["t1"] - 0.12 and rng.random() < ed.get("insert_on_beat", 0.6):
-                slots.append(b)
-            ob = b + beat_len / 2
-            if s["t0"] + 0.1 < ob < s["t1"] - 0.12 and rng.random() < ed.get("insert_off_beat", 0.3):
-                slots.append(ob)
-        last = f0 + 2
-        for t in sorted(slots):
-            fb = int(round(t * out_fps))
-            n = rng.randint(lo, hi)
-            if fb < last or fb + n > f1 - 1:
-                continue
-            edl.append({"f0": fb, "f1": fb + n, "render": s["B"], "kind": "insert"})
-            g1 = min(f1, fb + n + ghost_n)
-            edl.append({"f0": fb + n, "f1": g1, "render": s["A"], "kind": "ghost", "from": s["B"]})
-            last = g1
-    return edl

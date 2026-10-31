@@ -12,7 +12,7 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, pose, qc, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, qc, stems
 from .fv import setup_check
 from .fv import theme as fv_theme
 from .fv import broll as fv_broll
@@ -20,7 +20,7 @@ from .fv import identity as fv_identity
 from .fv import critic as fv_critic
 
 CATEGORY = "OneShot MV"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, setup_check, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, formats, casting, faces, plan, graphs, setup_check, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():
@@ -71,21 +71,6 @@ def _save_image_input(image) -> str:
     return path
 
 
-def _video_input_path(video) -> str:
-    """VIDEO input -> a file path the render graphs can read."""
-    try:
-        src = video.get_stream_source()
-        if isinstance(src, str) and os.path.exists(src):
-            return src
-    except Exception:
-        pass
-    import time
-    path = os.path.join(_inputs_dir(), f"dance_{int(time.time())}.mp4")
-    video.save_to(path)
-    return path
-
-
-# ------------------------------------------------------------------ loaders
 class FVLoadImagePath:
     """Load an image from a path. Unlike Load Image it does not check the file when the job is
     queued, so it can read a file an earlier job in the same queue will write."""
@@ -512,20 +497,20 @@ class FVFaceMatch:
 
 class FVFinish:
     """The OneShot MV finish on any frames: learned grade, diffusion, halation, contrast,
-    gate vignette, grain (settings from a style pack)."""
+    gate vignette, grain (the settings every run uses)."""
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"images": ("IMAGE",), "pack": (casting.list_packs(), {"default": "crowd"}),
+        return {"required": {"images": ("IMAGE",),
                              "amount": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05})}}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "run"
     CATEGORY = CATEGORY
 
-    def run(self, images, pack, amount):
+    def run(self, images, amount):
         _reload()
-        pk = casting.load_pack(pack)
+        pk = casting.load_pack("crowd")
         dev = images.device if images.is_cuda else ("cuda" if torch.cuda.is_available() else "cpu")
         frames = [images[i].to(dev) for i in range(images.shape[0])]
         fin = finish.Finisher(pk["finish"], finish.lab_stats(frames[:: max(1, len(frames) // 16)]))
@@ -551,89 +536,6 @@ class FVOffloadToCPU:
         m = model.clone()
         m.offload_device = torch.device("cpu")
         return (m,)
-
-
-class FVLeadPose:
-    """Keeps only the lead dancer in a DWPose guide. DWPose draws everyone it finds (backup
-    dancers, people at the back), and LTX's pose guide turns every skeleton into a person. This
-    follows the tallest, most central person and redraws that one pose in DWPose's own style.
-    Frames with a single person pass through unchanged."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "run"
-    CATEGORY = CATEGORY + "/io"
-
-    def run(self, pose_keypoint, image):
-        import cv2
-        _reload()
-        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
-        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
-                                                     if isinstance(f, dict)):
-            return (image,)
-        try:
-            from custom_controlnet_aux.dwpose import decode_json_as_poses, draw_poses
-        except Exception as e:  # controlnet_aux layout changed: leave the guide as it is
-            print(f"[OneShotMV] lead pose unavailable ({e}); guide unchanged")
-            return (image,)
-        src = pose.pick_lead(frames)
-        H_out, W_out = int(image.shape[1]), int(image.shape[2])
-        out = []
-        for k, (fr, s) in enumerate(zip(frames, src)):
-            if not isinstance(fr, dict) or len(fr.get("people") or []) <= 1 and s == (k, 0):
-                out.append(image[k])
-                continue
-            poses, _, H, W = decode_json_as_poses(pose.only(frames, s))
-            canvas = draw_poses(poses, int(H), int(W), draw_body=True, draw_hand=True, draw_face=True)
-            interp = cv2.INTER_CUBIC if W_out > W else cv2.INTER_AREA
-            canvas = cv2.resize(canvas, (W_out, H_out), interpolation=interp)
-            out.append(torch.from_numpy(canvas.astype(np.float32) / 255.0).to(image.device))
-        n_multi = sum(1 for f in frames if isinstance(f, dict) and len(f.get("people") or []) > 1)
-        print(f"[OneShotMV] lead pose: {n_multi}/{len(frames)} frames had extra people")
-        return (torch.stack(out).to(image.dtype),)
-
-
-class FVLeadMask:
-    """Greys out everything but the lead dancer in source frames, so an image edit (the motion
-    keyframes) sees one person: backup dancers otherwise come along into the new scene."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "run"
-    CATEGORY = CATEGORY + "/io"
-
-    def run(self, pose_keypoint, image):
-        import cv2
-        _reload()
-        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
-        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
-                                                     if isinstance(f, dict)):
-            return (image,)
-        src = pose.pick_lead(frames)
-        B, H, W = int(image.shape[0]), int(image.shape[1]), int(image.shape[2])
-        out = image.clone()
-        for k, s in enumerate(src):
-            if s is None:
-                continue
-            fr = pose.only(frames, s)
-            box = pose.person_box(fr["people"][0], float(fr.get("canvas_width") or W),
-                                  float(fr.get("canvas_height") or H)) if fr["people"] else None
-            if box is None:
-                continue
-            m = np.zeros((H, W), np.float32)
-            x0, y0, x1, y1 = int(box[0] * W), int(box[1] * H), int(np.ceil(box[2] * W)), int(np.ceil(box[3] * H))
-            m[y0:y1, x0:x1] = 1.0
-            r = max(3, int(0.03 * max(H, W))) | 1
-            m = cv2.GaussianBlur(m, (r * 2 + 1, r * 2 + 1), 0)
-            mt = torch.from_numpy(m).to(image.device, image.dtype)[..., None]
-            out[k] = image[k] * mt + 0.5 * (1 - mt)
-        return (out,)
 
 
 class FVFreeMemory:
@@ -748,8 +650,6 @@ NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVKeep": FVKeep,
     "FVOffloadToCPU": FVOffloadToCPU,
-    "FVLeadPose": FVLeadPose,
-    "FVLeadMask": FVLeadMask,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVRunResult": FVRunResult,
@@ -768,8 +668,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVFreeMemory": "OneShot MV: Free Memory",
     "FVKeep": "OneShot MV: Keep Models Loaded",
     "FVOffloadToCPU": "OneShot MV: Weight Backups to RAM",
-    "FVLeadPose": "OneShot MV: Lead Dancer Pose",
-    "FVLeadMask": "OneShot MV: Lead Dancer Only",
     "FVAssemble": "OneShot MV: Assemble",
     "FVRunResult": "OneShot MV: Run Result",
     "FVFinish": "OneShot MV: Finish",

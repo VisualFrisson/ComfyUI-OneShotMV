@@ -1,7 +1,7 @@
 """Output formats and render presets.
 
 LTX latents are 1/32 of the pixel size and the multi-stage pipeline upsamples the latent x2
-per stage. The union-control IC-LoRA (pose guides for twins and motion) encodes its guide at
+per stage. The union-control IC-LoRA (pose guides for twins) encodes its guide at
 half the stage-1 size, so the stage-1 size must be a multiple of 64 (an odd stage-1 latent
 crashes the guide encode). Render sizes are therefore a touch wider than the exact aspect;
 the assembler centre-crops to the delivery aspect before scaling.
@@ -39,9 +39,9 @@ PRESETS = {
 PRESET_NAMES = ["quality", "fast"]  # what users pick; fast_voice is chosen for voice + fast
 
 
-def effective_preset(mode: str, preset: str) -> str:
-    """Singing shots always use the quality model (fast_voice), motion keeps LTX-2.5 at fast."""
-    return "fast_voice" if (mode == "voice" and preset == "fast") else preset
+def effective_preset(preset: str) -> str:
+    """Singing shots always use the quality model: fast is fast_voice (LTX-2.3, smaller, fewer steps)."""
+    return "fast_voice" if preset == "fast" else preset
 
 
 def render_size(fmt: str, preset: str) -> tuple[int, int]:

@@ -321,12 +321,11 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 | OneShot MV: Finish | Applies the finish (grade, grain, vignette) to any frames. |
 | OneShot MV: Keep Models Loaded, Weight Backups to RAM, Free Memory | Memory helpers for the Director's jobs. |
 | OneShot MV: Load Image / Video / Audio (path) | Loaders for the Director's jobs. |
-| OneShot MV: Face Match, Lead Dancer Pose, Lead Dancer Only | Older experiments: one-artist looks and motion mode. |
+| OneShot MV: Face Match | Puts a look's face where its lead's face is (for one-singer looks). |
 
-The style packs live in `fv/packs/`, one JSON file each, holding the casting rules, the edit and
-the effects. `crowd` (the default) puts a different stranger on every line, close and to camera.
-`eras` casts people from every era, and `artist` puts one singer from one photo in a new look in
-every shot. The dance-driven motion packs (`spotlight`, `wardrobe`) are experimental.
+`fv/packs/crowd.json` holds the casting rules, the edit and the effects every run uses.
+`fv/packs/artist.json` is the start of Single Artist (one singer from a photo), which is being
+rebuilt and isn't in the Director node yet.
 
 ## Models and licences
 
@@ -353,7 +352,7 @@ pass. Both use the same LTX LoRAs, upscaler and VAE.
 
 In all, the 24 GB set is about 73 GB to download and the full set about 144 GB.
 
-A default run (voice mode, `crowd` pack) uses:
+Every run uses:
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
@@ -371,15 +370,14 @@ The optional checks (Install, step 4):
 | SyncNet v2 and the S3FD face detector | Lip-sync scores and each take's sync offset | Research use under CC-BY (Oxford VGG); no licence stated for S3FD | [VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/) |
 | insightface buffalo_l (`det_10g`, `w600k_r50`) | Framing and identity checks | Non-commercial research use only | [insightface model zoo](https://github.com/deepinsight/insightface/tree/master/model_zoo) |
 
-Models that only other packs and modes use (a default run never loads them):
+Not used by any run in this version. Single Artist, which is being rebuilt, will use some of them:
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
-| FLUX.2 [klein] 9B fp8, its Qwen3 8B text encoder and the FLUX.2 small-decoder VAE | Look keyframes in the `eras` and `artist` packs; motion mode | FLUX Non-Commercial License (outputs may be used commercially); the VAE is Apache-2.0 | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8), [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B), [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder) |
-| LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks; motion mode | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
-| DWPose and YOLOX-L (TorchScript) | Pose guides for looks and motion mode | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), which these packs and modes also need |
-| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | Portraits in the `artist` pack | Check the licence on the model page before commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
-| LTX-2.5 22B distilled, its VAEs, upscaler and Gemma 4 text encoder | Motion mode at the `fast` preset | LTX-2.x Community License | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) |
+| FLUX.2 [klein] 9B fp8, its Qwen3 8B text encoder and the FLUX.2 small-decoder VAE | One-singer look keyframes | FLUX Non-Commercial License (outputs may be used commercially); the VAE is Apache-2.0 | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8), [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B), [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder) |
+| LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
+| DWPose and YOLOX-L (TorchScript) | Pose guides for looks | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), which looks also need |
+| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | One-singer portraits from a photo | Check the licence on the model page before commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 
 File names are set in `fv/models.json` and `fv/models_full.json`.
 

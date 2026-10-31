@@ -10,17 +10,17 @@ import re
 PACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "packs")
 
 
-def list_packs(mode: str | None = None) -> list[str]:
-    out = []
-    for f in sorted(glob.glob(os.path.join(PACK_DIR, "*.json"))):
-        p = json.load(open(f, encoding="utf-8"))
-        if mode is None or p.get("mode") == mode:
-            out.append(p["name"])
-    return out
+def list_packs() -> list[str]:
+    """The casting and edit configs in fv/packs: crowd (every run) and artist (one singer from a photo)."""
+    return [json.load(open(f, encoding="utf-8"))["name"] for f in sorted(glob.glob(os.path.join(PACK_DIR, "*.json")))]
 
 
 def load_pack(name_or_path: str) -> dict:
+    """A pack by name or path. Runs made with the packs removed on Oct 31, 2026 (eras, spotlight,
+    wardrobe) re-cut with the crowd pack's edit and finish."""
     path = name_or_path if name_or_path.endswith(".json") else os.path.join(PACK_DIR, name_or_path + ".json")
+    if not os.path.exists(path) and not name_or_path.endswith(".json"):
+        path = os.path.join(PACK_DIR, "crowd.json")
     return json.load(open(path, encoding="utf-8"))
 
 
@@ -111,8 +111,6 @@ def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, f
         return _cast_theme(c, n, seed, sizes, leads, phases)
     if c.get("artist"):
         return _cast_artist(c, n, seed, sizes)
-    if "people" in c:  # packs of coherent archetypes (who, setting, light)
-        return _cast_people(c, n, seed, sizes)
     rng, used, out = random.Random(seed), {}, []
     for i in range(n):
         fr = _frame(c, sizes[i] if i < len(sizes) else "close")
@@ -368,35 +366,6 @@ def _scene_shot(rng, used, size: str, who: str, short: str, place: str, light: s
     move = _pick(rng, (CREATURE_MOVES if creature else SCENE_MOVES)[size], used, "scene_move_" + size)
     sing = (CREATURE_SCENE_SING if creature else SCENE_SING)[size].format(who=short, action=action, move=move)
     return " ".join(portrait.split()), " ".join((sing[0].upper() + sing[1:]).split())
-
-
-def _bg_place(bg: str) -> str:
-    """'a dusty corral and adobe walls behind' -> 'a dusty corral and adobe walls'."""
-    return re.sub(r"\s+behind$", "", bg.strip().rstrip("."))
-
-
-def _cast_people(c: dict, n: int, seed: int, sizes: list[str] | None = None) -> list[dict]:
-    rng = random.Random(seed)
-    srng, used = random.Random(seed * 13 + 5), {}
-    people = list(c["people"])
-    rng.shuffle(people)
-    scene_share = float(c.get("scene_medium_share", 0.5))
-    out = []
-    for i in range(n):
-        who, bg, light = people[i % len(people)]
-        size = sizes[i] if sizes and i < len(sizes) else "close"
-        short = who.split(" with ")[0].split(" in ")[0]
-        if size == "wide" or (size == "medium" and srng.random() < scene_share):
-            portrait, sing = _scene_shot(srng, used, size, who, short, _bg_place(bg), light,
-                                         actions=c.get("actions"))
-        else:
-            portrait = c["template"].format(who=who, background=bg, light=light)
-            sing = c["sing"].format(who=short)
-            sing = sing[0].upper() + sing[1:]
-        twin = {"who": who, "detail": "", "wear": "", "light": light, "background": bg}
-        out.append({"id": i, "portrait": portrait, "sing": sing, "who": short, "twin": twin, "size": size,
-                    "seed": seed * 1000 + i * 7 + 1})
-    return out
 
 
 # ------------------------------------------------------------------ themes
@@ -791,18 +760,7 @@ def apply_theme(pack: dict, bible: dict) -> dict:
     p = json.loads(json.dumps(pack))
     c = p["casting"]
     neg = c.get("negative", "")
-    neg = neg.replace("modern clothing in a period scene, ", "")  # the eras pack's period lock
-    if p.get("mode") == "motion":
-        rng = random.Random(len(bible["who"]) * 7 + 3)
-        cast, used = [], {}
-        for k in range(max(40, len(c.get("cast", [])))):
-            who = _pick(rng, bible["who"], used, "who")
-            wear = _pick(rng, bible["wear"], used, "wear")
-            place = _pick(rng, bible["places"], used, "place")
-            light = _pick(rng, bible["light"], used, "light")
-            cast.append([f"{who}, wearing {wear}", f"{_place_noun(place)}, {light}"])
-        c["cast"] = cast
-    elif c.get("artist"):
+    if c.get("artist"):
         c["wear"] = bible["wear"]
         c["light"] = bible["light"]
         c["places"] = bible["places"]
@@ -816,18 +774,3 @@ def apply_theme(pack: dict, bible: dict) -> dict:
         return p
     c["negative"] = neg
     return p
-
-
-def cast_motion(pack: dict, n: int, seed: int) -> list[dict]:
-    """n characters for a motion pack: keyframe edit prompt + video prompt."""
-    c = pack["casting"]
-    rng = random.Random(seed)
-    cast = list(c["cast"])
-    rng.shuffle(cast)
-    out = []
-    for i in range(n):
-        who, where = cast[i % len(cast)]
-        edit = f"Replace the dancer with {who}. Replace the room with {where}. {c['keep']}"
-        video = c["video"].format(who=who[0].upper() + who[1:], where="in " + where)
-        out.append({"id": i, "edit": edit, "video": video, "who": who, "seed": seed * 1000 + i * 7 + 1})
-    return out
