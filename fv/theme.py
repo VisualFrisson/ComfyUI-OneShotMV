@@ -944,6 +944,7 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                         c["place"] = _places([c["place"]])[0] if c["place"] else ""
                         if kept.get((c.get("role"), c.get("place"))):
                             _with_given(c, kept[(c.get("role"), c.get("place"))])
+                    _attach_given(cached["characters"], theme)  # as this version reads the World line
                 return cached
             except Exception:
                 pass

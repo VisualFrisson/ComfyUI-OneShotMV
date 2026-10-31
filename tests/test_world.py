@@ -162,6 +162,21 @@ def test_one_person_to_each_role():
     assert [c["role"] for c in cs] == ["medical staff member", "track maintenance worker", "boss", "physics teacher"]
 
 
+def test_a_cached_world_reads_the_line_as_this_version_does(tmp_path):
+    """A World cached by an older version ('a blockers, a woman aged 35') is read with today's rules."""
+    line = "Present day, all women: roller derby night: the jammer, the blockers; hard light"
+    old = {"theme": line, "rules": theme.rules(line), "characters": [
+        dict(_char("jammer", gender="woman", age="28", wear="a black jersey"), who="a jammer, a woman aged 28",
+             given="jammer"),
+        dict(_char("blockers", gender="woman", age="35", wear="a black jersey"), who="a blockers, a woman aged 35",
+             given="blockers")]}
+    os.makedirs(theme.cache_dir(str(tmp_path)))
+    with open(os.path.join(theme.cache_dir(str(tmp_path)), theme._key(line, 1) + ".json"), "w") as f:
+        json.dump(old, f)
+    b = theme.expand(line, seed=1, out_root=str(tmp_path), log=lambda *a: None)
+    assert [c["who"].split(",")[0] for c in b["characters"]] == ["a jammer", "a blocker"]
+
+
 def test_a_described_character_keeps_all_its_words():
     named = dict(theme.named_characters(STRESS[3][0]))
     assert named["owner"] == "owner, a man in his sixties with a grey crew cut and a brown cardigan"
