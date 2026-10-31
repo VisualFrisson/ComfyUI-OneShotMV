@@ -158,13 +158,64 @@ def use_models(name: str | None = "auto") -> str:
     return name
 
 
-def _have_sage() -> bool:
-    """SageAttention is optional: without the package the LTX jobs skip the patch."""
+# SageAttention modes (KJNodes' PathchSageAttentionKJ) -> (function it imports, lowest compute
+# capability, the flag in sageattention.core that says the kernel was built)
+SAGE_KERNELS = {"auto": ("sageattn", (8, 0), None),
+                "sageattn_qk_int8_pv_fp16_triton": ("sageattn_qk_int8_pv_fp16_triton", (8, 0), None),
+                "sageattn_qk_int8_pv_fp16_cuda": ("sageattn_qk_int8_pv_fp16_cuda", (8, 0), "SM80_ENABLED"),
+                "sageattn_qk_int8_pv_fp8_cuda": ("sageattn_qk_int8_pv_fp8_cuda", (8, 9), "SM89_ENABLED"),
+                "sageattn_qk_int8_pv_fp8_cuda++": ("sageattn_qk_int8_pv_fp8_cuda", (8, 9), "SM89_ENABLED")}
+_SAGE: dict = {}  # mode -> the mode to use (or None), worked out once
+
+
+def sage_mode(mode: str | None) -> str | None:
+    """The SageAttention mode the LTX jobs can use here, or None to leave the patch out. Sage is
+    optional, but KJNodes' patch fails every LTX clip when the installed package or the GPU lacks
+    the mode's kernel: SageAttention 1.x (what pip installs from PyPI) has no CUDA kernels, and the
+    fp8 kernels need compute 8.9 (RTX 40 or 50). Without the patch the clips render, only slower."""
+    if not mode:
+        return None
+    if mode in _SAGE:
+        return _SAGE[mode]
+    use, why = None, ""
     try:
-        import importlib.util
-        return importlib.util.find_spec("sageattention") is not None
-    except Exception:
-        return False
+        import importlib
+        import torch
+        cap = tuple(torch.cuda.get_device_capability(torch.cuda.current_device())) \
+            if torch.cuda.is_available() else None
+        if "sageattn3" in mode:
+            fn, need, flag = "sageattn3_blackwell", (10, 0), None
+            pkg = importlib.import_module("sageattn3")
+        else:
+            fn, need, flag = SAGE_KERNELS.get(mode, (mode.rstrip("+"), (8, 0), None))
+            pkg = importlib.import_module("sageattention")
+        core = getattr(pkg, "core", None)
+        card = {(8, 0): "an RTX 30 card or newer", (8, 9): "an RTX 40 or 50 card"}.get(need, "an RTX 50 card")
+        tip = "; ltx23_sage = auto in fv/models.json picks the kernel that fits this card"
+        if cap is None:
+            why = "no CUDA GPU"
+        elif not hasattr(pkg, fn):
+            try:
+                from importlib.metadata import version
+                ver = " " + version(pkg.__name__)
+            except Exception:
+                ver = ""
+            why = f"the installed SageAttention{ver} has no {fn} kernel; SageAttention 2 has it"
+        elif cap < need:
+            why = f"{mode} needs {card}" + (tip if mode != "auto" and cap >= (8, 0) else "")
+        elif flag and core is not None and not getattr(core, flag, True):
+            why = f"this SageAttention build has no {mode} kernel for this card{tip}"
+        else:
+            use = mode
+    except ImportError:
+        pass  # not installed: the clips run without it, as always
+    except Exception as e:
+        why = f"{type(e).__name__}: {e}"
+    if why:
+        print(f"[OneShotMV] SageAttention is left out of the LTX clips: {why}. They render without it, "
+              "only slower.")
+    _SAGE[mode] = use
+    return use
 
 
 M: dict = {}
@@ -268,9 +319,9 @@ def _ram_backups(g, model):
 def _ltx23(g, union=False):
     ck = g.add("CheckpointLoaderSimple", ckpt_name=M["ltx23_ckpt"])
     model = _ram_backups(g, O(ck, 0))
-    if M.get("ltx23_sage") and _have_sage():
-        model = O(g.add("PathchSageAttentionKJ", model=model, sage_attention=M["ltx23_sage"],
-                        allow_compile=False))
+    sage = sage_mode(M.get("ltx23_sage"))
+    if sage:
+        model = O(g.add("PathchSageAttentionKJ", model=model, sage_attention=sage, allow_compile=False))
     for name, st in M["ltx23_loras"]:
         model = O(g.add("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=st))
     if M.get("ltx23_av_tuner"):

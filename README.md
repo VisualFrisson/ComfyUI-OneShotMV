@@ -212,9 +212,12 @@ about every beat on intense.
      non-commercial research use only) in `ComfyUI/models/insightface/models/buffalo_l/`. They run
      with onnxruntime (`pip install onnxruntime-gpu` with ComfyUI's Python). Without them the
      framing checks are skipped.
-   - Speed: [SageAttention](https://github.com/thu-ml/SageAttention) makes the LTX clips faster.
-     If it isn't installed, the jobs run without it. The default kernel in `fv/models.json`
-     (`ltx23_sage`) needs an RTX 40 or 50 series card; set it to `auto` on older cards.
+   - Speed: [SageAttention](https://github.com/thu-ml/SageAttention) 2 makes the LTX clips faster.
+     `pip install sageattention` gets version 1, which doesn't have the kernels OneShot MV uses;
+     version 2 comes from a prebuilt wheel or a build (see its page). The default kernel in
+     `fv/models.json` (`ltx23_sage`) needs an RTX 40 or 50 series card; set it to `auto` on older
+     cards. When the installed version or the card can't run the kernel, the clips are made
+     without SageAttention, only slower, and the ComfyUI console says why.
    - The vocal and drum stems use torchaudio's Hybrid Demucs, which downloads its weights the
      first time it runs.
 
@@ -270,6 +273,9 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
   The video is still made.
 - A run stopped partway: the Studio's Rendering screen says so, and the ComfyUI console shows the
   error. Runs queued together render one after another.
+- A video with no singing clips (every LTX clip failed): look for the first error in the ComfyUI
+  console. In older versions of the pack, SageAttention 1, or the default kernel on an RTX 30
+  card, failed every clip; update the pack, or set `ltx23_sage` in `fv/models.json` to `auto`.
 - Off-theme people or modern things in a period World: name the period and the people in the
   World line, then re-shoot the wrong shots from the Result screen with a note.
 - Slow sampling on Windows with `--highvram`: ComfyUI keeps LoRA weight backups on the GPU and
