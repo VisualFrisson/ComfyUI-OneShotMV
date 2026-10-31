@@ -177,6 +177,24 @@ def test_a_cached_world_reads_the_line_as_this_version_does(tmp_path):
     assert [c["who"].split(",")[0] for c in b["characters"]] == ["a jammer", "a blocker"]
 
 
+def test_a_look_is_never_the_world_line():
+    """Oct 31, the all-women roller derby preview: Gemma wrote the World line, or the prompt's words
+    for the key, as the look of twelve extra characters, and it went into their portraits."""
+    line = ("Present day, all women: roller derby bout night in a warehouse rink: the jammer, the coach with a "
+            "clipboard; hard white arena light and a packed crowd")
+    r = theme.rules(line)
+    w = "an oversized hoodie and ripped black jeans"
+    cs = theme._characters([
+        _char("merchandise designer", gender="woman", age="24", wear=w, look="Present day, all women: roller derby bout "
+              "night in a warehouse rink: hard white arena light and a packed crowd."),
+        _char("bout sponsor", gender="woman", age="40", wear=w, look="Present day, all women: hard white arena light. "
+              "Her face and body, unlike anyone else's in the list: fair skin, auburn hair in a sleek bob"),
+    ], rules=r, theme=line)
+    assert [c["who"] for c in cs] == ["a merchandise designer, a woman aged 24",
+                                      "a bout sponsor, a woman aged 40, fair skin, auburn hair in a sleek bob"]
+    assert "the theme's own words" not in theme.CHARACTER_KEYS
+
+
 def test_a_described_character_keeps_all_its_words():
     named = dict(theme.named_characters(STRESS[3][0]))
     assert named["owner"] == "owner, a man in his sixties with a grey crew cut and a brown cardigan"
