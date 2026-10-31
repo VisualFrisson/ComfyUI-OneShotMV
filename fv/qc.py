@@ -15,8 +15,6 @@ per clip):
   mouth    - voice renders: the mouth barely moves (closed-mouth / dead takes)
              (mouth region from a face detector; activity = frame-to-frame change of the
               mouth crop relative to the whole face, plus how much the dark mouth cavity varies)
-  people   - motion renders: a second person in the shot (an image edit sometimes turns one
-             dancer into two); faces of at least 40% the main face's size in half the sampled frames
   noface   - voice renders: no face in most sampled frames (the head walked out of the top of a
              wide shot; SCRFD via fv/identity.py)
   sideways - the head lies on its side (eye line over 50 degrees off level, usually because the
@@ -233,18 +231,6 @@ def sync_check(path: str, vocal, sr: int, seek: float) -> dict:
     return out
 
 
-def extra_people(frames, n: int = 6) -> float:
-    """Fraction of n sampled frames showing a second face at least 40% the size of the main one."""
-    from . import faces
-    hits = k = 0
-    for i in np.linspace(0, len(frames) - 1, n).round().astype(int):
-        fs = faces.detect_all(frames[i][:, :, ::-1], size=512)
-        k += 1
-        if len(fs) >= 2 and fs[1][2] >= 0.4 * fs[0][2]:
-            hits += 1
-    return hits / max(1, k)
-
-
 def black_bars(gray) -> float:
     """How much of the frame near-black bars take on BOTH sides (pillar box: columns; letter box:
     rows), as a share of the width or height. gray: (H, W) or (N, H, W), 0..1. Real bars are flat
@@ -318,7 +304,7 @@ def image_bars(path: str) -> float:
 
 
 def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, vocal=None, sr: int = 44100,
-               seek: float = 0.0, sync: bool = False, people: bool = False, framing: str | None = None,
+               seek: float = 0.0, sync: bool = False, framing: str | None = None,
                ref=None, key_path: str | None = None) -> dict:
     """framing: the shot size ('close' / 'medium' / 'wide') to check the face against (noface,
     tooclose); ref: the artist's face embedding (fv/identity.py) for the identity check, judged on
@@ -353,14 +339,6 @@ def check_clip(path: str, *, expected_frames: int = 0, voice: bool = False, voca
     r["jump"], r["jump_at"] = round(jmax, 3), jat
     if jmax > THRESH["cut_abs"] and jmax > THRESH["cut_rel"] * max(jmed, 1e-3):
         r["fail"].append("cut")
-    if people:
-        try:
-            frac = extra_people(_read(path, size=512, max_frames=400)[0])
-            r["extra_people"] = round(frac, 2)
-            if frac >= 0.5:
-                r["fail"].append("people")
-        except Exception as e:  # the check is a nicety: never block the cut
-            r["people_error"] = str(e)
     if framing is not None or ref is not None:
         try:
             from . import identity

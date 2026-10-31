@@ -1,7 +1,7 @@
 """beatcore: song structure analysis in pure numpy.
 
 Finds the beat grid, the first beat of every bar, sections and the drop of a
-song, which the shot planners (fv/plan.py, fv/dsplan.py) time their cuts and looks to.
+song, which the shot planner (fv/plan.py) times its cuts and looks to.
 No librosa / scipy dependency so the module runs inside any ComfyUI install.
 
 Main entry point: analyze(samples, sr, beats_per_bar=4) -> dict (JSON-safe).

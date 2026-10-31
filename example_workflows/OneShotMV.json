@@ -1,0 +1,190 @@
+{
+  "id": "cb151cda-75ee-49ca-ad8f-778b2e3c6a57",
+  "revision": 0,
+  "last_node_id": 5,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        440,
+        760
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## OneShot MV\n\n**A song and a World in, a music video out.** Load a song, write a World, click **Run**.\n\n**1. Preview first**\nTurn **preview_only** on and click **Run**. The Director:\n- analyses the song,\n- writes the World,\n- plans every shot.\n\nThe summary lists every shot: time, energy, who, wearing what, and where. Nothing renders yet. Change the World line if you need to, turn **preview_only** off, and click **Run** again. The song analysis and the World are cached, so the second run starts faster.\n\n**2. The World**\nOne line is enough: *the gladiator games in ancient Rome*. It decides who the characters are, what they wear, the places, the light and the grade.\n\nFor more control, write it the way the Studio's examples are written: the tone, then the people in the order you want them, then the places, then the light. What you say about the cast is a rule (\"no men\", \"present day\", \"no people, all robots\"), and a character you describe keeps your words.\n\nThe characters you name are cast first, in that order (**cast_order** `as written`; `mixed` shuffles them). Every shot is a different person.\n\n**The edit**\nThe song is mapped into three energy levels, each cut its own way (**cuts_low / cuts_medium / cuts_high**):\n- **low** (the intro, quiet bridges): a cut every 2 bars.\n- **medium** (verses, builds): a cut every bar.\n- **high** (choruses, the drop): cuts to the music, each to a new face in the same spot.\n\n**audio_fx**: `subtle` (the default) adds flash, zoom, glow and colour split on the drums. `intense` is stronger and adds a motion-blurred twitch. `none` turns them off.\n\n**crowd**: `auto` puts a soft-focus crowd behind the singers when the World is a packed spectacle (an arena, a stadium, crowded stands); otherwise nobody else is in frame.\n\n**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync. A vision check looks at every picture before any video is made: one person, the right gender, no stray glasses or writing, period-right clothes.\n\n**broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. 0 turns it off.\n\n**quality**: `quality` is LTX-2.3 in 3 stages at 50 fps; `fast` uses the same model at 25 fps with fewer steps. **models**: `auto` picks the full set on a 48 GB+ card when its files are installed, else the 24 GB set.\n\n**seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.\n\nThe finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.\n\nUse music you have the rights to."
+      ],
+      "title": "How it works"
+    },
+    {
+      "id": 2,
+      "type": "LoadAudio",
+      "pos": [
+        450,
+        0
+      ],
+      "size": [
+        320,
+        180
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "song.mp3",
+        null,
+        null
+      ],
+      "title": "Song"
+    },
+    {
+      "id": 4,
+      "type": "FVDirector",
+      "pos": [
+        800,
+        0
+      ],
+      "size": [
+        380,
+        560
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "run_dir",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FVDirector"
+      },
+      "widgets_values": [
+        "",
+        30.0,
+        -1.0,
+        "16:9",
+        "quality",
+        "auto",
+        false,
+        1,
+        "fixed",
+        "every 2 bars",
+        "every bar",
+        "to the music (subtle)",
+        "subtle",
+        "auto",
+        "as written",
+        0.125,
+        2,
+        ""
+      ],
+      "title": "OneShot MV: Director"
+    },
+    {
+      "id": 5,
+      "type": "PreviewAny",
+      "pos": [
+        1210,
+        0
+      ],
+      "size": [
+        420,
+        260
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "title": "Run summary"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      4,
+      0,
+      "AUDIO"
+    ],
+    [
+      3,
+      4,
+      0,
+      5,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9,
+      "offset": [
+        40,
+        40
+      ]
+    }
+  },
+  "version": 0.4
+}

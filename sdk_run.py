@@ -6,7 +6,7 @@ so point it at your own ComfyUI through Comfy's open-source comfy-api-proxy, whi
 local ComfyUI the same API. This script starts the proxy for you if it isn't running:
 
     pip install comfy-sdk comfy-api-proxy        (or run_sdk.bat on Windows, which does it)
-    python sdk_run.py --song my_track.wav --theme "the gladiator games in ancient Rome" --seconds 30
+    python sdk_run.py --song my_track.wav --world "the gladiator games in ancient Rome" --seconds 30
 
 Another deployment that runs the OneShot MV nodes: set COMFY_BASE_URL (and COMFY_API_KEY).
 
@@ -116,12 +116,13 @@ def download(job, out: Path, prefix: str) -> list[Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--song", help="a song you have the rights to use (wav, mp3, flac, m4a)")
-    ap.add_argument("--theme", default="", help='the World in a line, e.g. "a 1965 airline: pilots, '
+    ap.add_argument("--world", "--theme", dest="world", default="",
+                    help='the World in a line, e.g. "a 1965 airline: pilots, '
                     'stewardesses and passengers; the cabin, the tarmac; warm afternoon light"')
     ap.add_argument("--seconds", type=float, default=30.0, help="length of the video; 0 = the whole song")
     ap.add_argument("--start", type=float, default=-1.0, help="song time to start at; -1 = the strongest stretch")
     ap.add_argument("--format", default="16:9", choices=["16:9", "9:16", "1:1"])
-    ap.add_argument("--preset", default="quality", choices=["quality", "fast"])
+    ap.add_argument("--quality", "--preset", dest="quality", default="quality", choices=["quality", "fast"])
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--fx", default="subtle", choices=["none", "subtle", "intense"],
                     help="audio-reactive effects (flash, zoom punch, glow, colour split)")
@@ -183,11 +184,11 @@ def main() -> int:
         song, d = node_id(wf, "LoadAudio"), node_id(wf, "FVDirector")
         say(f"uploading {Path(a.song).name}")
         wf.set_input(song, "audio", client.assets.from_file(a.song))
-        for k, v in (("theme", a.theme), ("seconds", a.seconds), ("start", a.start), ("format", a.format),
-                     ("preset", a.preset), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
+        for k, v in (("world", a.world), ("seconds", a.seconds), ("start", a.start), ("format", a.format),
+                     ("quality", a.quality), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
                      ("cuts_medium", a.cuts_medium), ("cuts_high", a.cuts_high), ("cast_order", a.cast_order),
                      ("crowd", a.crowd), ("models", a.models), ("broll_share", a.broll), ("qc_retries", a.qc),
-                     ("run_name", a.run_name), ("queue_renders", not a.preview), ("queue_assemble", True)):
+                     ("run_name", a.run_name), ("preview_only", a.preview)):
             wf.set_input(d, k, v)
         say("Director: analysing the song, writing the World, planning the shots")
         job = wait(client.submit(wf), "Director", t0, timeout)
@@ -199,7 +200,7 @@ def main() -> int:
         say(bundle.get("summary") or f"run '{bundle['run_id']}' planned")
         say()
         if a.preview:
-            say("Preview only: nothing was rendered. Change --theme if needed and run again "
+            say("Preview only: nothing was rendered. Change --world if needed and run again "
                 "without --preview (the song analysis and the World are cached).")
             return 0
 

@@ -151,6 +151,22 @@ def test_krea_raw_keeps_its_lora_backups_in_ram(monkeypatch):
     assert g[str(lora["inputs"]["model"][0])]["class_type"] == "FVOffloadToCPU"
 
 
+def test_a_run_starts_by_freeing_memory(monkeypatch):
+    """Oct 31: after a preview, Gemma and the image models stayed on the card under --highvram and
+    the first still ran at 300 s a step. Every run now frees memory before its first portrait."""
+    posted = fc.install(monkeypatch)
+    res = _direct()
+    jobs = sorted(os.listdir(os.path.join(res["run_dir"], "jobs")))
+    assert jobs[0] == "000_free_before_portraits.json" and jobs[1].startswith("001_p")
+    assert [n["class_type"] for n in posted[-1].values()] == ["FVFreeMemory"]  # posted last at the front: runs first
+
+
+def test_motion_mode_from_an_old_node_says_what_to_do(monkeypatch):
+    fc.install(monkeypatch)
+    with pytest.raises(ValueError, match="Motion mode was removed"):
+        _direct(mode="motion", dance_path="/x.mp4")
+
+
 # ------------------------------------------------------------------ the Studio
 @pytest.fixture
 def studio(monkeypatch):

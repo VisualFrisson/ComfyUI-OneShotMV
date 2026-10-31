@@ -12,7 +12,7 @@ import folder_paths
 
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
-from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, pose, qc, stems, dsplan
+from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, qc, stems
 from .fv import setup_check
 from .fv import theme as fv_theme
 from .fv import broll as fv_broll
@@ -20,7 +20,7 @@ from .fv import identity as fv_identity
 from .fv import critic as fv_critic
 
 CATEGORY = "OneShot MV"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, setup_check, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, formats, casting, faces, plan, graphs, setup_check, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():
@@ -71,21 +71,6 @@ def _save_image_input(image) -> str:
     return path
 
 
-def _video_input_path(video) -> str:
-    """VIDEO input -> a file path the render graphs can read."""
-    try:
-        src = video.get_stream_source()
-        if isinstance(src, str) and os.path.exists(src):
-            return src
-    except Exception:
-        pass
-    import time
-    path = os.path.join(_inputs_dir(), f"dance_{int(time.time())}.mp4")
-    video.save_to(path)
-    return path
-
-
-# ------------------------------------------------------------------ loaders
 class FVLoadImagePath:
     """Load an image from a path. Unlike Load Image it does not check the file when the job is
     queued, so it can read a file an earlier job in the same queue will write."""
@@ -202,68 +187,38 @@ class FVLoadAudioPath:
 
 # ------------------------------------------------------------------ the app
 class FVDirector:
-    """OneShot MV in one press: analyses the song, plans the cut in the chosen style pack,
-    casts the performers and queues every render (grouped by model) plus the final assembly."""
+    """OneShot MV in one press: a song and a World line in, a music video out. Analyses the song,
+    writes the World's cast, plans the cut and queues every render plus the final assembly."""
 
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
             "audio": ("AUDIO",),
-            "mode": (["voice", "motion"], {"default": "voice"}),
-            "pack": (casting.list_packs(), {"default": "crowd"}),
-            "format": (formats.FORMAT_NAMES, {"default": "16:9"}),
-            "preset": (formats.PRESET_NAMES, {"default": "quality"}),
+            "world": ("STRING", {"default": "", "multiline": True,
+                      "tooltip": "The world of the video in a line or two, e.g. 'a 1965 airline: pilots, "
+                                 "stewardesses and passengers, warm cabin light'. It sets who sings, what they "
+                                 "wear, the places, the light and the grade. Characters you describe keep your "
+                                 "words; 'no men', 'present day' or 'no people, all robots' are rules. Empty = "
+                                 "invented people in close-ups. Written once by Gemma 3 and cached."}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
-                                  "tooltip": "Length of the edit; 0 = the whole song"}),
+                                  "tooltip": "Length of the video; 0 = the whole song"}),
             "start": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 3600.0, "step": 0.01,
                                 "tooltip": "Song time to start at; -1 = pick the strongest stretch"}),
-            "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1}),
-            "twins": (["auto", "loud", "all", "off"], {"default": "auto",
-                      "tooltip": "Pose-matched twins for flash inserts (voice mode)"}),
-            "queue_renders": ("BOOLEAN", {"default": True,
-                              "tooltip": "Off = preview: plans the video and lists every shot (time, energy, who, "
-                                         "wearing what, where) in the summary, rendering nothing. Check it, edit "
-                                         "the World line if needed, then turn this on and press Queue again (the "
-                                         "song analysis and the World are cached, so it starts faster)"}),
+            "format": (formats.FORMAT_NAMES, {"default": "16:9"}),
+            "quality": (formats.PRESET_NAMES, {"default": "quality",
+                        "tooltip": "quality: 50 fps clips, the sharpest detail and the best lip sync. fast: "
+                                   "smaller 25 fps clips in fewer steps, for checking the cast and the cut"}),
+            "models": (["auto", "24gb", "full"], {"default": "auto",
+                       "tooltip": "Which model files to use. 24gb: the fp8 set (models.json), made for 24 GB GPUs. "
+                                  "full: the bf16 set (models_full.json), for 48 GB or more. auto: the full set on "
+                                  "a 48 GB+ GPU when its files are installed, otherwise the 24 GB set."}),
+            "preview_only": ("BOOLEAN", {"default": False,
+                             "tooltip": "On: plan the video and list every shot (time, energy, who, wearing what, "
+                                        "where) in the summary, rendering nothing. Check it, edit the World line if "
+                                        "needed, then turn this off and queue again (the song analysis and the World "
+                                        "are cached, so it starts faster)"}),
         }, "optional": {
-            "theme": ("STRING", {"default": "", "multiline": True,
-                      "tooltip": "The world of the whole video in a line or two, e.g. 'astronauts and ground crew on "
-                                 "a 1970s space station, warm orange and teal light'. It sets who the characters "
-                                 "are, what they wear, the places, the light and the colour grade; the pack still "
-                                 "sets the edit. Empty = the pack's own looks. Expanded once by Gemma 3 (the "
-                                 "LTX-2.3 text encoder) and cached."}),
-            "dance_video_path": ("STRING", {"default": "", "tooltip": "Motion mode: path to the dance clip"}),
-            "run_name": ("STRING", {"default": ""}),
-            "twin_editor": (["klein", "qwen"], {"default": "klein"}),
-            "guide_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05}),
-            "queue_assemble": ("BOOLEAN", {"default": True,
-                               "tooltip": "Also queue the final Assemble (off when a script assembles itself)"}),
-            "framing": (["mixed", "close"], {"default": "mixed",
-                        "tooltip": "mixed = wide, medium and close shots in quiet stretches, tighter in the "
-                                   "build, close-ups on the drop; close = close-ups only"}),
-            "artist_image_path": ("STRING", {"default": "",
-                                  "tooltip": "One-artist mode: a photo of the singer (uses the artist pack)"}),
-            "artist_image": ("IMAGE", {"tooltip": "One-artist mode: connect a Load Image with the singer's photo "
-                                                  "(instead of artist_image_path)"}),
-            "dance_video": ("VIDEO", {"tooltip": "Motion mode: connect a Load Video with the dance clip "
-                                                 "(instead of dance_video_path)"}),
-            "broll_share": ("FLOAT", {"default": 0.125, "min": 0.0, "max": 0.5, "step": 0.025,
-                            "tooltip": "Voice mode: share of shots replaced by b-roll cutaways (nobody singing): "
-                                       "first where lip sync stayed weak, then in instrumental gaps; never on the "
-                                       "drop. 0 = off"}),
-            "broll_style": (["mix", "world", "dance"], {"default": "mix",
-                            "tooltip": "mix: a World character in a candid moment over weak lip sync, performers "
-                                       "dancing (medium shots, not singing) in instrumental gaps; world or dance: "
-                                       "one kind everywhere"}),
-            "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
-                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
-                                      "from the shot, and lip sync with SyncNet if its weights are installed) and "
-                                      "re-roll bad ones, up to this many rounds and at most doubling the render time; "
-                                      "0 = off"}),
-            "staged": ("BOOLEAN", {"default": True,
-                       "tooltip": "Voice runs queued here: load each model as few times as possible (Krea for "
-                                  "every image, LTX for every singer clip and its QC, Klein for every look, LTX "
-                                  "for every look clip) and make the looks only from the final singer takes"}),
+            "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1}),
             "cuts_low": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["low"],
                          "tooltip": "How low-energy sections (intro, breaks, a quiet outro) are cut"}),
             "cuts_medium": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["medium"],
@@ -277,22 +232,22 @@ class FVDirector:
                                     "subtle tones them down; intense is stronger and adds a twitch (jumps of up "
                                     "to 8 px with motion blur) on the big hits; none leaves the picture alone "
                                     "(the colour grade and film grain still apply)"}),
-            "look_groups": ("BOOLEAN", {"default": False,
-                            "tooltip": "Experimental, with staged: each drop group's looks come from one LTX clip "
-                                       "that switches person on the beat. Faster when it works; looks it doesn't "
-                                       "deliver cleanly get their own clip"}),
-            "cast_order": (["as written", "mixed"], {"default": "as written",
-                           "tooltip": "as written: the characters the World line names are cast first, in the "
-                                      "order it names them (write who leads first); mixed: shuffled, women and "
-                                      "men alternating"}),
             "crowd": (["auto", "on", "off"], {"default": "auto",
                       "tooltip": "People behind the singers. auto: a soft-focus crowd when the World is a packed "
                                  "spectacle (arena, stadium, crowded stands), otherwise nobody else in frame; "
                                  "on / off: always / never"}),
-            "models": (["auto", "24gb", "full"], {"default": "auto",
-                       "tooltip": "Which model files to use. 24gb: the fp8 set (models.json), made for 24 GB GPUs. "
-                                  "full: the bf16 set (models_full.json), for 48 GB or more. auto: the full set on "
-                                  "a 48 GB+ GPU when its files are installed, otherwise the 24 GB set."}),
+            "cast_order": (["as written", "mixed"], {"default": "as written",
+                           "tooltip": "as written: the characters the World line names are cast first, in the "
+                                      "order it names them (write who leads first); mixed: shuffled"}),
+            "broll_share": ("FLOAT", {"default": 0.125, "min": 0.0, "max": 0.5, "step": 0.025,
+                            "tooltip": "Share of shots replaced by cutaways (nobody singing): first where lip sync "
+                                       "stayed weak, then in instrumental gaps; never on the drop. 0 = off"}),
+            "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
+                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
+                                      "from the shot, and lip sync with SyncNet if its weights are installed) and "
+                                      "re-roll bad ones, up to this many rounds and at most doubling the render time; "
+                                      "0 = off"}),
+            "run_name": ("STRING", {"default": "", "tooltip": "Folder name for the run; empty = made from the settings"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -305,26 +260,15 @@ class FVDirector:
     def IS_CHANGED(cls, **kw):
         return random.random()
 
-    def run(self, audio, mode, pack, format, preset, seconds, start, seed, twins, queue_renders,
-            dance_video_path="", run_name="", twin_editor="klein", guide_strength=1.0, queue_assemble=True,
-            framing="mixed", artist_image_path="", qc_retries=2, artist_image=None, dance_video=None, theme="", broll_share=0.125, broll_style="mix",
-            staged=True, look_groups=False, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
-            cast_order="as written", crowd="auto", models="auto"):
+    def run(self, audio, world, seconds, start, format, quality, models, preview_only, seed=1, cuts_low=None,
+            cuts_medium=None, cuts_high=None, audio_fx="subtle", crowd="auto", cast_order="as written",
+            broll_share=0.125, qc_retries=2, run_name=""):
         _reload()
-        if artist_image is not None:
-            artist_image_path = _save_image_input(artist_image)
-        if dance_video is not None:
-            dance_video_path = _video_input_path(dance_video)
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
-                              mode=mode, pack=pack, fmt=format, preset=preset, seconds=seconds, start=start,
-                              seed=seed, twins=twins, dance_path=_resolve(dance_video_path), run_name=run_name,
-                              queue=queue_renders, editor=twin_editor, guide_strength=guide_strength,
-                              queue_assemble=queue_assemble, framing=framing,
-                              artist_path=_resolve(artist_image_path) if artist_image_path else "",
-                              qc_retries=qc_retries, theme=theme or "", broll_share=broll_share,
-                              broll_style=broll_style, staged=staged,
-                              look_groups=look_groups,
+                              theme=world or "", fmt=format, preset=quality, seconds=seconds, start=start,
+                              seed=seed, run_name=run_name, queue=not preview_only, qc_retries=qc_retries,
+                              broll_share=broll_share,
                               cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high},
                               audio_fx=audio_fx or "", cast_order=cast_order or "as written",
                               crowd=crowd or "auto", models=models or "auto")
@@ -553,20 +497,20 @@ class FVFaceMatch:
 
 class FVFinish:
     """The OneShot MV finish on any frames: learned grade, diffusion, halation, contrast,
-    gate vignette, grain (settings from a style pack)."""
+    gate vignette, grain (the settings every run uses)."""
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"images": ("IMAGE",), "pack": (casting.list_packs(), {"default": "crowd"}),
+        return {"required": {"images": ("IMAGE",),
                              "amount": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05})}}
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "run"
     CATEGORY = CATEGORY
 
-    def run(self, images, pack, amount):
+    def run(self, images, amount):
         _reload()
-        pk = casting.load_pack(pack)
+        pk = casting.load_pack("crowd")
         dev = images.device if images.is_cuda else ("cuda" if torch.cuda.is_available() else "cpu")
         frames = [images[i].to(dev) for i in range(images.shape[0])]
         fin = finish.Finisher(pk["finish"], finish.lab_stats(frames[:: max(1, len(frames) // 16)]))
@@ -592,89 +536,6 @@ class FVOffloadToCPU:
         m = model.clone()
         m.offload_device = torch.device("cpu")
         return (m,)
-
-
-class FVLeadPose:
-    """Keeps only the lead dancer in a DWPose guide. DWPose draws everyone it finds (backup
-    dancers, people at the back), and LTX's pose guide turns every skeleton into a person. This
-    follows the tallest, most central person and redraws that one pose in DWPose's own style.
-    Frames with a single person pass through unchanged."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "run"
-    CATEGORY = CATEGORY + "/io"
-
-    def run(self, pose_keypoint, image):
-        import cv2
-        _reload()
-        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
-        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
-                                                     if isinstance(f, dict)):
-            return (image,)
-        try:
-            from custom_controlnet_aux.dwpose import decode_json_as_poses, draw_poses
-        except Exception as e:  # controlnet_aux layout changed: leave the guide as it is
-            print(f"[OneShotMV] lead pose unavailable ({e}); guide unchanged")
-            return (image,)
-        src = pose.pick_lead(frames)
-        H_out, W_out = int(image.shape[1]), int(image.shape[2])
-        out = []
-        for k, (fr, s) in enumerate(zip(frames, src)):
-            if not isinstance(fr, dict) or len(fr.get("people") or []) <= 1 and s == (k, 0):
-                out.append(image[k])
-                continue
-            poses, _, H, W = decode_json_as_poses(pose.only(frames, s))
-            canvas = draw_poses(poses, int(H), int(W), draw_body=True, draw_hand=True, draw_face=True)
-            interp = cv2.INTER_CUBIC if W_out > W else cv2.INTER_AREA
-            canvas = cv2.resize(canvas, (W_out, H_out), interpolation=interp)
-            out.append(torch.from_numpy(canvas.astype(np.float32) / 255.0).to(image.device))
-        n_multi = sum(1 for f in frames if isinstance(f, dict) and len(f.get("people") or []) > 1)
-        print(f"[OneShotMV] lead pose: {n_multi}/{len(frames)} frames had extra people")
-        return (torch.stack(out).to(image.dtype),)
-
-
-class FVLeadMask:
-    """Greys out everything but the lead dancer in source frames, so an image edit (the motion
-    keyframes) sees one person: backup dancers otherwise come along into the new scene."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {"required": {"pose_keypoint": ("POSE_KEYPOINT",), "image": ("IMAGE",)}}
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "run"
-    CATEGORY = CATEGORY + "/io"
-
-    def run(self, pose_keypoint, image):
-        import cv2
-        _reload()
-        frames = pose_keypoint if isinstance(pose_keypoint, list) else [pose_keypoint]
-        if len(frames) != image.shape[0] or not any(len(f.get("people") or []) > 1 for f in frames
-                                                     if isinstance(f, dict)):
-            return (image,)
-        src = pose.pick_lead(frames)
-        B, H, W = int(image.shape[0]), int(image.shape[1]), int(image.shape[2])
-        out = image.clone()
-        for k, s in enumerate(src):
-            if s is None:
-                continue
-            fr = pose.only(frames, s)
-            box = pose.person_box(fr["people"][0], float(fr.get("canvas_width") or W),
-                                  float(fr.get("canvas_height") or H)) if fr["people"] else None
-            if box is None:
-                continue
-            m = np.zeros((H, W), np.float32)
-            x0, y0, x1, y1 = int(box[0] * W), int(box[1] * H), int(np.ceil(box[2] * W)), int(np.ceil(box[3] * H))
-            m[y0:y1, x0:x1] = 1.0
-            r = max(3, int(0.03 * max(H, W))) | 1
-            m = cv2.GaussianBlur(m, (r * 2 + 1, r * 2 + 1), 0)
-            mt = torch.from_numpy(m).to(image.device, image.dtype)[..., None]
-            out[k] = image[k] * mt + 0.5 * (1 - mt)
-        return (out,)
 
 
 class FVFreeMemory:
@@ -789,8 +650,6 @@ NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVKeep": FVKeep,
     "FVOffloadToCPU": FVOffloadToCPU,
-    "FVLeadPose": FVLeadPose,
-    "FVLeadMask": FVLeadMask,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVRunResult": FVRunResult,
@@ -809,8 +668,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVFreeMemory": "OneShot MV: Free Memory",
     "FVKeep": "OneShot MV: Keep Models Loaded",
     "FVOffloadToCPU": "OneShot MV: Weight Backups to RAM",
-    "FVLeadPose": "OneShot MV: Lead Dancer Pose",
-    "FVLeadMask": "OneShot MV: Lead Dancer Only",
     "FVAssemble": "OneShot MV: Assemble",
     "FVRunResult": "OneShot MV: Run Result",
     "FVFinish": "OneShot MV: Finish",

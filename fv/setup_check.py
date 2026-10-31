@@ -149,9 +149,8 @@ def message(p: dict, model_set: str = "", lead: str = "") -> str:
 
 
 # ------------------------------------------------------------------ what a run will use, before it plans
-def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, theme: bool = True,
-          mode: str = "voice") -> list[dict]:
-    """Sample jobs with the nodes and model files a voice run uses, built the way the Director builds
+def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, theme: bool = True) -> list[dict]:
+    """Sample jobs with the nodes and model files a run uses, built the way the Director builds
     them, so the check can run before the run plans (writing the World takes minutes). The full list
     of the run's own jobs is checked again before they are queued."""
     gs = []
@@ -160,8 +159,8 @@ def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, th
                          "inputs": {"text_encoder": graphs.M["ltx23_te"], "ckpt_name": graphs.M["ltx23_ckpt"],
                                     "device": "default"}},
                    "2": {"class_type": "TextGenerate", "inputs": {"clip": ["1", 0], "prompt": "x"}}})
-    if render and mode == "voice":
-        eff = formats.effective_preset(mode, preset)
+    if render:
+        eff = formats.effective_preset(preset)
         s1, s2 = formats.portrait_size(fmt)
         gs.append(graphs.krea2_portrait(prompt="x", seed=1, prefix="probe/p", size1=s1, size2=s2,
                                         turbo_only=preset == "fast").nodes)

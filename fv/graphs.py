@@ -419,17 +419,14 @@ def _ltx25(g, union=False):
     return dict(model=model, dsf=dsf, vae=O(vae), avae=O(avae), clip=O(clip), ups=O(ups))
 
 
-def _pose(g, video_path, w, h, frames, fps, start_s=0.0, face=True, lead_only=False):
-    """DWPose guide frames. lead_only: keep just the lead dancer (FVLeadPose) so backup dancers
-    in the source clip don't turn into extra people."""
+def _pose(g, video_path, w, h, frames, fps, start_s=0.0, face=True):
+    """DWPose guide frames of a singer's clip (a twin follows the lead's pose)."""
     src = g.add("FVLoadVideoPath", path=video_path, width=w, height=h, frame_cap=frames,
                 start_seconds=float(start_s), force_fps=float(fps))
     dw = g.add("DWPreprocessor", image=O(src), detect_hand="enable", detect_body="enable",
                detect_face="enable" if face else "disable", resolution=512,
                bbox_detector=M["dwpose_bbox"], pose_estimator=M["dwpose_pose"],
                scale_stick_for_xinsr_cn="disable")
-    if lead_only and _has_node("FVLeadPose"):
-        return O(g.add("FVLeadPose", pose_keypoint=O(dw, 1), image=O(dw, 0)))
     return O(dw)
 
 
@@ -444,7 +441,7 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
                guide_strength=1.0, guide_face=True, save_pose=False, key_strengths=None,
                keyframes=None, continuity=True):
     """One LTX clip. audio_path -> lip sync on a frozen vocal latent (voice);
-    guide_video -> DWPose union-control guide (twins, motion).
+    guide_video -> DWPose union-control guide (twins).
     keyframes: [(image_path, frame_idx, strength)] pinned at later frames of the clip, in every
     stage (a look group: one clip that switches person on the beat, each look's keyframe pinned
     at its cut frame; continuity=False, since the clip is meant to change person)."""
@@ -487,7 +484,7 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
     lat_ref = O(g.add("LTXVImgToVideoInplace", vae=m["vae"], image=keys[0], latent=O(lat),
                       strength=ks[0], bypass=False)) if keys else O(lat)
     if union:
-        ctl = _pose(g, guide_video, w1, h1, frames, fps, guide_start, guide_face, lead_only=not guide_face)
+        ctl = _pose(g, guide_video, w1, h1, frames, fps, guide_start, guide_face)
         gd = g.add("LTXAddVideoICLoRAGuide", positive=p_ref, negative=n_ref, vae=m["vae"], latent=lat_ref,
                    image=ctl, frame_idx=0, strength=guide_strength, latent_downscale_factor=m["dsf"],
                    crop="disabled", use_tiled_encode=False, tile_size=256, tile_overlap=64)
@@ -629,22 +626,6 @@ def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, p
     g.add("SaveImage", images=out, filename_prefix=prefix)
     if keep:  # staged runs: LTX stays loaded between the singer clips and the look clips
         keep_ltx(g, keep)
-    return g
-
-
-def motion_key(*, video_path, start_s, prompt, prefix, size, seed=7):
-    """The dance frame at `start_s` re-cast as a character (Klein edit, keeps the pose)."""
-    g = Graph()
-    fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
-               start_seconds=float(start_s), force_fps=0.0)
-    img = O(fr)
-    if _has_node("FVLeadMask"):  # grey out backup dancers so the edit keeps one person
-        dw = g.add("DWPreprocessor", image=img, detect_hand="enable", detect_body="enable",
-                   detect_face="disable", resolution=512, bbox_detector=M["dwpose_bbox"],
-                   pose_estimator=M["dwpose_pose"], scale_stick_for_xinsr_cn="disable")
-        img = O(g.add("FVLeadMask", pose_keypoint=O(dw, 1), image=img))
-    out = _klein(g, img, prompt, seed=seed)
-    g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 
 

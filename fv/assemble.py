@@ -192,7 +192,10 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     # re-assemble picks up edit changes without re-rendering
     # lip-sync offset: LTX's mouths lead its audio slightly; show each clip `delay` seconds later
     delay = float(plan.get("sync_delay", formats.PRESETS.get(plan["preset"], {}).get("sync_delay", 0.0)))
-    if plan.get("mode") == "voice" and plan.get("shots") and not plan.get("edl_locked"):
+    if plan.get("mode", "voice") != "voice":
+        raise RuntimeError("This run was made in motion mode, which OneShot MV no longer has; its clips and "
+                           "keyframes are still in the run folder.")
+    if plan.get("shots") and not plan.get("edl_locked"):
         from . import plan as planner
         faces = None
         if pack["edit"].get("match_cut", False):
@@ -205,13 +208,6 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
         beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
         plan["edl"] = planner.voice_edl(plan["shots"], plan["renders"], beats_w, pack["edit"], fps,
                                         plan.get("seed", 1), faces=faces, delay=delay)
-    if plan.get("mode") != "voice":
-        delay = 0.0  # motion clips carry no lip sync
-        if plan.get("shots") and not plan.get("edl_locked") and any("B" in s for s in plan["shots"]):
-            from . import plan as planner
-            beats_w = sorted(set(round(b, 4) for b in tlw.get("beats", []) if 0 <= b < plan["duration"]))
-            plan["edl"] = planner.motion_edl(plan["shots"], beats_w, pack["edit"], fps, plan.get("seed", 1),
-                                             renders=plan.get("renders"))
 
     # ---- clips
     renders = {r["id"]: r for r in plan["renders"]}
@@ -229,7 +225,7 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
                for rid, r in renders.items()}
     missing = [rid for rid, rd in readers.items() if not rd.ok]
     sung = [rid for rid, r in renders.items() if r.get("role") == "A" and not r.get("unused")]
-    if plan.get("mode", "voice") == "voice" and sung and all(rid in missing for rid in sung):
+    if sung and all(rid in missing for rid in sung):
         raise RuntimeError(f"None of the {len(sung)} singing clips rendered, so there is nothing to cut. Every "
                            "LTX clip failed: the first error in the ComfyUI console, also shown on the Studio's "
                            "Rendering screen, says why.")
