@@ -196,7 +196,9 @@ about every beat on intense.
    [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (the LTX attention tuner and Sage
    attention) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers). OneShot MV
    was built on ComfyUI 0.39; it needs a recent ComfyUI for the core Generate Text node, Krea 2
-   and App mode.
+   and App mode. The Studio's Brief checks all of this when it opens: if a node pack is missing
+   or didn't load, a model file can't be found, or ComfyUI or a pack is too old, it says what to
+   do, and nothing starts until it's fixed.
 3. Download a model set (see [Two model sets](#two-model-sets)): the 24 GB set for most cards,
    the full set if your GPU has 48 GB or more. Diffusion models go in `models/diffusion_models`,
    LoRAs in `models/loras`, text encoders in `models/text_encoders`, VAEs in `models/vae`, the
@@ -213,11 +215,12 @@ about every beat on intense.
      with onnxruntime (`pip install onnxruntime-gpu` with ComfyUI's Python). Without them the
      framing checks are skipped.
    - Speed: [SageAttention](https://github.com/thu-ml/SageAttention) 2 makes the LTX clips faster.
-     `pip install sageattention` gets version 1, which doesn't have the kernels OneShot MV uses;
-     version 2 comes from a prebuilt wheel or a build (see its page). The default kernel in
-     `fv/models.json` (`ltx23_sage`) needs an RTX 40 or 50 series card; set it to `auto` on older
-     cards. When the installed version or the card can't run the kernel, the clips are made
-     without SageAttention, only slower, and the ComfyUI console says why.
+     `pip install sageattention` gets version 1, which OneShot MV doesn't use; version 2 comes
+     from a prebuilt wheel or a build (see its page). OneShot MV picks the kernel for your card:
+     the one in `fv/models.json` (`ltx23_sage`, made for RTX 40 and 50 cards) when it can run,
+     otherwise SageAttention's own choice for the card (`auto`, RTX 30 and newer), otherwise none.
+     Without it the clips render the same, only slower. The line under Model Versions on the
+     Brief says which it uses, and a clip that still fails is re-shot without it.
    - The vocal and drum stems use torchaudio's Hybrid Demucs, which downloads its weights the
      first time it runs.
 
@@ -262,20 +265,25 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 
 - No OneShot MV button or page: restart ComfyUI once after installing, and look in the console
   for import errors from the pack.
-- "It didn't start", naming node packs or model files: install the packs it names and restart
-  ComfyUI, or download the files. A file saved under another name counts as missing. Older
-  versions of the pack only said "HTTP Error 400: Bad Request"; update it, or look in the ComfyUI
-  console after "invalid prompt" or "Failed to validate prompt" for the reason.
+- "Before you can make a video" on the Brief, or "It can't start yet": do what each line says
+  (install or update a node pack, update ComfyUI, download a model file), restart ComfyUI and
+  reload the page. "If it's installed, it didn't load" means the pack failed to import: the
+  ComfyUI console shows IMPORT FAILED next to it when ComfyUI starts, with the reason above it.
+- "HTTP Error 400: Bad Request" (older versions of the pack): ComfyUI refused a job for one of
+  the reasons above. Update the pack, or look in the ComfyUI console after "invalid prompt" or
+  "Failed to validate prompt" for the reason.
 - "Model not found" or "Value not in list": a file of the chosen model set is missing. The
   line under Model Versions in the Studio lists the missing files; download them, or pick the
   other set.
 - The lip-sync or framing checks were skipped: their weights aren't installed (Install, step 4).
   The video is still made.
-- A run stopped partway: the Studio's Rendering screen says so, and the ComfyUI console shows the
-  error. Runs queued together render one after another.
-- A video with no singing clips (every LTX clip failed): look for the first error in the ComfyUI
-  console. In older versions of the pack, SageAttention 1, or the default kernel on an RTX 30
-  card, failed every clip; update the pack, or set `ltx23_sage` in `fv/models.json` to `auto`.
+- A run stopped partway, or jobs failed while it renders: the Studio's Rendering screen shows the
+  last error, and the ComfyUI console has all of it. Clips that didn't render are re-shot by the
+  take check; if none of the singing clips rendered, the cut stops and says so. Runs queued
+  together render one after another.
+- Every clip failed, or a video with no singers (older versions of the pack): SageAttention 1,
+  or the default kernel on an RTX 30 card, failed every clip. Update the pack, or set
+  `ltx23_sage` in `fv/models.json` to `""` (off) or `"auto"`.
 - Off-theme people or modern things in a period World: name the period and the people in the
   World line, then re-shoot the wrong shots from the Result screen with a note.
 - Slow sampling on Windows with `--highvram`: ComfyUI keeps LoRA weight backups on the GPU and

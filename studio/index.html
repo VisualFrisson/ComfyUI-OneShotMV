@@ -162,6 +162,8 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
 .notes li{display:flex;gap:10px}.notes li i{font-style:normal;font-weight:800}
 .banner{padding:14px 16px;border-radius:12px;background:#2A1A10;border:1px solid #6A4520;color:#FFD9A8;margin-bottom:18px}
+.banner ul{margin:8px 0 6px;padding-left:20px}.banner li{margin:5px 0;line-height:1.4}.banner a{color:inherit}
+.banner .err{font-family:var(--mono,ui-monospace,monospace);font-size:13px;overflow-wrap:anywhere}
 /* result */
 .player{background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .player video{width:100%;display:block;max-height:72vh;background:#000}
@@ -743,6 +745,7 @@ async function viewBrief(){
   const app = $("#app");
   app.innerHTML = `
   <div class="head"><div><h1>The Brief</h1><p class="sub">One song and one line about the world it lives in. OneShot MV casts it, plans the cut and renders the video.</p></div></div>
+  <div id="setup"></div>
   <div class="cols">
    <div class="colmain">
     <section class="card projcard">
@@ -844,7 +847,7 @@ async function viewBrief(){
     const t = [["quality","Quality",RSIZE.quality[f],"50 fps clips: the sharpest detail and the best lip sync."],
                ["fast","Fast",RSIZE.fast[f],"Smaller 25 fps clips in fewer steps. For checking the cast and the cut; lip sync is weaker."]];
     $("#tiers").innerHTML = t.map(x => { const e = estimate(Object.assign({}, b, {preset:x[0]})); return `<button type="button" class="tier" data-q="${x[0]}" aria-pressed="${b.preset===x[0]}"><span class="t"><span><b>${x[1]}</b><span class="mono muted" style="font-size:12px;margin-left:8px">${x[2]}</span></span><span class="eta">≈ ${mins(e)}</span></span><small>${x[3]}</small></button>`; }).join("");
-    $("#tiers").querySelectorAll(".tier").forEach(el => el.onclick = () => { b.preset = el.dataset.q; saveBrief(); drawTiers(); });
+    $("#tiers").querySelectorAll(".tier").forEach(el => el.onclick = () => { b.preset = el.dataset.q; saveBrief(); drawTiers(); loadSetup(); });
     const sec = +b.seconds > 0 ? b.seconds + " s" : "the whole song";
     $("#etanote").textContent = `Both are upscaled to ${DSIZE[f]}. Times are a rough guide for ${sec}${S.sys && S.sys.gpu ? " on " + gpuName(S.sys.gpu) : ""}.`;
   };
@@ -854,7 +857,7 @@ async function viewBrief(){
   const drawModels = () => {
     const r = S.models, cur = b.models || "auto";
     $("#mset").innerHTML = [["auto", "Auto"], ["24gb", "24 GB"], ["full", "Full"]].map(([k, n]) => `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
-    $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); });
+    $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); loadSetup(); });
     if (!r){ $("#mnote").textContent = "Checking your GPU…"; return; }
     const use = cur === "auto" ? r.auto : cur, name = use === "full" ? "full models (bf16)" : "24 GB models (fp8)";
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
@@ -863,10 +866,24 @@ async function viewBrief(){
     if (use === "full" && r.vram_gb && r.vram_gb < r.full_min_gb) t += " The full models want 48 GB or more, so this may be slow or run out of memory.";
     const miss = (r.missing || {})[use] || [];
     if (miss.length) t += ` Missing ${miss.length === 1 ? "one file" : miss.length + " files"}: ${miss.slice(0, 3).join(", ")}${miss.length > 3 ? ` and ${miss.length - 3} more` : ""}. The README lists the downloads.`;
+    const sage = (r.setup || {}).sage;
+    if (sage) t += " " + sage;
     $("#mnote").textContent = t; $("#mnote").classList.toggle("warn", !!miss.length);
+    drawSetup();
   };
-  drawModels();
-  if (S.models) drawModels(); else api("models").then(r => { S.models = r; if ($("#mset")) drawModels(); }).catch(() => { S.models = null; });
+  // what this ComfyUI still needs before it can plan or render (fv/setup_check.py), as soon as the page opens
+  const drawSetup = () => {
+    const el = $("#setup"); if (!el) return;
+    const st = (S.models || {}).setup || {}, plan = st.plan || [], rend = st.render || [];
+    if (!rend.length && !plan.length){ el.innerHTML = ""; return; }
+    const link = x => esc(x).replace(/https:\/\/[^\s)]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https:\/\//, "")}</a>`);
+    el.innerHTML = `<div class="banner" role="status"><b>${plan.length ? "Before OneShot MV can start" : "Before you can make a video"}</b>
+      <ul>${(rend.length ? rend : plan).map(x => `<li>${link(x)}</li>`).join("")}</ul>
+      <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
+  };
+  const loadSetup = () => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}`)
+    .then(r => { S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
+  drawModels(); loadSetup();
 
   // advanced
   for (const k of ["cuts_low","cuts_medium","cuts_high","crowd","cast_order"]) { const el = $("#"+k); el.value = b[k]; el.onchange = () => { b[k] = el.value; saveBrief(); }; }
@@ -1040,7 +1057,7 @@ async function start(render, briefOverride){
         overlay(); location.hash = (render ? "#/render/" : "#/plan/") + encodeURIComponent(j.run); return;
       }
     }
-  }catch(e){ overlay(); toast("It didn't start: " + e.message, Math.max(9000, 70 * e.message.length)); }
+  }catch(e){ overlay(); const m = e.message || ""; toast(/^(It can't|ComfyUI refused)/.test(m) ? m : "It didn't start: " + m, Math.max(9000, 70 * m.length)); }
 }
 
 // ---------------------------------------------------------------- 2. The Plan
@@ -1139,7 +1156,13 @@ function renderUpdate(r){
   $("#elapsed").textContent = `${mins(r.elapsed_min)} in`;
   $("#left").textContent = r.stalled ? "stopped" : (r.left_min > 0 ? `about ${mins(r.left_min)} to go` : "nearly there");
   $("#pfill").style.width = r.pct + "%"; $("#pbar").setAttribute("aria-valuenow", r.pct);
-  $("#stall").innerHTML = r.stalled ? `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>` : "";
+  const er = r.errors || [], last = er.length ? (er[0].node ? er[0].node + ": " : "") + (er[0].error || "no message") : "";
+  const lastHtml = last ? `<div class="err">${esc(last.length > 400 ? last.slice(0, 400) + "…" : last)}</div>` : "";
+  const sageNote = /sage/i.test(last) ? ", without SageAttention" : "";
+  $("#stall").innerHTML = r.stalled
+    ? (last ? `<div class="banner"><b>This video stopped: a step failed.</b> The last error:${lastHtml}Fix that, then start it again from <a href="#/">The Brief</a>; the ComfyUI console has the full error.</div>`
+            : `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>`)
+    : (last ? `<div class="banner">${r.failed_jobs} job${r.failed_jobs === 1 ? "" : "s"} of this video failed so far; the take check re-shoots clips that didn't render${sageNote}. The last error:${lastHtml}</div>` : "");
   $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(s.meta)}</div></li>`).join("");
   const cls = shotClass(r.brief.format);
   $("#board").innerHTML = r.shots.map(s => {

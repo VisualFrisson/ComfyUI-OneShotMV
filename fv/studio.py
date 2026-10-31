@@ -387,6 +387,18 @@ def _director_graph(b: dict) -> dict:
             "2": {"class_type": "FVDirector", "inputs": d}}
 
 
+def _cant_start(b: dict) -> list:
+    """What this ComfyUI needs before it can make this brief's plan or video (setup_check), one line
+    each: Make the video and Preview refuse at once instead of after minutes of planning."""
+    try:
+        rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
+                                        b.get("format") or "16:9")
+    except Exception as e:  # never let the check itself stop a run: the Director checks again
+        print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
+        return []
+    return rep.get("render" if b.get("render") else "plan") or []
+
+
 def _job(pid: str) -> dict:
     from server import PromptServer
     q = PromptServer.instance.prompt_queue
@@ -430,6 +442,40 @@ def _job(pid: str) -> dict:
         except Exception:
             pass
     return {"state": "done", "run": run}
+
+
+def _of_run(graph: dict, name: str) -> bool:
+    """Whether a job belongs to this run (its save prefix or run folder)."""
+    tag = f"oneshot-mv/runs/{name}"
+    for n in graph.values() if isinstance(graph, dict) else []:
+        ins = (n or {}).get("inputs") or {} if isinstance(n, dict) else {}
+        for k in ("filename_prefix", "run_dir"):
+            v = ins.get(k)
+            if isinstance(v, str):
+                v = v.replace("\\", "/").rstrip("/")
+                if v.endswith(tag) or (tag + "/") in v:
+                    return True
+    return False
+
+
+def _run_errors(name: str, recent: int = 400) -> list[dict]:
+    """The jobs of this run that failed, newest first: the node and ComfyUI's error message."""
+    try:
+        from server import PromptServer
+        hist = PromptServer.instance.prompt_queue.get_history(max_items=recent)
+    except Exception:
+        return []
+    out = []
+    for h in hist.values():
+        st = (h or {}).get("status") or {}
+        if st.get("status_str") != "error":
+            continue
+        pr = h.get("prompt")
+        if not (isinstance(pr, (list, tuple)) and len(pr) > 2 and _of_run(pr[2], name)):
+            continue
+        d = next((d for ev, d in st.get("messages", []) if ev == "execution_error" and isinstance(d, dict)), {})
+        out.append({"node": str(d.get("node_type") or ""), "error": str(d.get("exception_message") or "").strip()[:500]})
+    return out[::-1]
 
 
 def _run_jobs(name: str):
@@ -528,6 +574,12 @@ def _notes(d: str, p: dict, label_of: dict, done: bool = False) -> list[dict]:
                                                       f"takes re-shot ({_why(why[:4])})."})
             else:
                 notes.append({"kind": "ok", "text": f"Take check {ps.get('pass', 0) + 1}: all {len(rep)} takes kept."})
+    miss = (_load(os.path.join(d, "done.json"), {}) or {}).get("missing_renders") or [] if done else []
+    if miss:
+        one = len(miss) == 1
+        notes.append({"kind": "redo", "text": f"{len(miss)} clip{'' if one else 's'} didn't render and "
+                                              f"{'is' if one else 'are'} left out of the cut; re-shoot "
+                                              f"{'that shot' if one else 'those shots'} from the Result screen."})
     return notes[-12:]
 
 
@@ -579,6 +631,7 @@ def _run(name: str) -> dict:
     except Exception:
         pass
     started = tm.get("queued")
+    errors = _run_errors(os.path.basename(d)) if started and not done else []
     keys = " ".join(tm.keys())
     if done:
         stage = "done"
@@ -636,6 +689,7 @@ def _run(name: str) -> dict:
         "run": os.path.basename(d), "project": _project(d), "stage": stage, "stages": stages, "pct": pct,
         "elapsed_min": round(elapsed, 1), "estimate_min": round(est), "left_min": 0 if done else round(max(0.0, est - elapsed)),
         "queued_jobs": queued_jobs, "stalled": bool(started and not done and queued_jobs == 0),
+        "errors": [] if done else errors[:3], "failed_jobs": 0 if done else len(errors),
         "brief": {"format": p.get("format"), "preset": p.get("preset"), "seconds": round(float(p.get("duration") or 0), 1),
                   "from": _clock(p.get("song_t0", 0)), "to": _clock(p.get("song_t1", 0)), "tempo": p.get("tempo"),
                   "fx": p.get("fx_level") or "subtle", "cuts": p.get("cuts") or {}, "seed": p.get("seed"),
@@ -874,6 +928,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
     chain += [graphs.free_memory("before pickup clips").nodes] + clips
     chain += [graphs.free_memory("before assembly").nodes,
               graphs.assemble(run_dir=d, prefix=rel).nodes]
+    director.check_jobs(chain, p.get("models") or "")  # before the plan records it
     est = (3.0 + 0.5 * len(stills) if stills else 0.0) + 2.0 + 1.2 * len(clips) + \
         1.0 + 0.035 * float(p.get("duration") or 30)
     p.setdefault("pickups", []).append({"n": k, "at": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -970,6 +1025,7 @@ def _sharpen(name: str, dry: bool = False) -> dict:
         shutil.copy2(done["video"], os.path.join(d, "versions", f"v{nv}_{os.path.basename(done['video'])}"))
     chain = [graphs.free_memory("before re-decoding").nodes] + clips + \
         [graphs.free_memory("before assembly").nodes, graphs.assemble(run_dir=d, prefix=rel).nodes]
+    director.check_jobs(chain, p.get("models") or "")  # before the plan records it
     p.setdefault("pickups", []).append({"n": k, "kind": "sharpen", "at": _dt.datetime.now().isoformat(timespec="seconds"),
                                         "t": time.time(), "items": changes, "estimate_min": round(est, 1)})
     json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
@@ -1206,8 +1262,17 @@ async def _api(request: web.Request, route: str) -> web.Response:
         if not b.get("song"):
             return web.json_response({"error": "pick a song first"}, status=400)
         return web.json_response(await _blocking(_estimate, b))
-    if route == "models":  # the GPU's memory, the set "auto" picks, and each set's missing files
-        return web.json_response(await _blocking(lambda: _fv("graphs").models_report()))
+    if route == "models":  # the GPU's memory, the set "auto" picks, each set's missing files, and
+        # what this ComfyUI needs before it can plan or render (setup_check), as soon as the Brief opens
+        def models():
+            rep = _fv("graphs").models_report()
+            try:
+                rep["setup"] = _fv("setup_check").report(q.get("models") or "auto", q.get("preset") or "quality",
+                                                         q.get("format") or "16:9")
+            except Exception as e:  # never let the check stop the page
+                rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
+            return rep
+        return web.json_response(await _blocking(models))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
     if route.startswith("xml/"):
@@ -1235,6 +1300,10 @@ async def _api(request: web.Request, route: str) -> web.Response:
             if not body.get("song"):
                 return web.json_response({"error": "pick a song first"}, status=400)
             _song_path(body["song"])
+            todo = await _blocking(_cant_start, body)
+            if todo:
+                lead = "It can't start yet." if body.get("render") else "It can't write the plan yet."
+                return web.json_response({"error": " ".join([lead] + todo), "setup": todo}, status=400)
             try:
                 est = await _blocking(_estimate, body)
             except Exception as e:

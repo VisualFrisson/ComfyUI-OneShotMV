@@ -230,6 +230,13 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     readers = {rid: ClipReader(clip_path(r), (rw, rh), trim_bars=r.get("role") == "R")
                for rid, r in renders.items()}
     missing = [rid for rid, rd in readers.items() if not rd.ok]
+    sung = [rid for rid, r in renders.items() if r.get("role") == "A" and not r.get("unused")]
+    if plan.get("mode", "voice") == "voice" and sung and all(rid in missing for rid in sung):
+        raise RuntimeError(f"None of the {len(sung)} singing clips rendered, so there is nothing to cut. Every "
+                           "LTX clip failed: the first error in the ComfyUI console, also shown on the Studio's "
+                           "Rendering screen, says why.")
+    if missing:
+        print(f"[OneShotMV] {len(missing)} of {len(readers)} clips didn't render and are left out of the cut")
 
     held = {}  # output frames that had to hold a clip's first / last frame (shows as a pause)
 

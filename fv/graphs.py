@@ -107,25 +107,6 @@ def missing_files(name: str, idx=None) -> list:
     return sorted(set(f for _, f in _resolve_models(m, idx)[1]))
 
 
-LOADER_INPUTS = ("unet_name", "ckpt_name", "clip_name", "lora_name", "vae_name", "model_name", "text_encoder")
-
-
-def missing_in_jobs(job_graphs, idx=None) -> list:
-    """The model files these jobs load that this ComfyUI doesn't list (a name _resolve_models
-    couldn't find stays as written, so ComfyUI would refuse the job). [] outside ComfyUI."""
-    idx = idx if idx is not None else _model_index()
-    if idx is None:
-        return []
-    have = idx[0]
-    out = set()
-    for g in job_graphs:
-        for n in g.values():
-            for k, v in (n.get("inputs") or {}).items():
-                if k in LOADER_INPUTS and isinstance(v, str) and v.lower().endswith(MODEL_EXT) and v not in have:
-                    out.add(os.path.basename(v.replace("\\", "/")))
-    return sorted(out)
-
-
 def pick_models(requested: str | None = "auto") -> str:
     """The model set for a run: the requested one, or with "auto" the full set on cards with 48 GB or
     more when its files are installed, otherwise the 24 GB set."""
@@ -158,64 +139,147 @@ def use_models(name: str | None = "auto") -> str:
     return name
 
 
-# SageAttention modes (KJNodes' PathchSageAttentionKJ) -> (function it imports, lowest compute
-# capability, the flag in sageattention.core that says the kernel was built)
-SAGE_KERNELS = {"auto": ("sageattn", (8, 0), None),
-                "sageattn_qk_int8_pv_fp16_triton": ("sageattn_qk_int8_pv_fp16_triton", (8, 0), None),
+# SageAttention is optional, for speed. KJNodes' PathchSageAttentionKJ loads the kernel a mode names
+# when a clip runs, and if the installed package or the card doesn't have it, every LTX clip fails.
+# So the kernel is chosen for this machine: the one in fv/models.json (ltx23_sage) when it can run
+# here; otherwise "auto", which lets SageAttention 2 pick the kernel for the card; otherwise none, and
+# the clips render without Sage, only slower. A clip that still fails is re-shot without it (qc_pass).
+# mode -> (the function KJNodes imports, the lowest compute capability, the flag in
+# sageattention.core that says this build has the kernel)
+SAGE_KERNELS = {"sageattn_qk_int8_pv_fp16_triton": ("sageattn_qk_int8_pv_fp16_triton", (8, 0), None),
                 "sageattn_qk_int8_pv_fp16_cuda": ("sageattn_qk_int8_pv_fp16_cuda", (8, 0), "SM80_ENABLED"),
                 "sageattn_qk_int8_pv_fp8_cuda": ("sageattn_qk_int8_pv_fp8_cuda", (8, 9), "SM89_ENABLED"),
                 "sageattn_qk_int8_pv_fp8_cuda++": ("sageattn_qk_int8_pv_fp8_cuda", (8, 9), "SM89_ENABLED")}
-_SAGE: dict = {}  # mode -> the mode to use (or None), worked out once
+# "auto" (sageattention.sageattn) picks a kernel by the card's compute capability and stops on any
+# other card: the cards it has a kernel for, and the build flag that kernel needs
+SAGE_AUTO = {(8, 0): "SM80_ENABLED", (8, 6): None, (8, 9): "SM89_ENABLED", (9, 0): "SM90_ENABLED",
+             (12, 0): "SM89_ENABLED", (12, 1): "SM89_ENABLED"}
+_SAGE: dict = {}  # configured mode -> (the mode to use or None, why), worked out once
+
+
+def _kj_sage_modes() -> list | None:
+    """The modes the installed KJNodes' Sage node offers ([] if it isn't loaded, None outside ComfyUI)."""
+    try:
+        import nodes as comfy_nodes  # type: ignore
+    except Exception:
+        return None
+    cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("PathchSageAttentionKJ")
+    if cls is None:
+        return []
+    try:
+        spec = cls.INPUT_TYPES()["required"]["sage_attention"][0]
+        return list(spec) if isinstance(spec, (list, tuple)) else None
+    except Exception:
+        return None
+
+
+def _sage_kernel(pkg, mode: str, cap: tuple) -> str:
+    """'' when this SageAttention build has the mode's kernel for this card, else why not."""
+    core = getattr(pkg, "core", None)
+    if mode == "auto":
+        if cap not in SAGE_AUTO:
+            return f"SageAttention has no kernel for this card (compute {cap[0]}.{cap[1]}; it needs an RTX 30 card or newer)"
+        flag = SAGE_AUTO[cap]
+        if flag and core is not None and not getattr(core, flag, True):
+            return "this SageAttention build has no kernel for this card"
+        return ""
+    if "sageattn3" in mode:
+        return "" if cap >= (10, 0) else "SageAttention 3 needs an RTX 50 card"
+    fn, need, flag = SAGE_KERNELS.get(mode, (mode.rstrip("+"), (8, 0), None))
+    if not hasattr(pkg, fn):
+        return f"this SageAttention has no {mode} kernel"
+    if cap < need:
+        return f"{mode} needs an RTX 40 or 50 card" if need == (8, 9) else f"{mode} needs a newer card"
+    if flag and core is not None and not getattr(core, flag, True):
+        return f"this SageAttention build has no {mode} kernel for this card"
+    return ""
+
+
+def _sage_choice(mode: str | None) -> tuple:
+    """(the mode the LTX jobs use here or None, why it differs from the configured one)."""
+    if not mode or mode == "disabled":
+        return None, "turned off in fv/models.json (ltx23_sage)"
+    import importlib
+    import importlib.util
+    try:
+        import torch
+        if not torch.cuda.is_available() or getattr(torch.version, "hip", None):
+            return None, "it needs an NVIDIA GPU"
+        cap = tuple(torch.cuda.get_device_capability(torch.cuda.current_device()))
+    except Exception:
+        return None, "it needs an NVIDIA GPU"
+    try:
+        if importlib.util.find_spec("sageattention") is None:
+            return None, "not installed"
+    except (ImportError, ValueError):
+        return None, "not installed"
+    try:
+        pkg = importlib.import_module("sageattention")
+    except Exception as e:
+        return None, f"SageAttention is installed but doesn't load ({type(e).__name__}: {str(e)[:120]})"
+    if not hasattr(pkg, "sageattn_qk_int8_pv_fp8_cuda"):  # 1.x has only sageattn and sageattn_varlen
+        try:
+            from importlib.metadata import version
+            ver = " " + version("sageattention")
+        except Exception:
+            ver = ""
+        return None, (f"the installed SageAttention{ver} is version 1 (what pip installs); "
+                      "OneShot MV uses SageAttention 2")
+    modes = _kj_sage_modes()
+    if modes == []:
+        return None, "ComfyUI-KJNodes isn't loaded"
+    why = _sage_kernel(pkg, mode, cap)
+    if "sageattn3" in mode and not why:
+        try:
+            importlib.import_module("sageattn3")
+        except Exception:
+            why = "SageAttention 3 isn't installed"
+    if not why and modes is not None and mode not in modes:
+        why = f"the installed ComfyUI-KJNodes has no {mode} mode"
+    if not why:
+        return mode, ""
+    if mode != "auto" and (modes is None or "auto" in modes) and not _sage_kernel(pkg, "auto", cap):
+        return "auto", f"{why}, so SageAttention picks the kernel for this card (auto)"
+    return None, why
 
 
 def sage_mode(mode: str | None) -> str | None:
-    """The SageAttention mode the LTX jobs can use here, or None to leave the patch out. Sage is
-    optional, but KJNodes' patch fails every LTX clip when the installed package or the GPU lacks
-    the mode's kernel: SageAttention 1.x (what pip installs from PyPI) has no CUDA kernels, and the
-    fp8 kernels need compute 8.9 (RTX 40 or 50). Without the patch the clips render, only slower."""
-    if not mode:
-        return None
-    if mode in _SAGE:
-        return _SAGE[mode]
-    use, why = None, ""
-    try:
-        import importlib
-        import torch
-        cap = tuple(torch.cuda.get_device_capability(torch.cuda.current_device())) \
-            if torch.cuda.is_available() else None
-        if "sageattn3" in mode:
-            fn, need, flag = "sageattn3_blackwell", (10, 0), None
-            pkg = importlib.import_module("sageattn3")
-        else:
-            fn, need, flag = SAGE_KERNELS.get(mode, (mode.rstrip("+"), (8, 0), None))
-            pkg = importlib.import_module("sageattention")
-        core = getattr(pkg, "core", None)
-        card = {(8, 0): "an RTX 30 card or newer", (8, 9): "an RTX 40 or 50 card"}.get(need, "an RTX 50 card")
-        tip = "; ltx23_sage = auto in fv/models.json picks the kernel that fits this card"
-        if cap is None:
-            why = "no CUDA GPU"
-        elif not hasattr(pkg, fn):
-            try:
-                from importlib.metadata import version
-                ver = " " + version(pkg.__name__)
-            except Exception:
-                ver = ""
-            why = f"the installed SageAttention{ver} has no {fn} kernel; SageAttention 2 has it"
-        elif cap < need:
-            why = f"{mode} needs {card}" + (tip if mode != "auto" and cap >= (8, 0) else "")
-        elif flag and core is not None and not getattr(core, flag, True):
-            why = f"this SageAttention build has no {mode} kernel for this card{tip}"
-        else:
-            use = mode
-    except ImportError:
-        pass  # not installed: the clips run without it, as always
-    except Exception as e:
-        why = f"{type(e).__name__}: {e}"
-    if why:
-        print(f"[OneShotMV] SageAttention is left out of the LTX clips: {why}. They render without it, "
-              "only slower.")
-    _SAGE[mode] = use
-    return use
+    """The SageAttention mode for the LTX clips on this machine, or None to leave the patch out."""
+    if mode not in _SAGE:
+        use, why = _sage_choice(mode)
+        _SAGE[mode] = (use, why)
+        if why and why != "not installed":
+            print(f"[OneShotMV] SageAttention: {why}." + ("" if use else " The clips render without it, only slower."))
+    return _SAGE[mode][0]
+
+
+def sage_report() -> str:
+    """SageAttention's state on this machine, in a sentence (the Studio's Brief)."""
+    mode = M.get("ltx23_sage")
+    use = sage_mode(mode)
+    why = _SAGE.get(mode, (None, ""))[1]
+    if use and not why:
+        return f"SageAttention 2 is on ({use})."
+    if use:
+        return f"SageAttention 2 is on: {why}."
+    if why == "not installed":
+        return "SageAttention isn't installed, so the clips render without it. SageAttention 2 makes them faster."
+    return f"SageAttention is off: {why}. The clips render without it, only slower."
+
+
+def strip_sage(g: dict) -> int:
+    """Take the SageAttention patch out of a job graph (a clip re-shot after it failed): whatever
+    read the patched model reads the model before it. Returns how many patches were removed."""
+    ids = [k for k, n in g.items() if isinstance(n, dict) and n.get("class_type") == "PathchSageAttentionKJ"]
+    for k in ids:
+        src = g[k].get("inputs", {}).get("model")
+        for n in g.values():
+            ins = n.get("inputs", {}) if isinstance(n, dict) else {}
+            for name, v in list(ins.items()):
+                if isinstance(v, list) and len(v) == 2 and str(v[0]) == k:
+                    ins[name] = src
+        del g[k]
+    return len(ids)
 
 
 M: dict = {}

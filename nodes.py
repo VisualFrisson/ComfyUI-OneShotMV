@@ -13,13 +13,14 @@ import folder_paths
 from . import fv as _fvpkg  # noqa: F401
 from .fv import assemble as fv_assemble
 from .fv import audiofx, beat, casting, director, export, faces, finish, formats, fx, graphs, lipsync, plan, pose, qc, stems, dsplan
+from .fv import setup_check
 from .fv import theme as fv_theme
 from .fv import broll as fv_broll
 from .fv import identity as fv_identity
 from .fv import critic as fv_critic
 
 CATEGORY = "OneShot MV"
-_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
+_MODULES = [beat, dsplan, formats, casting, faces, plan, pose, graphs, setup_check, fv_theme, fv_broll, fv_identity, fv_critic, stems, audiofx, fx, finish, export, lipsync, qc, fv_assemble, director]
 
 
 def _reload():

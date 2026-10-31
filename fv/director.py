@@ -15,7 +15,7 @@ import urllib.request
 
 import numpy as np
 
-from . import beat, casting, formats, graphs, plan as planner, stems
+from . import beat, casting, formats, graphs, plan as planner, setup_check, stems
 
 
 def _slug(s: str) -> str:
@@ -48,79 +48,19 @@ def queue_prompt(graph: dict, url: str | None = None, client_id: str = "oneshot-
             reply = json.loads(e.read().decode("utf-8", "replace"))
         except Exception:
             reply = None
-        raise QueueRefused(_refused(reply, e.code)) from e
-
-
-# the node classes a run can use that don't come with ComfyUI itself, and the pack of each
-NODE_PACKS = {"ClownsharKSampler_Beta": "RES4LYF", "LTX2AttentionTunerPatch": "ComfyUI-KJNodes",
-              "PathchSageAttentionKJ": "ComfyUI-KJNodes", "LTXICLoRALoaderModelOnly": "ComfyUI-LTXVideo",
-              "LTXAddVideoICLoRAGuide": "ComfyUI-LTXVideo", "DWPreprocessor": "comfyui_controlnet_aux"}
+        from . import setup_check
+        raise QueueRefused(setup_check.refused(reply, e.code)) from e
 
 
 class QueueRefused(RuntimeError):
-    """ComfyUI refused a job; the message says why in plain words."""
-
-
-def _what_is_missing(nodes_=(), files=(), other=(), model_set: str = "") -> str:
-    packs: dict = {}
-    for c in sorted(set(nodes_)):
-        packs.setdefault(NODE_PACKS.get(c, ""), []).append(c)
-    named = [f"{p} ({', '.join(cs)})" for p, cs in sorted(packs.items()) if p]
-    parts = []
-    if named:
-        listed = named[0] if len(named) == 1 else ", ".join(named[:-1]) + " and " + named[-1]
-        parts.append(f"Install the node pack{'s' if len(named) > 1 else ''} {listed}, then restart ComfyUI.")
-    if packs.get(""):
-        parts.append(f"Update ComfyUI; it has no {', '.join(packs[''])} node.")
-    if files:
-        which = {"24gb": " of the 24 GB set", "full": " of the full set"}.get(model_set, "")
-        parts.append(f"Model files{which} that ComfyUI can't find: {', '.join(sorted(set(files)))}. "
-                     "A file saved under another name counts as missing.")
-    return " ".join(parts + list(other))
-
-
-def _refused(reply, code: int) -> str:
-    """ComfyUI's refusal ({"error": ..., "node_errors": ...}, server.py) in plain words."""
-    if not isinstance(reply, dict):
-        return f"ComfyUI refused a OneShot MV job (HTTP {code}); the ComfyUI console says why."
-    err = reply.get("error") if isinstance(reply.get("error"), dict) else {}
-    nodes_, files, other = [], [], []
-    if err.get("type") == "missing_node_type":
-        nodes_.append((err.get("extra_info") or {}).get("class_type") or "?")
-    for ne in (reply.get("node_errors") or {}).values():
-        cls = ne.get("class_type", "")
-        for e in ne.get("errors") or []:
-            x = e.get("extra_info") or {}
-            name, val = x.get("input_name", ""), x.get("received_value")
-            if e.get("type") == "value_not_in_list" and name in graphs.LOADER_INPUTS:
-                files.append(os.path.basename(str(val).replace("\\", "/")))
-            elif e.get("type") == "value_not_in_list" and name == "sampler_name":
-                other.append(f"The sampler '{val}' comes with RES4LYF: install it, then restart ComfyUI.")
-            elif e.get("type") == "value_not_in_list":
-                other.append(f"{cls} has no '{val}' for {name}: update ComfyUI.")
-            else:
-                other.append(f"{cls}: {e.get('message', '')}" + (f" ({str(e['details'])[:160]})" if e.get("details") else "") + ".")
-    if not (nodes_ or files or other):
-        other.append(f"{err.get('message') or f'HTTP {code}'}; the ComfyUI console says more.")
-    return "ComfyUI refused a OneShot MV job. " + _what_is_missing(nodes_, files, dict.fromkeys(other),
-                                                                   graphs.M.get("_set", ""))
+    """ComfyUI refused a job; the message says why in plain words (setup_check.refused)."""
 
 
 def check_jobs(job_graphs, model_set: str = "") -> None:
-    """Before a run queues anything: every node its jobs use is installed and every model file they
-    load is listed, or nothing is queued and the error says what to install (ComfyUI would refuse
-    the job anyway, after part of the run was already queued). Does nothing outside ComfyUI."""
-    try:
-        import nodes as _comfy_nodes
-        reg = _comfy_nodes.NODE_CLASS_MAPPINGS
-    except Exception:
-        return
-    no_nodes = {n.get("class_type") for g in job_graphs for n in g.values()} - {None}
-    no_nodes = sorted(c for c in no_nodes if c not in reg)
-    no_files = graphs.missing_in_jobs(job_graphs)
-    if no_nodes or no_files:
-        raise ValueError("It can't render yet, so nothing was queued. " +
-                         _what_is_missing(no_nodes, no_files, (), model_set))
+    """Before jobs are queued: ComfyUI has every node, option and model file they use, or nothing is
+    queued and the error says what to install or update (setup_check). Does nothing outside ComfyUI."""
+    from . import setup_check
+    setup_check.check(job_graphs, model_set)
 
 
 def _node_available(name: str) -> bool:
@@ -133,7 +73,9 @@ def _node_available(name: str) -> bool:
 
 def queue_chain_front(graphs: list[dict], url: str | None = None) -> list[str]:
     """Queue graphs at the front of the queue so they run next, in the given order (follow-ups
-    of a run finish before the next run's renders start)."""
+    of a run finish before the next run's renders start). Nothing is queued if ComfyUI would refuse
+    any of them: a chain that stops partway leaves its last jobs queued (the cut of a run with no clips)."""
+    check_jobs(graphs)
     ids = [queue_prompt(g, url, front=True) for g in reversed(graphs)]
     return ids[::-1]
 
@@ -173,6 +115,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
     # queues, and every later pass, uses the same one (p["models"])
     model_set = graphs.use_models(models)
     log(f"[OneShotMV] models: the {'full' if model_set == 'full' else '24 GB'} set ({graphs.vram_gb():.0f} GB of GPU memory to use)")
+    # what this ComfyUI is missing, before minutes of planning (the run's own jobs are checked again
+    # before they are queued)
+    setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue) and mode == "voice",
+                                        theme=bool(theme and theme.strip()), mode=mode), model_set,
+                      lead="It can't start yet." if queue else "It can't write the plan yet.")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
     # in its log. Start from empty memory.
@@ -1030,6 +977,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         new_paths = {}
         rel = p.get("run_rel", "")
         lead_jobs, key_jobs, twin_jobs, portrait_jobs = [], [], [], []
+        sage_off = []
 
         def swap(g, old, new):
             return json.loads(json.dumps(g).replace(json.dumps(old)[1:-1], json.dumps(new)[1:-1]))
@@ -1060,6 +1008,11 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         g = swap(g, gnode["inputs"]["path"], cur_key)
                     break
             _refresh_prompt(g)
+            if "missing" in next((x.get("fail", []) for x in report if x["id"] == r["id"]), []) \
+                    and graphs.strip_sage(g):
+                # the clip didn't render at all: SageAttention can fail on a card or build the
+                # checks didn't catch, so the re-shoot runs without it (slower, but it renders)
+                sage_off.append(f"r{r['id']:03d}{r['role']}")
             if r["role"] == "A" and "sync" in next((x.get("fail", []) for x in report if x["id"] == r["id"]), []):
                 _articulate_prompt(g)
             if r["role"] == "A" and set(next((x.get("fail", []) for x in report if x["id"] == r["id"]), [])) \
@@ -1163,6 +1116,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                                   then_assemble=then_assemble, stage=stage, keep=keep).nodes)
         if queue and queue_rerolls:
             queued = queue_chain_front(jobs, server_url())
+        if sage_off:
+            log(f"[OneShotMV] {len(sage_off)} clip(s) didn't render; re-shooting them without SageAttention: "
+                + ", ".join(sage_off))
         msg = f"QC pass {pass_idx}: re-rolling {len(redo)} take(s): " + ", ".join(
             f"r{r['id']:03d}{r['role']}" for r in redo) + \
             (f"; {len(fb_clips)} group looks get their own clip" if fb_clips else "") + \
