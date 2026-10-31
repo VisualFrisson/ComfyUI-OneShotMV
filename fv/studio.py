@@ -288,6 +288,41 @@ def _estimate(b: dict) -> dict:
             "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win)}
 
 
+def _form(d: str, p: dict) -> dict:
+    """The Brief this run was made from, as the Studio's form holds it: saved with the run when the
+    Studio started it, else rebuilt from its plan (the song from ComfyUI's history, when it's there)."""
+    saved = (_load(os.path.join(d, "studio.json"), {}) or {}).get("brief")
+    if isinstance(saved, dict) and saved.get("song"):
+        return saved
+    cuts = p.get("cuts") or {}
+    form = {"name": _project(d), "song": _song_of(os.path.basename(d)), "theme": (p.get("theme") or {}).get("theme", ""),
+            "world": "custom", "seconds": round(float(p.get("song_t1", 0)) - float(p.get("song_t0", 0)), 1),
+            "start": round(float(p.get("song_t0", -1)), 2), "seed": p.get("seed", 1),
+            "broll": p.get("broll_share", 0.125), "fx": p.get("fx_level") or "subtle"}
+    form.update({f"cuts_{k}": cuts[k] for k in ("low", "medium", "high") if cuts.get(k)})
+    form.update({k: p[k] for k in ("format", "preset", "crowd", "cast_order", "models") if p.get(k)})
+    return form
+
+
+def _song_of(name: str, recent: int = 400) -> str:
+    """The song a run was made from: the Director job's LoadAudio input, from ComfyUI's history."""
+    try:
+        from server import PromptServer
+        hist = PromptServer.instance.prompt_queue.get_history(max_items=recent)
+    except Exception:
+        return ""
+    for h in hist.values():
+        outs = (h or {}).get("outputs") or {}
+        if not any(it.get("filename") == "jobs.json" and it.get("subfolder", "").rstrip("/").split("/")[-1] == name
+                   for o in outs.values() for it in (o.get("text") or []) if isinstance(it, dict)):
+            continue
+        pr = h.get("prompt")
+        g = pr[2] if isinstance(pr, (list, tuple)) and len(pr) > 2 and isinstance(pr[2], dict) else {}
+        return next((str(n["inputs"].get("audio", "")) for n in g.values()
+                     if isinstance(n, dict) and n.get("class_type") == "LoadAudio"), "")
+    return ""
+
+
 def _project(d: str) -> str:
     """The project name the user gave in the Studio ("" for runs made elsewhere)."""
     return str((_load(os.path.join(d, "studio.json"), {}) or {}).get("project") or "")
@@ -433,12 +468,12 @@ def _job(pid: str) -> dict:
         for it in node_out.get("text", []) or []:
             if isinstance(it, dict) and it.get("filename") == "jobs.json":
                 run = it.get("subfolder", "").rstrip("/").split("/")[-1]
-    if run and rec.get("project"):
+    if run and (rec.get("project") or rec.get("brief")):
         try:
             sj = os.path.join(_run_dir(run), "studio.json")
             if not os.path.isfile(sj):
                 with open(sj, "w", encoding="utf-8") as f:
-                    json.dump({"project": rec["project"]}, f)
+                    json.dump({"project": rec.get("project", ""), "brief": rec.get("brief") or {}}, f)
         except Exception:
             pass
     return {"state": "done", "run": run}
@@ -694,6 +729,7 @@ def _run(name: str) -> dict:
                   "from": _clock(p.get("song_t0", 0)), "to": _clock(p.get("song_t1", 0)), "tempo": p.get("tempo"),
                   "fx": p.get("fx_level") or "subtle", "cuts": p.get("cuts") or {}, "seed": p.get("seed"),
                   "crowd": p.get("crowd", "auto"), "cast_order": p.get("cast_order", "as written")},
+        "form": _form(d, p),
         "world": world, "energy_map": p.get("energy_map") or [], "shots": shots,
         "notes": _notes(d, p, label_of, done=bool(done)),
         "latest": _view(latest) if latest else "",
@@ -1315,7 +1351,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
             pid = await _blocking(_queue_graph, _director_graph(body))
             import time
             with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
-                json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render")), "project": project}, f)
+                json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render")), "project": project,
+                           "brief": {k: v for k, v in body.items() if k not in ("render", "run_name")}}, f)
             return web.json_response({"prompt_id": pid, "estimate": est})
         if route == "recut":
             d = _run_dir(body.get("run", ""))

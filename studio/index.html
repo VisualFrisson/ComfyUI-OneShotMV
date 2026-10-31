@@ -38,6 +38,7 @@ nav.steps{display:flex;gap:6px;flex-wrap:wrap;margin-left:12px}
 .step .n{width:22px;height:22px;border-radius:50%;border:1px solid var(--line3);display:flex;align-items:center;justify-content:center;font-size:12px}
 .step.done{color:var(--muted)}.step.done .n{background:var(--line2);border-color:var(--line2);color:var(--text)}
 .step.now{background:var(--accent-bg);color:var(--text);font-weight:600}.step.now .n{background:var(--accent);border-color:var(--accent);color:#0A0A0A;font-weight:800}
+a.step{text-decoration:none;cursor:pointer}a.step:hover{color:var(--text);background:var(--line)}a.step:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .topright{margin-left:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 .chip{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:8px}
 .chip .led{width:8px;height:8px;border-radius:50%;background:var(--accent)}
@@ -528,7 +529,8 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem("osmv."+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem("osmv."+k, JSON.stringify(v)); }catch(e){} },
 };
-const S = { brief: Object.assign({}, DEFAULT_BRIEF, store.get("brief", {})), songs: null, analysis: null, sys: null, timer: null };
+const S = { brief: Object.assign({}, DEFAULT_BRIEF, store.get("brief", {})), songs: null, analysis: null, sys: null, timer: null,
+            stageOf: {}, showPlan: null, fromRun: null };
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, el=document) => el.querySelector(s);
@@ -704,14 +706,32 @@ function askName(){
   });
 }
 function stopTimer(){ if (S.timer){ clearInterval(S.timer); S.timer = null; } }
-function setSteps(cur){
+// run, stage: the video on screen (and how far it is), so its other steps are links: the Brief it was
+// made from, its plan, its render while it runs, its result once it's made. Going back never changes
+// a video: a new World or cast from the Brief or the Plan makes a new one, and this one stays.
+function setSteps(cur, run, stage){
   const names = ["The Brief","The Plan","Rendering","Result"];
+  if (run && stage) S.stageOf[run] = stage;
+  stage = stage || (run ? S.stageOf[run] : "");
+  const enc = encodeURIComponent(run || "");
+  const href = i => {
+    if (i === cur) return "";
+    if (i === 0) return run ? "#/brief/" + enc : "#/";
+    if (!run) return "";
+    if (i === 1) return "#/plan/" + enc;
+    if (i === 2) return stage && stage !== "preview" && stage !== "done" ? "#/render/" + enc : "";
+    return stage === "done" ? "#/result/" + enc : "";
+  };
   $("#steps").innerHTML = names.map((n,i)=>{
     const st = i < cur ? "done" : (i === cur ? "now" : "");
     const mark = i < cur ? '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>' : (i+1);
-    return `<span class="step ${st}"${i===cur?' aria-current="step"':''}><span class="n">${mark}</span>${n}</span>`;
+    const h = href(i);
+    return h ? `<a class="step ${st}" href="${h}" data-step="${i}" data-run="${esc(run || "")}"><span class="n">${mark}</span>${n}</a>`
+             : `<span class="step ${st}"${i===cur?' aria-current="step"':''}><span class="n">${mark}</span>${n}</span>`;
   }).join("");
 }
+// the Plan step of a video that is rendering or made shows its plan, instead of sending you on
+document.addEventListener("click", e => { const a = e.target.closest && e.target.closest('#steps a[data-step="1"]'); if (a) S.showPlan = a.dataset.run; });
 function lvlBadge(l){ return `<span class="lvl"><i style="background:${LEVEL_COL[l]||'var(--mid)'}"></i>${esc(l||"")}</span>`; }
 
 // ---------------------------------------------------------------- router
@@ -720,10 +740,23 @@ function route(){
   stopTimer();
   const h = location.hash.replace(/^#\/?/, "").split("/");
   const [page, run] = [h[0] || "", decodeURIComponent(h.slice(1).join("/") || "")];
+  if (page === "brief" && run) return openBrief(run);  // the Brief this video was made from, to change it and make another
+  if (page !== "brief") S.fromRun = null;
   if (page === "plan" && run) return viewPlan(run);
   if (page === "render" && run) return viewRender(run);
   if (page === "result" && run) return viewResult(run);
   if (page === "videos") return viewVideos();
+  return viewBrief();
+}
+
+async function openBrief(run){
+  // saved in this browser when it started the run; else the one the run keeps (any browser)
+  let b = store.get("briefs", {})[run];
+  if (!b){ try{ b = (await api("run/" + encodeURIComponent(run))).form; }catch(e){} }
+  if (b && (b.theme || b.song)){
+    S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; saveBrief(); S.fromRun = run;
+    if (!b.song) toast("This video's song isn't recorded, so pick it again. Everything else is as it was.");
+  } else toast("This video's brief couldn't be found, so this is your last one.");
   return viewBrief();
 }
 
@@ -740,7 +773,8 @@ async function loadSystem(){
 
 // ---------------------------------------------------------------- 1. The Brief
 async function viewBrief(){
-  setSteps(0);
+  if (!/^#\/brief\//.test(location.hash)) S.fromRun = null;
+  setSteps(0, S.fromRun);
   const b = S.brief;
   const app = $("#app");
   app.innerHTML = `
@@ -1062,12 +1096,16 @@ async function start(render, briefOverride){
 
 // ---------------------------------------------------------------- 2. The Plan
 async function viewPlan(run){
-  setSteps(1);
+  setSteps(1, run);
   const app = $("#app");
   app.innerHTML = `<p class="muted">Loading the plan…</p>`;
+  const asked = S.showPlan === run; S.showPlan = null;
   let r;
   try{ r = await api("run/" + encodeURIComponent(run)); }catch(e){ app.innerHTML = `<p class="banner">${esc(e.message)}</p>`; return; }
-  if (r.stage !== "preview"){ location.hash = (r.stage === "done" ? "#/result/" : "#/render/") + encodeURIComponent(run); return; }
+  // a video already rendering or made: its plan only when asked for from the steps, else go on to it
+  if (r.stage !== "preview" && !asked){ location.hash = (r.stage === "done" ? "#/result/" : "#/render/") + encodeURIComponent(run); return; }
+  setSteps(1, run, r.stage);
+  const made = r.stage !== "preview";
   const w = r.world, b = r.brief;
   const brief = store.get("briefs", {})[run];
   const sing = r.shots.filter(s => s.kind === "sing").length, cut = r.shots.length - sing;
@@ -1075,10 +1113,11 @@ async function viewPlan(run){
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
   <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(w.headline || "House look")} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
-    <span class="mono muted" style="font-size:12px">Nothing is rendered yet</span></div>
+    <span class="mono muted" style="font-size:12px">${made ? (r.stage === "done" ? "This video is made" : "This video is rendering") : "Nothing is rendered yet"}</span></div>
+  ${made ? `<p class="note" style="margin:0 0 16px">This is the plan this video was made from. A new World, or Shuffle the cast, makes a new video; this one stays in <a href="#/videos">Your videos</a>.</p>` : ""}
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
-     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="#/" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
+     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="#/brief/${encodeURIComponent(run)}" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
      <p style="margin:0;font-size:18px;line-height:1.35;font-weight:600">${esc(w.headline || "The house look: no World line")}</p>
      ${w.camera ? `<div><div class="kv">Camera</div><div style="font-size:14px;color:#D4D4D4">${esc(w.camera)}</div></div>` : ""}
      ${w.places && w.places.length ? `<div><div class="kv">Places</div><div style="font-size:14px;color:#D4D4D4">${esc(w.places.slice(0,6).map(p=>String(p).replace(/^(in|on|at|near|by) (the )?/i,"")).join(" · "))}${w.places.length > 6 ? " · …" : ""}</div></div>` : ""}
@@ -1096,21 +1135,22 @@ async function viewPlan(run){
    </section>
   </div>
   <div class="bar">
-    <a class="btn" href="#/">Change the World</a>
+    <a class="btn" href="#/brief/${encodeURIComponent(run)}">Change the World</a>
     <button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
+    ${made ? `<a class="btn primary big" href="${r.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(run)}">${r.stage === "done" ? "Back to the video" : "Back to the render"}</a>`
+           : `<button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>`}
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
   if (brief){
-    $("#make").onclick = () => start(true, brief);
+    if ($("#make")) $("#make").onclick = () => start(true, brief);
     $("#shuffle").onclick = () => { const nb = Object.assign({}, brief, {seed: (+brief.seed || 1) + 1}); S.brief = Object.assign({}, S.brief, {seed: nb.seed}); saveBrief(); start(false, nb); };
   }
 }
 
 // ---------------------------------------------------------------- 3. Rendering
 async function viewRender(run){
-  setSteps(2);
+  setSteps(2, run);
   const app = $("#app");
   app.innerHTML = `<p class="muted">Loading…</p>`;
   let first = true;
@@ -1119,7 +1159,7 @@ async function viewRender(run){
     try{ r = await api("run/" + encodeURIComponent(run)); }catch(e){ if (first) app.innerHTML = `<p class="banner">${esc(e.message)}</p>`; return; }
     if (r.stage === "done"){ stopTimer(); location.hash = "#/result/" + encodeURIComponent(run); return; }
     if (r.stage === "preview"){ stopTimer(); location.hash = "#/plan/" + encodeURIComponent(run); return; }
-    if (first){ renderSkeleton(r); first = false; }
+    if (first){ renderSkeleton(r); first = false; setSteps(2, run, r.stage); }
     renderUpdate(r);
   };
   await tick();
@@ -1185,7 +1225,7 @@ function renderUpdate(r){
 const pickKey = run => "pickups." + run;
 let REFINE_OPEN = null;  // the open Post Processing panel on the Result screen (all closed at first)
 async function viewResult(run){
-  setSteps(3);
+  setSteps(3, run, "done");
   const app = $("#app");
   let r;
   try{ r = await api("run/" + encodeURIComponent(run)); }catch(e){ app.innerHTML = `<p class="banner">${esc(e.message)}</p>`; return; }
