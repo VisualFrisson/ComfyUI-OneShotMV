@@ -1137,7 +1137,27 @@ def _offstage(role: str, theme: str) -> bool:
 
 
 _ROLE_SPLIT = re.compile(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
-                         r"fanning|carrying|by|near|under|and|alone|standing|sitting|waiting|leaning|waving)\b")
+                         r"fanning|carrying|by|near|under|and|alone|standing|sitting|waiting|leaning|waving|outside|"
+                         r"inside|behind|beneath|up|dressed|(?!(?:king|viking)\b)[a-z]{2,}ing(?=\s+(?:(?:up|out|down|off|over|back|away)\s+)?"
+                         r"(?:the|a|an|his|her|their|its|some)\b))\b")
+# "the owner, a man in his sixties with ...": what the owner looks like, not a second character
+_APPOSITIVE = re.compile(r"(?i)^(?:an?\s+)?(?:(?:young|old|older|elderly|tall|short|stout|slim)\s+)?(?:man|woman|person|"
+                         r"lady|gentleman|guy|fellow|figure)(?![\w'-])")
+# "the announcer and the superfan in face paint": two characters ("a goat with horns and a bell": one)
+_AND_SPLIT = re.compile(r"(?i)^((?:an?|the)\s+[\w'-]+(?:\s+[\w'-]+){0,2})\s+and\s+((?:an?|the)\s.+)$")
+# a list of places after the cast ("...; the showroom floor; humming light")
+_PLACE_NOUN = re.compile(r"(?i)\b(?:room|floor|hall|stage|kitchen|street|alley|beach|field|yard|garden|market|shop|"
+                         r"store|stockroom|display|window|deck|dock|pier|harbou?r|arena|rink|track|court|pool|booth|"
+                         r"counter|office|lobby|station|platform|cave|forest|valley|river|lake|sea|shore|cliff|ridge|"
+                         r"meadow|square|plaza|terrace|rooftop|balcony|corridor|backstage|tent|chapel|church|bar|"
+                         r"diner|lot|ring|gym|stands|bleachers|showroom|warehouse|alleyway|sky|water|hallway|"
+                         r"cafeteria|clubhouse|gymnasium|tunnel|entrance|buffet)s?$")
+
+
+def _is_place(desc: str) -> bool:
+    """'the hallway of lockers', 'the showroom floor': a place in the cast list, not a character."""
+    role = _ROLE_SPLIT.split(re.sub(r"(?i)^\s*(?:an?|the)\s+", "", desc))[0]
+    return bool(_PLACE_NOUN.search(role.split(" of ")[0].strip(" ,.")))
 # a long creature description: the kind before what it is made of ("snowdrift creature of packed powder")
 _ROLE_CUT = re.compile(r"(?i)\s+(?:of|built|made|carved|covered|formed|shaped|drifting|like)\b")
 
@@ -1146,21 +1166,52 @@ def named_characters(theme: str) -> list[tuple[str, str]]:
     """(role, the World line's own words for that character) for each character it names ("headline,
     all invented adults: a murmillo gladiator in a crested helmet, the emperor in a purple toga, ...;
     places; light"), in its order."""
-    head = theme.split(";")[0]
-    if ":" not in head:
+    segs = [x.strip() for x in theme.split(";")]
+    if ":" not in segs[0]:
         return []
+    # the cast follows the last colon a character follows: "No people, all animals: a farm at sunrise:
+    # a rooster, ..." (not "residents in their eighties ...: early-bird dinner, water aerobics")
+    parts = segs[0].split(":")
+    k = max((i for i in range(1, len(parts)) if re.match(r"(?i)\s*(?:an?|the)\s", parts[i])), default=1)
+    stretches = [":".join(parts[k:])]
+    if len(_cast_items(stretches[0], merge=True)) == 1:  # one character to a ";": "the owner, a man in his
+        for x in segs[1:]:                                 # sixties with ...; the champion, ...; ..."
+            items = _cast_items(x, merge=True)
+            if not re.match(r"(?i)(?:an?|the)\s", x) or len(items) != 1 or _is_place(items[0]):
+                break  # the places, or the light
+            stretches.append(x)
+    merge = len(stretches) > 1
     out = []
-    for item in re.split(r",\s+(?=(?:an?|the)\s)", head.split(":", 1)[1]):
-        desc = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", " ".join(item.split())).strip(" .,")
+    for item in (i for x in stretches for i in _cast_items(x, merge)):
+        if _is_place(item):
+            continue
+        desc = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", item).strip(" .,")
         role = _ROLE_SPLIT.split(desc)[0].strip(" .,")
         role = role.split(",")[0].strip()  # "champion murmillo gladiator, scarred and oiled"
         if len(role.split()) > 4 or re.search(r"(?i)\s(?:built|made|carved|covered|formed|shaped)$", role):
             role = _ROLE_CUT.split(role)[0].strip()  # "glacier creature of clear blue ice" -> "glacier creature"
         if _GEAR.search(role.split()[-1] if role.split() else ""):
             continue  # "..., a short sword and a tall shield": the last character's kit, not a character
-        if 2 < len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r, _ in out]:
+        if 2 <= len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r, _ in out]:  # the DJ
             out.append((role, desc))
     return out
+
+
+def _cast_items(text: str, merge: bool = False) -> list[str]:
+    """The characters in one stretch of a World line's cast, each with its own words. merge: a cast
+    written one character to a ";", where "the owner, a man in his sixties" is one character (in a
+    list with commas, "a barber, a woman under a hood dryer" are two)."""
+    items: list[str] = []
+    for item in re.split(r",\s+(?=(?:an?|the)\s)", text):
+        item = " ".join(item.split()).strip(" .,")
+        m = _AND_SPLIT.match(item)
+        parts = [m.group(1), m.group(2)] if m and not _ROLE_SPLIT.search(m.group(1)) else [item]
+        for x in parts:
+            if merge and items and _APPOSITIVE.match(x):
+                items[-1] += ", " + x  # "the owner, a man in his sixties"
+            elif x:
+                items.append(x)
+    return items
 
 
 def _named_roles(theme: str) -> list[str]:
@@ -1257,7 +1308,7 @@ def _attach_given(chars: list[dict], theme: str) -> int:
     return k
 
 
-_GEAR = re.compile(r"(?i)^(?:swords?|sica|shields?|nets?|tridents?|helmets?|spears?|lances?|guards?|wraps?|greaves|"
+_GEAR = re.compile(r"(?i)^(?:swords?|sica|shields?|nets?|tridents?|helmets?|spears?|lances?|guards?|wraps?|greaves|harness|"
                    r"breastbands?|breastplates?|caps?|hats?|togas?|tunics?|robes?|silks?|pearls?|wreaths?|pelts?|"
                    r"branch(?:es)?|cloaks?|capes?|bags?|cases?|cups?|trays?|aprons?|dress(?:es)?|suits?|coats?|"
                    r"jackets?|shirts?|boots?|shoes?|gloves?|scarf|scarves|belts?|sashes?|necklaces?|earrings?|"

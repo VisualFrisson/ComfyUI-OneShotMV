@@ -107,6 +107,47 @@ def test_the_world_lines_own_creatures_keep_their_words():
     assert list(named) == ["snowdrift creature", "glacier creature", "moss creature", "tide creature"]
 
 
+# From the stress test of Oct 31: the ways people write a cast, and the characters each line names
+STRESS = [
+    ("No people: a 1970s appliance store after closing time where the machines come alive, all robots: a chrome "
+     "toaster robot with round dial eyes and a bread-slot mouth; a canister vacuum robot with headlamp eyes and a "
+     "hose-nozzle mouth; a jukebox robot with bubble-tube eyes and a speaker-grille mouth; the showroom floor, the "
+     "stockroom and the window display; humming fluorescent light at night",
+     ["chrome toaster robot", "canister vacuum robot", "jukebox robot"]),
+    ("No people, all animals: a farm at sunrise, played like a nature documentary: a rooster on the fence post, a "
+     "goat on the hay bales, a barn owl in the rafters; soft golden sunrise light and mist",
+     ["rooster", "goat", "barn owl"]),
+    ("Present day, all women: roller derby bout night in a warehouse rink: the jammer, the coach with a clipboard, "
+     "the announcer and the superfan in face paint; hard white arena light and a packed crowd",
+     ["jammer", "coach", "announcer", "superfan"]),
+    ("Tokyo, 1985, a neon arcade at midnight: the owner, a man in his sixties with a grey crew cut and a brown "
+     "cardigan; the rhythm-game champion, a woman in her twenties with bleached hair; a salaryman with a loosened "
+     "tie; the noodle-stand cook outside under a paper lantern; colourful neon and screen glow at night",
+     ["owner", "rhythm-game champion", "salaryman", "noodle-stand cook"]),
+    ("No humans: the deep sea at night, a cast of glowing creatures of the midnight zone: an anglerfish with a "
+     "lantern lure and needle teeth; a vampire squid with blue-lit arms; a giant isopod on the sea floor; dark "
+     "water and bioluminescent glow",
+     ["anglerfish", "vampire squid", "giant isopod"]),
+    ("A 2020s backyard wedding in Texas at golden hour: the bride's grandmother, a woman in her eighties in a lilac "
+     "dress and pearls; the nervous best man; the DJ under the oak tree; under string lights in the warm last sun",
+     ["bride's grandmother", "nervous best man", "DJ"]),
+    ("Men only: a 1950s barbershop on a Saturday morning: the old barber, a mailman on his break, a boxer reading "
+     "the racing form; warm morning sun through the shop window", ["old barber", "mailman", "boxer"]),
+]
+
+
+@pytest.mark.parametrize("line, want", STRESS)
+def test_the_cast_the_world_line_names(line, want):
+    assert [r for r, _ in theme.named_characters(line)] == want
+
+
+def test_a_described_character_keeps_all_its_words():
+    named = dict(theme.named_characters(STRESS[3][0]))
+    assert named["owner"] == "owner, a man in his sixties with a grey crew cut and a brown cardigan"
+    assert dict(theme.named_characters(STRESS[0][0]))["jukebox robot"] == \
+        "jukebox robot with bubble-tube eyes and a speaker-grille mouth"
+
+
 def test_a_creature_is_named_once():
     r = theme.rules(ELEMENTS)
     c = theme._characters([_char("ice shard creature", look="an ice shard creature formed from jagged, translucent "
