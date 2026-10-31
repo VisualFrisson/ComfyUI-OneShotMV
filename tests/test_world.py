@@ -107,6 +107,13 @@ def test_the_world_lines_own_creatures_keep_their_words():
     assert list(named) == ["snowdrift creature", "glacier creature", "moss creature", "tide creature"]
 
 
+def test_a_creature_is_named_once():
+    r = theme.rules(ELEMENTS)
+    c = theme._characters([_char("ice shard creature", look="an ice shard creature formed from jagged, translucent "
+                                 "ice fragments, with deep-set eyes", kind="creature")], rules=r)[0]
+    assert c["who"] == "an ice shard creature formed from jagged, translucent ice fragments, with deep-set eyes"
+
+
 # ------------------------------------------------------------------ a creature World, to the clips
 def test_a_creature_world_stays_creatures_even_when_the_model_writes_people(gemma, monkeypatch):
     asked, st = gemma

@@ -468,7 +468,11 @@ def _characters(v, allow_eyewear: bool = False, rules: dict | None = None) -> li
                 look = ", ".join(x for x in re.split(r",\s*|;\s*", look)  # a person's skin tone or hairdo,
                                  if x.strip() and not _HUMAN_LOOK.search(x))      # written anyway: the whole clause
                 rname = _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role))
-                who = f"{_article(rname)} {rname}" + (f", {look}" if look else "")
+                lk = re.sub(r"(?i)^(?:an?|the)\s+", "", look)
+                if lk.lower().startswith(rname.lower()):  # "an ice shard creature formed from ...": named once
+                    who = f"{_article(lk)} {lk}"
+                else:
+                    who = f"{_article(rname)} {rname}" + (f", {look}" if look else "")
                 extra = {"role": rname, "kind": "creature", "gender": "",
                          "age": "", "look": look}
             else:
