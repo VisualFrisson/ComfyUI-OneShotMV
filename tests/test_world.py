@@ -95,6 +95,14 @@ def _cast(bible, n=6):
     ("A 1965 airline, nothing modern: pilots, stewardesses and passengers", {"cast": "people", "gender": "", "now": False}),
     ("a barbershop quartet contest in 1910, men only", {"cast": "people", "gender": "man", "now": False}),
     ("a car factory run entirely by robots, no humans", {"cast": "creatures", "gender": "", "now": False}),
+    # Oct 31: the author's own line came out 6 women and 6 men
+    ("A sunny beach in modern day, on a hot day. Only sexy females.", {"cast": "people", "gender": "woman", "now": True}),
+    ("only beautiful young women", {"cast": "people", "gender": "woman", "now": False}),
+    ("a boxing gym, all grown men", {"cast": "people", "gender": "man", "now": False}),
+    ("A ball where all the men and women dance", {"cast": "people", "gender": "", "now": False}),
+    ("all women and men", {"cast": "people", "gender": "", "now": False}),
+    ("men and women only", {"cast": "people", "gender": "", "now": False}),
+    ("the only two women in a bar full of sailors", {"cast": "people", "gender": "", "now": False}),
 ])
 def test_rules(line, want):
     assert theme.rules(line) == want

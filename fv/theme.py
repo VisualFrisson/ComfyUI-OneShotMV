@@ -78,12 +78,18 @@ _NO_PEOPLE = re.compile(r"(?i)\b(?:no|without)\s+(?:other\s+)?(?:people|humans?|
 _CREATURE_CAST = re.compile(r"(?i)\b(?:all|every|only|entirely)\b[^,.;:]{0,40}?\b(?:creatures?|animals?|beasts?|robots?|"
                             r"androids?|machines?|monsters?|elementals?|aliens?|dragons?|spirits?|golems?|puppets?|toys?)\b")
 _W, _M = r"(?:women|woman|females?|ladies|lady|girls?)", r"(?:men|man|males?|guys?|gentlemen|boys?)"
-_ONLY = (r"\bno (?:{other})\b|\b(?:only|all)[- ](?:the )?(?:{one})\b|\b(?:{one}) only\b|\ball[- ](?:{adj})\b|"
+# "only sexy females", "all grown men" (a word or two between); not "the only two women", "all day long the women"
+_BETWEEN = (r"(?:(?!(?:one|two|three|four|five|six|a|few|of|day|night|long|year|week|around|over|along|at|in|with|"
+            r"and|or)\b)[a-z][\w-]*\s+){{0,2}}?")
+_ONLY = (r"\bno (?:{other})\b|(?<!the )\b(?:only|all)[- ](?:the )?" + _BETWEEN + r"(?:{one})\b(?!\s+(?:and|or|&)\s)|"
+         r"(?<!and )(?<!or )(?<!& )\b(?:{one}) only\b|\ball[- ](?:{adj})\b(?!\s+(?:and|or|&)\s)|"
          r"\b(?:every|each) (?:single )?(?:one|character|singer|person|performer|member)\b[^.;]{{0,30}}?\bis an? "
          r"(?:[\w-]+\s+){{0,4}}?(?:{one})\b|"
          r"\b(?:all|the) (?:the )?(?:characters|singers|performers|cast|people)\b[^.;]{{0,20}}?\bare (?:all )?"
          r"(?:[\w-]+\s+){{0,4}}?(?:{one})\b")
 _ONLY_WOMEN = re.compile("(?i)" + _ONLY.format(one=_W, other=_M, adj="female"))
+_MIXED = re.compile(rf"(?i)\b(?:{_M}\s+(?:and|or|&)\s+(?:\w+\s+)?{_W}|{_W}\s+(?:and|or|&)\s+(?:\w+\s+)?{_M}|"
+                    r"male\s+(?:and|or|&)\s+female|female\s+(?:and|or|&)\s+male)\b")
 _ONLY_MEN = re.compile("(?i)" + _ONLY.format(one=_M, other=_W, adj="male"))
 _NOW = re.compile(r"(?i)\b(?:modern(?:[- ](?:day|times?))?|present[- ]day|today|contemporary|nowadays|current[- ]day|"
                   r"20[2-3]0s|202\d)\b")
@@ -114,6 +120,8 @@ def rules(theme: str) -> dict:
     t = " ".join((theme or "").split())
     creatures = bool(_NO_PEOPLE.search(t) or _CREATURE_CAST.search(t))
     w, m = bool(_ONLY_WOMEN.search(t)), bool(_ONLY_MEN.search(t))
+    if _MIXED.search(t):
+        w = m = False  # "all the men and women", "men and women only"
     return {"cast": "creatures" if creatures else "people",
             "gender": "" if creatures or w == m else ("woman" if w else "man"), "now": _says_now(t)}
 
