@@ -64,6 +64,36 @@ def test_the_sdk_graph_sends_what_the_node_has(node):
     assert set(req) <= set(d) and set(d) <= set(req + opt)
 
 
+def test_the_studio_asks_for_a_restart_after_an_update(node, monkeypatch):
+    """The Studio reloads on every request, the node only when ComfyUI restarts: until then the old
+    node refuses the new inputs, so the Brief says to restart instead of starting."""
+    from fv import studio
+
+    class OldDirector:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {"required": {"audio": ("AUDIO",), "mode": (["voice", "motion"],), "theme": ("STRING",)}}
+    reg = sys.modules["nodes"].NODE_CLASS_MAPPINGS
+    monkeypatch.setitem(reg, "FVDirector", OldDirector)
+    assert studio._cant_start({"render": True}) == [studio.RESTART]
+    monkeypatch.setitem(reg, "FVDirector", node)
+    assert studio.RESTART not in studio._cant_start({"render": True})
+
+
+def test_the_studio_follows_the_plan_step(node, monkeypatch):
+    """The planning progress reads the Director's log; its plan line lost "voice" with motion mode."""
+    import time
+    from fv import studio
+    now = time.time()
+    logger = types.ModuleType("app.logger")
+    logger.get_logs = lambda: [{"t": now + 1, "m": "[OneShotMV] plan: 16 renders, window 48.83-78.83s, tempo 94"}]
+    monkeypatch.setitem(sys.modules, "app", types.ModuleType("app"))
+    monkeypatch.setitem(sys.modules, "app.logger", logger)
+    parts = [{"id": "listen", "name": "Listening to the song", "s": 10},
+             {"id": "stems", "name": "Separating the vocals", "s": 10}]
+    assert studio._progress("x", {"t_run": now, "estimate": {"parts": parts}})["step"] == "Separating the vocals"
+
+
 @pytest.mark.parametrize("name", ["OneShotMV.json", "OneShotMV_App.json"])
 def test_the_example_workflows_fit_the_node(node, name):
     """A saved workflow stores the node's widget values by position; a value in the wrong place

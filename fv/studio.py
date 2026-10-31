@@ -370,7 +370,7 @@ def _progress(pid: str, rec: dict) -> dict:
             batches_done += 1; cast_n = int(mm.group(1)); last_t = ts
         if "every role has its real gender" in m:
             done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
-        if "voice plan:" in m:
+        if "voice plan:" in m or "] plan:" in m:  # older Directors logged "voice plan:"
             done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "[OneShotMV] stems:" in m or "lyrics:" in m or "lyrics skipped" in m:  # older runs logged lyrics
             done.update({"listen", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
@@ -409,9 +409,27 @@ def _director_graph(b: dict) -> dict:
             "2": {"class_type": "FVDirector", "inputs": d}}
 
 
+RESTART = "OneShot MV was updated: restart ComfyUI once to load its new Director node, then reload this page."
+
+
+def _restart_needed() -> list:
+    """[RESTART] when the Director node ComfyUI loaded at startup is older than this Studio: the Studio
+    is reloaded on every request, nodes.py only by a restart, and the old node refuses the new inputs."""
+    try:
+        import nodes as comfy_nodes  # type: ignore
+        cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
+        if cls is not None and "world" not in (cls.INPUT_TYPES().get("required") or {}):
+            return [RESTART]
+    except Exception:
+        pass
+    return []
+
+
 def _cant_start(b: dict) -> list:
     """What this ComfyUI needs before it can make this brief's plan or video (setup_check), one line
     each: Make the video and Preview refuse at once instead of after minutes of planning."""
+    if _restart_needed():
+        return _restart_needed()
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
                                         b.get("format") or "16:9")
@@ -1294,6 +1312,9 @@ async def _api(request: web.Request, route: str) -> web.Response:
                                                          q.get("format") or "16:9")
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
+            stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts
+            rep["setup"]["plan"] = stale + list(rep["setup"].get("plan") or [])
+            rep["setup"]["render"] = stale + list(rep["setup"].get("render") or [])
             return rep
         return web.json_response(await _blocking(models))
     if route == "runs":

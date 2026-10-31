@@ -423,7 +423,7 @@ def plan_preview(p: dict, queued: bool = True) -> str:
     who is in each shot, where, in what; then the World's characters left out, and how to change it."""
     th = p.get("theme") or {}
     cast = {c["id"]: c for c in p.get("cast") or []}
-    lines = ["PLAN" + ("" if queued else " (preview: nothing rendered; turn queue_renders on to render it)")]
+    lines = ["PLAN" + ("" if queued else " (preview: nothing rendered; turn preview_only off to render it)")]
     if th.get("theme"):
         lines.append("World: " + th["theme"].split(":")[0].strip())
     if th.get("camera"):
@@ -534,8 +534,6 @@ def _take_inputs(run_dir: str, path: str) -> tuple[str | None, str | None]:
     return _video_in(g), img
 
 
-# LTX lands a pinned switch a little early (measured: 6 and 2 frames at 50 fps), so the pins sit
-# this much after the beat; _attach_groups then lines each real switch up with its beat
 def _looks_jobs(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict]]:
     """Staged runs, after the last singer QC pass: the look jobs (Klein keyframes, then the LTX
     look clips), following each lead's final take."""
