@@ -227,8 +227,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, mode: str = "voice", pa
         # the Director's cast order and crowd choices (casting._cast_theme)
         pk.setdefault("casting", {})["story"] = (cast_order or "as written") != "mixed"
         pk["casting"]["crowd_mode"] = crowd if crowd in ("on", "off") else "auto"
-        if bible and pk["casting"]["crowd_mode"] != "off" and (pk["casting"]["crowd_mode"] == "on" or
-                                                               themes.crowd_world(bible.get("theme", ""))):
+        if bible and (bible.get("rules") or {}).get("cast") != "creatures" and pk["casting"]["crowd_mode"] != "off" \
+                and (pk["casting"]["crowd_mode"] == "on" or themes.crowd_world(bible.get("theme", ""))):
             try:
                 dress = themes.crowd_dress(bible, seed=seed, out_root=out_root, log=log)
                 if dress and isinstance(pk["casting"].get("theme"), dict):
@@ -508,7 +508,8 @@ def plan_preview(p: dict, queued: bool = True) -> str:
             ck = c.get("check") or {}
             if c.get("char") is not None:
                 used.add(c["char"])
-            who = f"{ck.get('role') or c.get('who', '')} ({ck.get('gender', '')}, {ck.get('age', '')})" if ck else c.get("who", "")
+            ga = ", ".join(x for x in (ck.get("gender", ""), str(ck.get("age", "") or "")) if x)
+            who = f"{ck.get('role') or c.get('who', '')}" + (f" ({ga})" if ga else "") if ck else c.get("who", "")
             where, wear = ck.get("place", ""), ck.get("wear", "")
         else:
             who, where, wear = "?", "", ""
@@ -893,8 +894,13 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         except Exception as e:
             log(f"[OneShotMV] identity check off ({e})")
 
+    creature = {c["id"] for c in p.get("cast") or [] if (c.get("check") or {}).get("kind") == "creature"}
+
+    def is_creature(r):
+        return r.get("performer") in creature
+
     def checks(r):  # the face checks a render gets: framing for every sung shot, identity for the artist
-        if not voice or r["role"] not in ("A", "B"):
+        if not voice or r["role"] not in ("A", "B") or is_creature(r):
             return {}
         # a look takes its lead's framing (Face Match), so only leads are judged for "too close"
         return {"framing": r.get("size", "close") if r["role"] == "A" else "look", "ref": ref,
@@ -917,8 +923,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         try:
             res = qc.check_clip(r.get("path", ""), expected_frames=r.get("frames", 0), voice=voice,
                                 vocal=vocal, sr=sr or 44100, seek=seek,
-                                sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r),
-                                people=not voice, **checks(r))
+                                sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r)
+                                and not is_creature(r), people=not voice, **checks(r))
         except Exception as e:  # never let QC block a cut
             res = {"path": r.get("path", ""), "ok": True, "fail": [], "score": 0.5, "error": str(e)}
         if r.get("group") is not None and set(res.get("fail", [])) & {"cut", "drift"}:
@@ -1142,8 +1148,8 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                         seek = r.get("t_start", 0.0) + p.get("song_t0", 0.0) - p.get("stems_t0", 0.0)
                         res = qc.check_clip(t["path"], expected_frames=r.get("frames", 0), voice=voice,
                                             vocal=vocal, sr=sr or 44100, seek=seek,
-                                            sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r),
-                                            people=not voice, **checks(r))
+                                            sync=voice and r["role"] == "A" and r.get("size", "close") != "wide" and _long(r)
+                                            and not is_creature(r), people=not voice, **checks(r))
                         t.clear()
                         t.update({k: v for k, v in res.items() if k != "ok"})
                     except Exception:
@@ -1368,7 +1374,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
             it["final"] = best["image"]
             it["final_faults"] = best.get("faults", [])
         # the drop's match cuts: every drop face to one size and one place
-        drop = [it for it in items if it["kind"] == "portrait" and it.get("drop")]
+        drop = [it for it in items if it["kind"] == "portrait" and it.get("drop") and it["check"].get("kind") != "creature"]
         fitted = 0
         if drop:
             try:

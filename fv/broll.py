@@ -247,6 +247,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     if not picks:
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
+    creatures = ((((pack.get("casting") or {}).get("theme") or {}).get("rules") or {}).get("cast") == "creatures")
     camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
     from .casting import era_line
     era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink
@@ -263,6 +264,8 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
     for k, (s, why) in enumerate(picks):
         rid = len(p["renders"])
         kind = kind_for(why, style)
+        if creatures and kind in ("dance", "moment"):
+            kind = "words"  # a creature World: an empty view of its places (the candid moments are people's)
         t_start = max(-p["song_t0"], s["t0"] - 0.2)
         frames = formats.ltx_frames(s["t1"] - t_start + 0.15, rfps)
         key = os.path.join(run_dir, f"k{rid:03d}R_00001_.png")

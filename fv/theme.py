@@ -47,15 +47,117 @@ EXTRA_BATCH = 8  # batches of 12 come back cut off
 # Separate keys because, given one "who" field (v6 bibles), Gemma writes just the role ("a Hotel
 # Valet"): no gender, age or face, so the image model draws its default man again and again (a
 # radio announcer, a businessman and a bellhop with one face) and a "musician" can come out either way.
-CHARACTER_KEYS = """each an object with ten keys. "role": the job, role or type, at most 5 words, no names: every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world (never a generic "customer", "passenger", "resident" or "friend"). "gender": "woman" or "man"; about half the characters are women and half men, mixed through the list, except that a role only one gender held in this world's place and time keeps that gender. "age": a number from 18 to 80 that fits the role and the theme. "look": this person's own face and body, unlike anyone else's in the list: skin tone, hair colour and a hairdo of the period, a beard or moustache for some of the men only, build and one distinctive feature; at most 20 words. "wear": exactly what this person wears for their role in this world, every piece right for its place and period, specific in fabric, colour and cut, cut for their gender; plain, with no writing, badges with words or logos; no glasses, sunglasses or goggles unless the role truly needs them and they existed then; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words."""
+CHARACTER_KEYS = """each an object with ten keys. "role": the job, role or type, at most 5 words, no names: every role the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world (never a generic "customer", "passenger", "resident" or "friend"). "gender": "woman" or "man"; about half the characters are women and half men, mixed through the list, except that a role only one gender held in this world's place and time keeps that gender. "age": a number from 18 to 80 that fits the role and the theme. "look": the theme's own words, with every detail, when the theme describes how this person looks; otherwise this person's own face and body, unlike anyone else's in the list: skin tone, hair colour and a hairdo of the period, a beard or moustache for some of the men only, build and one distinctive feature; at most 30 words. "wear": the theme's own words, with every detail, when the theme says what this person wears; otherwise exactly what this person wears for their role in this world, every piece right for its place and period, specific in fabric, colour and cut, cut for their gender; plain, with no writing, badges with words or logos; no glasses, sunglasses or goggles unless the role truly needs them and they existed then; at most 20 words. "place": where this character belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this character does in that place while singing, seen in a wide shot, starting with a verb ending in -ing, something their role would really do there, alone, never with or to another person; at most 9 words. "face": this character's expression in a close-up portrait, in the theme's tone, the face only, head up; at most 10 words."""
 STRICT = ("Strict accuracy: every outfit, hairdo, prop and place is exactly right for this world and its "
           "period, as a costume historian would check it, and nothing comes from a later time.")
+
+GENDER_SENTENCE = ('"gender": "woman" or "man"; about half the characters are women and half men, mixed through the '
+                   "list, except that a role only one gender held in this world's place and time keeps that gender.")
+assert GENDER_SENTENCE in CHARACTER_KEYS
+STRICT_NOW = "Strict accuracy: every outfit, hairdo, prop and place is exactly what you would see in this world today."
+STRICT_CREATURES = ("Strict accuracy: every creature, place and prop is exactly as this world describes it, and "
+                    "everything could be photographed for real.")
+
+# ------------------------------------------------------------------ what the World line itself says
+# The defaults (about half women and half men, ages 18 to 80, period hair and clothes, people) only
+# fill in what the World line leaves open; what it says about the cast wins. Without this rule,
+# "all invented elemental creatures and no people" came back as 60 people with jobs ("a snowdrift
+# sculptor, a man aged 62, weathered face, pale skin"), and "No men" as 7 women and 5 men.
+BRIEF_FIRST = ("The theme is the brief and it wins: whatever it says about the characters (who or what they are, "
+               "their kind, gender, age, period, looks, clothes and places) is a rule, and the instructions below "
+               "only fill in what it leaves open. A character the theme describes keeps every detail the theme "
+               "gives it, in the theme's own words.")
+RULE_LINES = {"woman": "Every character is a woman: the theme says so.",
+              "man": "Every character is a man: the theme says so.",
+              "now": ("The theme is set today: every character, outfit, hairdo and place is from the present day, "
+                      "with no costumes or looks from earlier decades."),
+              "creatures": ("The characters are not people: every one is a creature as the theme describes it, never "
+                            "a person, a person in costume or a person who works with that thing.")}
+_NO_PEOPLE = re.compile(r"(?i)\b(?:no|without)\s+(?:other\s+)?(?:people|humans?|persons|human beings|men or women)\b|"
+                        r"\bnon-?humans?\b|\bnot (?:a )?humans?\b")
+_CREATURE_CAST = re.compile(r"(?i)\b(?:all|every|only|entirely)\b[^,.;:]{0,40}?\b(?:creatures?|animals?|beasts?|robots?|"
+                            r"androids?|machines?|monsters?|elementals?|aliens?|dragons?|spirits?|golems?|puppets?|toys?)\b")
+_W, _M = r"(?:women|woman|females?|ladies|lady|girls?)", r"(?:men|man|males?|guys?|gentlemen|boys?)"
+_ONLY = (r"\bno (?:{other})\b|\b(?:only|all)[- ](?:the )?(?:{one})\b|\b(?:{one}) only\b|\ball[- ](?:{adj})\b|"
+         r"\b(?:every|each) (?:single )?(?:one|character|singer|person|performer|member)\b[^.;]{{0,30}}?\bis an? "
+         r"(?:[\w-]+\s+){{0,4}}?(?:{one})\b|"
+         r"\b(?:all|the) (?:the )?(?:characters|singers|performers|cast|people)\b[^.;]{{0,20}}?\bare (?:all )?"
+         r"(?:[\w-]+\s+){{0,4}}?(?:{one})\b")
+_ONLY_WOMEN = re.compile("(?i)" + _ONLY.format(one=_W, other=_M, adj="female"))
+_ONLY_MEN = re.compile("(?i)" + _ONLY.format(one=_M, other=_W, adj="male"))
+_NOW = re.compile(r"(?i)\b(?:modern(?:[- ](?:day|times?))?|present[- ]day|today|contemporary|nowadays|current[- ]day|"
+                  r"20[2-3]0s|202\d)\b")
+# a role from an earlier decade ("1950s pin-up model", "1957 lifeguard") in a World set today
+_PAST_ROLE = re.compile(r"(?i)\b(?:1[5-9]\d0s|1[5-9]\d\d|19\d0s|(?:the )?(?:twenties|thirties|forties|fifties|sixties|"
+                        r"seventies|eighties|nineties))\b")
+
+
+def _says_now(t: str) -> bool:
+    """The World line is set today: it says modern, present day, today or 2020s, and names no
+    earlier year, decade or era ("a 1965 airline, nothing modern" is not)."""
+    from .casting import _ERA
+    for m in _ERA.finditer(t):
+        y = m.group(1) or m.group(3) or ""
+        if not y or int(y[:4]) < 2000:
+            return False
+    for m in _NOW.finditer(t):
+        before = t[max(0, m.start() - 16):m.start()].lower()
+        if re.search(r"\b(?:no|not|nothing|without|non|never)[\s-]*(?:\w+\s+)?$", before):
+            continue  # "nothing modern", "no modern clothes"
+        return True
+    return False
+
+
+def rules(theme: str) -> dict:
+    """What the World line says about the cast, which the defaults never override: "cast" people or
+    creatures, "gender" woman or man when it asks for one only, "now" when it is set today."""
+    t = " ".join((theme or "").split())
+    creatures = bool(_NO_PEOPLE.search(t) or _CREATURE_CAST.search(t))
+    w, m = bool(_ONLY_WOMEN.search(t)), bool(_ONLY_MEN.search(t))
+    return {"cast": "creatures" if creatures else "people",
+            "gender": "" if creatures or w == m else ("woman" if w else "man"), "now": _says_now(t)}
+
+
+def brief(r: dict) -> str:
+    """The lines at the top of every prompt that writes characters: the World line wins."""
+    lines = [BRIEF_FIRST]
+    if r.get("cast") == "creatures":
+        lines.append(RULE_LINES["creatures"])
+    elif r.get("gender"):
+        lines.append(RULE_LINES[r["gender"]])
+    if r.get("now"):
+        lines.append(RULE_LINES["now"])
+    return " ".join(lines)
+
+
+def _strict(r: dict) -> str:
+    return STRICT_CREATURES if r.get("cast") == "creatures" else STRICT_NOW if r.get("now") else STRICT
+
+
+CREATURE_KEYS = """each an object with nine keys. "role": what kind of creature it is, as the theme names it, at most 5 words, no names: every creature the theme lists comes first, each once, before you invent any of your own, and invented ones are just as specific to this world. "kind": "creature". "look": the theme's own words, with every detail, when the theme describes this creature; otherwise what it is made of, its shape and size, its colours and textures, and its face: the eyes and the mouth it sings with; never a person, a person in costume, or a person's skin, hair, hands or clothes unless the theme gives it them; at most 30 words. "wear": only what the theme says it wears or carries, else an empty string. "place": where this creature belongs, starting with "in" or "on"; at most 14 words. "light": the real light source in that place, one you could point at, and its colour; at most 10 words. "doing": what this creature does in that place while singing, seen in a wide shot, the way a creature like it would move, starting with a verb ending in -ing, alone; at most 9 words. "face": this creature's expression in a close-up portrait, in the theme's tone, the face only; at most 10 words."""
+
+
+def character_keys(r: dict) -> str:
+    """The keys each character is written with, under the World line's rules."""
+    if r.get("cast") == "creatures":
+        return CREATURE_KEYS
+    k = CHARACTER_KEYS
+    if r.get("gender"):
+        k = k.replace(GENDER_SENTENCE, f'"gender": "{r["gender"]}" for every character, because the theme says so.')
+        if r["gender"] == "woman":
+            k = k.replace(", a beard or moustache for some of the men only", "")
+    if r.get("now"):
+        k = k.replace("a hairdo of the period", "a present-day hairdo").replace(
+            "every piece right for its place and period", "every piece what people really wear there today")
+    return k
+
 
 # Characters come whole (who + outfit + place), so a role reads at a glance and an outfit always
 # fits the person wearing it (picking who and wear separately gives men in lace corsets and
 # night-shift workers you can't place). The prompt also carries no example phrases: Gemma copies
 # them into every bible (the same silver-beehive woman and the same two poses in every cast).
 PROMPT = """You design the look of a music video. Theme: "{theme}"
+{brief}
 Invent the world of this video. If the theme names jobs, roles, eras or kinds of people, every character is one of them and recognisable at a glance: their outfit, props and place say what they are. Go for specific, era-perfect detail, as if the stylist, the hair and make-up team and the set designer cared about every piece, in the tone the theme asks for: playful and over the top when it is fun, natural and grounded when it says straight, cinematic or serious. Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens or scoreboards. Answer with one JSON object only, no other text, with these keys:
 "characters": a list of {characters} different characters, all adults, {character_keys} When the theme names places or a time of day, most characters are in those places at that time. Every place, prop and moment the theme names belongs to at least one character's place, outfit or "doing". Vary everything across the list: roles, ages within what the theme describes, skin tones, builds, faces and hairdos; no two people look alike and no two outfits are alike. {strict}
 "places": a list of {places} more specific places in this world, each starting with "in" or "on". At most 16 words each.
@@ -65,10 +167,40 @@ Invent the world of this video. If the theme names jobs, roles, eras or kinds of
 "poses": a list of {poses} different expressions for a portrait that anyone in this world could have, in the theme's tone, describing the face only, never tied to one role, place or object, never naming a role or another person. At most 12 words each.
 "grade": the colour grade that fits the theme best, one of: {grades}."""
 
+# A creature World (the World line says no people, or all creatures, animals, robots...): the same
+# world, places, light, camera and grade, with creatures in place of people
+_P = PROMPT.split("\n")
+PROMPT_CREATURES = "\n".join([_P[0], _P[1],
+    "Invent the world of this video. Its characters are the creatures the theme describes, never people: each one "
+    "recognisable at a glance from what it is made of and how it looks, as if a creature designer and the set "
+    "designer cared about every detail, in the tone the theme asks for. Everything must look physically real, as if it "
+    "could be photographed. Never use brand or product names, never real or famous people or characters, nothing "
+    "holds a microphone, phone or instrument, and nothing carries writing: no signs, posters, banners, menus, screens "
+    "or scoreboards. Answer with one JSON object only, no other text, with these keys:",
+    '"characters": a list of {characters} different creatures, {character_keys} When the theme names places or a time '
+    "of day, most creatures are in those places at that time. Every place and moment the theme names belongs to at "
+    'least one creature\'s place or "doing". Vary everything across the list: kinds, materials, sizes, colours and '
+    "faces; no two creatures look alike. {strict}",
+    _P[4], _P[5].replace("never photographers, crowds or other people", "never people"), _P[6],
+    '"actions": a list of {actions} things any creature in this world could do in its places while singing, seen in a '
+    "wide shot, each starting with a verb ending in -ing, never naming one kind of creature or a person, and never "
+    "generic. At most 9 words each.",
+    '"poses": a list of {poses} different expressions for a close portrait that any creature in this world could have, '
+    "in the theme's tone, describing the face only, never naming one kind of creature or a person. At most 12 words "
+    "each.", _P[9]])
+assert len(_P) == 10 and _P[4].startswith('"places"') and _P[9].startswith('"grade"')
+
+ROLES_CREATURES = """You design the look of a music video. Theme: "{theme}"
+{brief}
+Creatures already in the video: {taken}.
+List {n} more kinds of creature that belong in this theme's own places ({places}), described the way the theme describes its creatures, each one obviously part of this world at a glance and different from the creatures already in the video and from each other, never a person, at most 4 words each, no names. Answer with one JSON object only, no other text: {{"roles": ["...", ...]}}"""
+
+
 # Shown the cast so far and asked for more, Gemma writes the cast so far out again and adds one
 # or two. Two steps instead: new role names first, then those roles written out, each with the
 # gender the cast needs.
 ROLES_PROMPT = """You design the look of a music video. Theme: "{theme}"
+{brief}
 Roles already in the video: {taken}.
 List {n} more roles, jobs or kinds of people who belong in this theme's own places at its own moment (when the theme is one day, one event or one night, the people who are really there then and part of it). Most of them belong in these places of the theme, as part of what happens there: {places}. Each one is obviously tied to the theme at a glance: the people at the heart of what happens there, who perform, compete, rule, host or watch it (the stars, the rich and powerful, eye-catching guests and spectators), never people who only work behind the scenes or keep the place running (cleaners, sweepers, clerks, scribes, mechanics, porters, vendors, cooks, labourers) unless the theme itself names that kind of person. Every one different from the roles already in the video and from each other, each as specific to this world as those and standing on its own (never someone's assistant, servant or relative, never a generic "customer", "passenger", "resident", "local" or "friend"), at most 4 words each, no names. Give each the gender of the person who would really hold that role in this world's place and time; about half of the new roles are held by women, so pick roles women really held there. {strict} Answer with one JSON object only, no other text: {{"roles": [{{"role": "...", "gender": "woman" or "man"}}, ...]}}"""
 
@@ -79,8 +211,9 @@ For each role below, say who really held it in this world's place and time: "wom
 Answer with one JSON object only, no other text, each role exactly as written with its answer: {{"roles": {{"<role>": "women" or "men" or "both", ...}}}}"""
 
 FILL_PROMPT = """You design the look of a music video. Theme: "{theme}"
+{brief}
 Write these {n} characters for it, in this order, one each: {wanted}.
-Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing. {strict} Answer with one JSON object only, no other text: {{"characters": [...]}}, a list of these {n} characters, all adults, {character_keys}"""
+Everything must be physically real, things that existed and could be photographed. Never use brand or product names, never real or famous people, nobody holds a microphone, phone or instrument, and nothing carries writing. {strict} Answer with one JSON object only, no other text: {{"characters": [...]}}, a list of these {n} {who_kind} {character_keys}"""
 
 # phrases the old prompt showed as examples; Gemma copied them verbatim into bibles cached before v4
 COPIED = {"a woman in her sixties with deep brown skin, a towering silver beehive and cat-eye glasses on a beaded chain",
@@ -299,11 +432,15 @@ def _who_line(role: str, gender: str, age: str, look: str) -> str:
     return f"{_article(role)} {role}, {person}" + (f", {look}" if look else "")
 
 
-def _characters(v, allow_eyewear: bool = False) -> list[dict]:
+def _characters(v, allow_eyewear: bool = False, rules: dict | None = None) -> list[dict]:
     """[{who, wear, place, ...}] from the model's 'characters', tolerating strings and odd keys.
-    v7 characters also carry role, gender, age and look (who is built from them)."""
+    v7 characters also carry role, gender, age and look (who is built from them). rules (the World
+    line's, rules()): a creature cast has no gender, age, skin or hair; a cast of one gender drops
+    the others; a World set today drops roles from earlier decades."""
     if not isinstance(v, list):
         return []
+    rules = rules or {}
+    creatures = rules.get("cast") == "creatures"
     out = []
     for x in v:
         if not isinstance(x, dict):
@@ -323,21 +460,36 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
                            r"(?:the|a|an|his|her|their|its|some|[a-z]+s)\b.*|"
                            r"(?:in|on|at|with|from|during|behind|near)\s.*)$", "", role).strip(" ,")
             role = short if len(short) >= 3 else role
+            if rules.get("now") and _PAST_ROLE.search(role):
+                continue  # a 1950s pin-up model in a World set today
             look = _adults(_debrand(" ".join((low.get("look") or low.get("appearance") or "").split()).strip(" ,.")))
             look = look[:1].lower() + look[1:] if look[:2].istitle() or look[:1].isupper() and look[1:2].islower() else look
-            look = _no_props(_drop_clauses(look, EYEWEAR))  # a face never comes with glasses unasked
-            gender = _gender_of(low.get("gender", ""), role, look, wear)
-            if gender == "woman":
-                look = _drop_clauses(look, FACIAL_HAIR)
-            m = re.search(r"\d{2}", low.get("age", ""))
-            age = str(min(80, max(21, int(m.group(0))))) if m else ""  # 21: a margin above the adults rule
-            who = _who_line(role, gender, age, look)
-            extra = {"role": _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role)), "gender": gender, "age": age,
-                     "look": look}
+            if creatures:  # no gender, age, skin or hair: what it is made of and its face, as written
+                look = ", ".join(x for x in re.split(r",\s*|;\s*", look)  # a person's skin tone or hairdo,
+                                 if x.strip() and not _HUMAN_LOOK.search(x))      # written anyway: the whole clause
+                rname = _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role))
+                who = f"{_article(rname)} {rname}" + (f", {look}" if look else "")
+                extra = {"role": rname, "kind": "creature", "gender": "",
+                         "age": "", "look": look}
+            else:
+                look = _no_props(_drop_clauses(look, EYEWEAR))  # a face never comes with glasses unasked
+                gender = _gender_of(low.get("gender", ""), role, look, wear)
+                if rules.get("gender") and gender and gender != rules["gender"]:
+                    continue  # "No men": a man is left out (more women are written to take his place)
+                gender = gender or rules.get("gender", "")
+                if gender == "woman":
+                    look = _drop_clauses(look, FACIAL_HAIR)
+                m = re.search(r"\d{2}", low.get("age", ""))
+                age = str(min(80, max(21, int(m.group(0))))) if m else ""  # 21: a margin above the adults rule
+                who = _who_line(role, gender, age, look)
+                extra = {"role": _role(re.sub(r"(?i)^(?:an?|the)\s+", "", role)), "gender": gender, "age": age,
+                         "look": look}
         if wear and not allow_eyewear:
             wear = _drop_clauses(wear, EYEWEAR)
         if extra:
             extra["eyewear"] = bool(EYEWEAR.search(wear or ""))
+        if creatures and not extra:
+            continue  # a creature cast is written with roles
         place = low.get("place") or low.get("where") or low.get("location") or ""
         light = " ".join((low.get("light") or low.get("lighting") or "").split()).strip(" ,.")
         # "neon sign, red" draws garbled lettering: the sign scrub, as on the world's lists
@@ -356,8 +508,8 @@ def _characters(v, allow_eyewear: bool = False) -> list[dict]:
         place = place if re.search(r"(?i)\b(a|an|the|of|in|on|at|vast|huge|large|small|big|old|busy|dark|quiet|empty)$", cut) else cut
         if _CROWD.search(place):
             place = ""  # the cast then takes a place from the world's list
-        if len(who) < 4 or len(wear) < 4 or _copied(who):
-            continue
+        if len(who) < 4 or (len(wear) < 4 and not creatures) or _copied(who):
+            continue  # a creature may wear nothing
         if _WORDS.search(wear) and not _NO_WORDS.search(wear):
             continue  # lettering on clothes comes out as garbled text
         doing = _own(low.get("doing") or low.get("action") or low.get("activity") or "", ing=True)
@@ -432,7 +584,7 @@ def cache_dir(out_root: str) -> str:
 
 
 def _key(theme: str, seed: int) -> str:
-    return hashlib.sha1(f"{theme.strip()}|{seed}|v10".encode("utf-8")).hexdigest()[:16]  # v10: the bible format version; a new one stops older cached bibles from being reused
+    return hashlib.sha1(f"{theme.strip()}|{seed}|v11".encode("utf-8")).hexdigest()[:16]  # v11: the bible format version; a new one stops older cached bibles from being reused
 
 
 # ------------------------------------------------------------------ the language model
@@ -750,15 +902,23 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
                 if cached.get("camera"):
                     cached["camera"] = _camera(cached["camera"])
                 if isinstance(cached.get("characters"), list):
-                    cached["characters"] = _characters(cached["characters"], allow_eyewear=eyewear_ok(theme))
+                    kept = {(c.get("role"), c.get("place")): c.get("given") for c in cached["characters"]}
+                    cached["characters"] = _characters(cached["characters"], allow_eyewear=eyewear_ok(theme),
+                                                       rules=cached.get("rules") or rules(theme))
                     for c in cached["characters"]:
                         c["who"] = _people([c["who"]])[0]
                         c["place"] = _places([c["place"]])[0] if c["place"] else ""
+                        if kept.get((c.get("role"), c.get("place"))):
+                            _with_given(c, kept[(c.get("role"), c.get("place"))])
                 return cached
             except Exception:
                 pass
-    prompt = PROMPT.format(theme=theme.replace('"', "'"), grades=", ".join(GRADES), characters=N_CHARACTERS,
-                           character_keys=CHARACTER_KEYS, strict=STRICT, **COUNTS)
+    r = rules(theme)
+    log(f"[OneShotMV] theme: the World line asks for {'creatures, no people' if r['cast'] == 'creatures' else 'people'}"
+        + (f", {r['gender']}en only" if r["gender"] else "") + (", set today" if r["now"] else ""))
+    prompt = (PROMPT_CREATURES if r["cast"] == "creatures" else PROMPT).format(
+        theme=theme.replace('"', "'"), brief=brief(r), grades=", ".join(GRADES), characters=N_CHARACTERS,
+        character_keys=character_keys(r), strict=_strict(r), **COUNTS)
     bible = None
     for attempt in range(2):
         text = llm(prompt, seed=seed + attempt, max_length=3200, log=log)  # whole characters run long
@@ -772,13 +932,16 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
         for k in ("actions", "places", "poses"):
             lists[k] = [y for y in (_no_props(x) for x in lists[k]) if len(y) > 3]
         lists["wear"] = [_plain(x) for x in lists["wear"]]
-        roles = _role_words(_characters(d.get("characters"), allow_eyewear=eyewear_ok(theme)))
+        roles = _role_words(_characters(d.get("characters"), allow_eyewear=eyewear_ok(theme), rules=r))
         for k in ("actions", "poses"):
             lists[k] = _no_others(lists[k], roles)
         lists["light"] = _alone(lists["light"], _LIGHT_SPARE, n_min=4)
         lists["places"] = _alone(lists["places"])
-        chars = _characters(d.get("characters"), allow_eyewear=eyewear_ok(theme))
-        if len(chars) >= 6:  # who and wear come from the whole characters
+        chars = _characters(d.get("characters"), allow_eyewear=eyewear_ok(theme), rules=r)
+        # the World line's rules can leave out half an answer ("No men"): a few characters are enough,
+        # extend() writes the rest under the same rules
+        min_chars = 6 if r == {"cast": "people", "gender": "", "now": False} else 2
+        if len(chars) >= min_chars:  # who and wear come from the whole characters
             lists["who"] = [c["who"] for c in chars]
             lists["wear"] = [c["wear"] for c in chars]
             lists["places"] = lists["places"] or [c["place"] for c in chars if c["place"]]
@@ -786,18 +949,24 @@ def expand(theme: str, *, seed: int = 1, out_root: str | None = None, log=print)
             g = str(d.get("grade", "neutral")).strip().lower()
             bible = {"theme": theme, "source": "gemma-3-12b", **lists,
                      "grade": g if g in GRADES else "neutral", "camera": _camera(d.get("camera")), "raw": text}
-            if len(chars) >= 6:
+            if len(chars) >= min_chars:
                 bible["characters"] = chars
                 bible["n_main"] = len(chars)  # the World line's own characters come first in the cast
             break
         log("[OneShotMV] theme: the model's answer was missing lists, trying again")
     if bible is None:
         bible = fallback(theme)
+    bible["rules"] = r
     bible["who"] = _people([_adults(w) for w in bible["who"]])
     bible["places"] = _places(bible["places"])
     for c in bible.get("characters") or []:
         c["who"] = _people([c["who"]])[0]
         c["place"] = _places([c["place"]])[0] if c["place"] else ""
+    if bible.get("characters"):
+        given = _attach_given(bible["characters"], theme)
+        if given:
+            log(f"[OneShotMV] theme: {given} characters keep the World line's own words")
+        bible["who"] = [c["who"] for c in bible["characters"]]
     if path:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
@@ -913,13 +1082,15 @@ def _true_genders(chars: list[dict], theme: str, seed: int, dump, log=print) -> 
     redo = {}
     for b in range(0, len(want), EXTRA_BATCH):
         batch = want[b:b + EXTRA_BATCH]
-        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), n=len(batch),
+        rl = rules(theme)
+        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), brief=brief(rl), n=len(batch),
                                       wanted="; ".join(f"{_article(r)} {r} ({g})" for r, g in batch),
-                                      character_keys=CHARACTER_KEYS, strict=STRICT),
+                                      character_keys=character_keys(rl), strict=_strict(rl),
+                                      who_kind="characters, all adults,"),
                    seed=seed + 401 + b, max_length=320 * len(batch) + 600, log=log)
         dump(f"gx{b}", text)
         d2 = _parse(text or "")
-        for c in (_characters((d2 or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d2 else []):
+        for c in (_characters((d2 or {}).get("characters"), allow_eyewear=eyewear_ok(theme), rules=rl) if d2 else []):
             key = (c.get("role") or "").lower()
             if c.get("gender") and key and key not in redo:
                 c["who"] = _people([c["who"]])[0]
@@ -964,24 +1135,93 @@ def _offstage(role: str, theme: str) -> bool:
     return any(m.group(0).lower().rstrip("s") not in t for m in _BACKSTAGE.finditer(role))
 
 
-def _named_roles(theme: str) -> list[str]:
-    """The characters a World line names ("headline, all invented adults: a murmillo gladiator in a
-    crested helmet, the emperor in a purple toga, ...; places; light"), as role names."""
+_ROLE_SPLIT = re.compile(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
+                         r"fanning|carrying|by|near|under|and|alone|standing|sitting|waiting|leaning|waving)\b")
+# a long creature description: the kind before what it is made of ("snowdrift creature of packed powder")
+_ROLE_CUT = re.compile(r"(?i)\s+(?:of|built|made|carved|covered|formed|shaped|drifting|like)\b")
+
+
+def named_characters(theme: str) -> list[tuple[str, str]]:
+    """(role, the World line's own words for that character) for each character it names ("headline,
+    all invented adults: a murmillo gladiator in a crested helmet, the emperor in a purple toga, ...;
+    places; light"), in its order."""
     head = theme.split(";")[0]
     if ":" not in head:
         return []
     out = []
     for item in re.split(r",\s+(?=(?:an?|the)\s)", head.split(":", 1)[1]):
-        item = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", item.strip())
-        role = re.split(r"(?i)\s+(?:in|with|who|whose|beside|at|on|from|wearing|holding|cheering|betting|"
-                        r"fanning|carrying|by|near|under|and|alone|standing|sitting|waiting|leaning|"
-                        r"waving)\b", item)[0].strip(" .,")
+        desc = re.sub(r"(?i)^\s*(?:an?|the)\s+", "", " ".join(item.split())).strip(" .,")
+        role = _ROLE_SPLIT.split(desc)[0].strip(" .,")
         role = role.split(",")[0].strip()  # "champion murmillo gladiator, scarred and oiled"
+        if len(role.split()) > 4 or re.search(r"(?i)\s(?:built|made|carved|covered|formed|shaped)$", role):
+            role = _ROLE_CUT.split(role)[0].strip()  # "glacier creature of clear blue ice" -> "glacier creature"
         if _GEAR.search(role.split()[-1] if role.split() else ""):
             continue  # "..., a short sword and a tall shield": the last character's kit, not a character
-        if 2 < len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r in out]:
-            out.append(role)
+        if 2 < len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r, _ in out]:
+            out.append((role, desc))
     return out
+
+
+def _named_roles(theme: str) -> list[str]:
+    """The characters a World line names, as role names (named_characters)."""
+    return [r for r, _ in named_characters(theme)]
+
+
+_AGE_WORDS = re.compile(r"(?i)\b(?:in (?:his|her|their) (?:early |mid-?|late )?(?:twenties|thirties|forties|fifties|"
+                        r"sixties|seventies|eighties|nineties)|aged \d{2}|\d{2}-year-old|young|old|elderly|older|"
+                        r"middle-aged|seniors?|retired)\b")
+_LOOK_WORDS = re.compile(r"(?i)\b(?:skin|skinned|hair|haired|beard|bearded|moustache|mustache|eyes|eyed|face|faced|"
+                         r"freckles|freckled|tattoos?|tattooed|scars?|scarred|bald|braids?|curls|bob|bun|ponytail|"
+                         r"build|tall|stout|slim|muscular|wrinkled|lashes|cheekbones|made of|of (?:\w+\s){0,3}?(?:ice|"
+                         r"snow|stone|granite|clay|moss|bark|leaves|water|sand|fire|smoke|metal|steel|glass|light))\b")
+
+
+# what only a person has, in a look the model wrote for a creature anyway ("pale skin freckled with
+# green, long auburn hair woven with moss"): the clause goes, the moss stays in the next one
+_HUMAN_LOOK = re.compile(r"(?i)\b(?:(?:pale|fair|olive|tan(?:ned)?|dark|deep|light|brown|black|ruddy|rosy|sun-darkened|"
+                         r"weathered)\s+(?:skin|complexion)|complexion|hair(?:do|cut|line)?|beards?|bearded|moustaches?|"
+                         r"mustaches?|stubble|eyebrows|cheekbones|jawline|weathered face|wrinkled face|build)\b")
+_DRESSED = re.compile(r"(?i)\b(?:wears?|wearing|dressed|clothes|clothing|carr(?:y|ies|ying)|holding|cloak|cape|robe|"
+                      r"shawl|crown|hat|hood|coat|gown|armou?r|helmet|mask)\b")
+
+
+def _with_given(c: dict, desc: str) -> None:
+    """A character the World line describes keeps its words: they lead its who line, and they are
+    what the vision check holds the still to. What the line leaves open (an age, a gender, a face)
+    comes from the language model as before."""
+    c["given"] = desc
+    head = f"{_article(desc)} {desc}"
+    if c.get("kind") == "creature":
+        detailed = len(desc.split()) > len((c.get("role") or "").split()) + 1
+        c["who"] = head if detailed or not c.get("look") else f"{head}, {c['look']}"
+        if detailed:
+            c["look"] = desc
+            if not _DRESSED.search(desc):
+                c["wear"] = ""  # the model's fur hat on the line's snowdrift creature
+        return
+    g, age = c.get("gender", ""), c.get("age", "")
+    if not _AGE_WORDS.search(desc):
+        person = f"a {g or 'person'}" + (f" aged {age}" if age else "")
+    else:
+        person = f"a {g}" if g and not (_WOMAN_ROLE.search(desc) or _MAN_ROLE.search(desc)) else ""
+    looks = bool(_LOOK_WORDS.search(desc))
+    c["who"] = ", ".join(x for x in (head, person, "" if looks else c.get("look", "")) if x)
+    if looks:
+        c["look"] = desc
+
+
+def _attach_given(chars: list[dict], theme: str) -> int:
+    """Give each character the World line describes its own words (story_positions matches them up).
+    Returns how many."""
+    named = named_characters(theme)
+    if not named:
+        return 0
+    k = 0
+    for c, pos in zip(chars, story_positions(chars, theme)):
+        if pos is not None and c.get("given") != named[pos][1]:
+            _with_given(c, named[pos][1])
+            k += 1
+    return k
 
 
 _GEAR = re.compile(r"(?i)^(?:swords?|sica|shields?|nets?|tridents?|helmets?|spears?|lances?|guards?|wraps?|greaves|"
@@ -1084,53 +1324,69 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
             except Exception:
                 pass
 
+    r = bible.get("rules") or rules(theme)
+    creatures = r.get("cast") == "creatures"
+    words = {role.lower(): desc for role, desc in named_characters(theme)}
     taken = [c.get("role") or c["who"].split(",")[0] for c in chars]
     # the World line's own characters the first call left out come first (it can return 12 of 16
     # named roles, leaving out the emperor, the patrician matron and the praetorian guard)
-    roles: list = [(r, _gender_of("", r, "", "") or "") for r in _named_roles(theme) if not _has_role(r, taken)]
+    roles: list = [(x, "" if creatures else _gender_of("", x, "", "") or "") for x in _named_roles(theme)
+                   if not _has_role(x, taken)]
     if roles:
-        log(f"[OneShotMV] theme: the World line's own characters still to cast: {', '.join(r for r, _ in roles)}")
+        log(f"[OneShotMV] theme: the World line's own characters still to cast: {', '.join(x for x, _ in roles)}")
     for attempt in range(3):
         need = n - len(chars) - len(roles) + 4
         if need <= 4:
             break
-        text = llm(ROLES_PROMPT.format(theme=theme.replace('"', "'"), taken=", ".join(taken + [r for r, _ in roles]),
-                                       n=need, strict=STRICT, places=_theme_places(bible)),
+        text = llm((ROLES_CREATURES if creatures else ROLES_PROMPT).format(
+                       theme=theme.replace('"', "'"), brief=brief(r), taken=", ".join(taken + [x for x, _ in roles]),
+                       n=need, strict=_strict(r), places=_theme_places(bible)),
                    seed=seed + 211 + attempt, max_length=24 * need + 160, log=log)
         dump(f"r{attempt}", text)
         if text is None:
             break
-        known = {r.lower() for r in taken} | {r.lower() for r, _ in roles}
+        known = {x.lower() for x in taken} | {x.lower() for x, _ in roles}
         got = _role_list(text)
-        off = [r for r, _ in got if _offstage(r, theme)]
+        if r.get("now"):
+            got = [(x, g) for x, g in got if not _PAST_ROLE.search(x)]
+        off = [] if creatures else [x for x, _ in got if _offstage(x, theme)]
         if off:
             log(f"[OneShotMV] theme: left out (behind the scenes): {', '.join(off)}")
-        roles += [(r, g) for r, g in got if r.lower() not in known and r not in off]
-    log(f"[OneShotMV] theme: {len(roles)} new roles: {', '.join(f'{r} ({g or chr(63)})' for r, g in roles)}")
+        roles += [(x, g) for x, g in got if x.lower() not in known and x not in off]
+    log(f"[OneShotMV] theme: {len(roles)} new roles: {', '.join(f'{x} ({g or chr(63)})' for x, g in roles)}")
     women = sum(1 for c in chars if c.get("gender") == "woman")
     men = sum(1 for c in chars if c.get("gender") == "man")
     queue = []
     # the gender the role really had (the model's, or the role word's); only an open role is
     # given the one the cast is short of (balancing every role would make a woman the senator's bodyguard)
-    for r, given in roles:
-        g = _gender_of("", r, "", "") or given
-        if not g:
-            g = "man" if women > men else "woman"
+    for x, given in roles:
+        if creatures:
+            g = ""
+        elif r.get("gender"):
+            g = r["gender"]  # "No men": every new role is a woman's
+        else:
+            g = _gender_of("", x, "", "") or given or ("man" if women > men else "woman")
         women, men = women + (g == "woman"), men + (g == "man")
-        queue.append((r, g))
+        queue.append((x, g))
+
+    def want(x, g):  # "a snowdrift creature, as the theme describes it: snowdrift creature of packed powder ..."
+        desc = words.get(x.lower())
+        return f"{_article(x)} {x}" + (f" ({g})" if g else "") + (
+            f", as the theme describes it: {desc}" if desc and desc.lower() != x.lower() else "")
     attempt = 0
     while queue and len(chars) < n and attempt < 8:
         batch, queue = queue[:EXTRA_BATCH], queue[EXTRA_BATCH:]
-        wanted = "; ".join(f"{_article(r)} {r} ({g})" for r, g in batch)
-        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), n=len(batch), wanted=wanted,
-                                      character_keys=CHARACTER_KEYS, strict=STRICT),
+        wanted = "; ".join(want(x, g) for x, g in batch)
+        text = llm(FILL_PROMPT.format(theme=theme.replace('"', "'"), brief=brief(r), n=len(batch), wanted=wanted,
+                                      character_keys=character_keys(r), strict=_strict(r),
+                                      who_kind="creatures, never people," if creatures else "characters, all adults,"),
                    seed=seed + 101 + attempt, max_length=320 * len(batch) + 600, log=log)
         dump(f"x{attempt}", text)
         attempt += 1
         if text is None:
             break
         d = _parse(text)
-        new = _characters((d or {}).get("characters"), allow_eyewear=eyewear_ok(theme)) if d else []
+        new = _characters((d or {}).get("characters"), allow_eyewear=eyewear_ok(theme), rules=r) if d else []
         added = 0
         for c in new:
             c["who"] = _people([c["who"]])[0]
@@ -1140,10 +1396,14 @@ def extend(bible: dict, n: int, *, seed: int = 1, out_root: str | None = None, l
             chars.append(c)
             added += 1
         got = {(c.get("role") or "").lower() for c in new}
-        queue += [(r, g) for r, g in batch if r.lower() not in got and _role(r).lower() not in got][:2]  # a dropped one, once more
+        queue += [(x, g) for x, g in batch if x.lower() not in got and _role(x).lower() not in got][:2]  # a dropped one, once more
         log(f"[OneShotMV] theme: cast {len(chars)} characters (+{added} of {len(batch)} asked)")
-    _true_genders(chars, theme, seed, dump, log)
+    if not creatures and not r.get("gender"):  # a creature has none; a one-gender World set them all
+        _true_genders(chars, theme, seed, dump, log)
     bible["genders_checked"] = True
+    bible["rules"] = r
+    if _attach_given(chars, theme):
+        bible["who"] = [c["who"] for c in chars]
     if chars:  # saved with the gender check done (and any new characters)
         # a role's own action never names another character (as in _characters, over the whole cast)
         roles_ = _role_words(chars)

@@ -41,7 +41,7 @@ WHY = {"people": "someone else in frame", "gender": "wrong gender", "beard": "un
        "outfit": "wrong outfit", "unread": "unreadable", "frozen": "frozen", "exposure": "bad exposure", "bars": "black bars",
        "cut": "cut away", "noface": "no face", "headcut": "head out of frame", "sideways": "head sideways",
        "tooclose": "too close", "identity": "a different person", "drift": "drifted off the shot", "mouth": "mouth not moving",
-       "sync": "weak lip sync", "missing": "missing"}
+       "sync": "weak lip sync", "missing": "missing", "human": "looked human", "look": "didn't match its description"}
 
 
 def _why(fs) -> str:

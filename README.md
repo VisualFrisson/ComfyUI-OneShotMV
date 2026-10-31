@@ -144,9 +144,23 @@ in the order you want them, then the places, then the light.
 > shuffleboard court, the early-bird buffet and rows of golf carts; harsh Florida sun and
 > sun-faded pastel colour
 
+What you write is followed, and what you leave out is filled in. A short line gets a general
+World; the more you say, the closer it sticks:
+
+- What you say about the cast is a rule. "No men" or "all women" makes every character a woman
+  ("men only" the reverse), and "modern", "present day" or "2020s" keeps earlier decades out.
+- A character you describe keeps your words. "A net mender in her seventies with a weathered face
+  and a grey bun" is drawn as written; whatever you leave open (an age, a face, an outfit) is
+  filled in for you.
+- Creatures instead of people: say "no people", or "all creatures", "all animals" or "all
+  robots", and describe each one, with the eyes and the mouth it sings with. They get their own
+  portraits, prompts and checks. Their mouths open on the voice rather than shaping words, so the
+  lip-sync score and the face checks are skipped for them, and the cutaways are empty views of
+  their places.
+
 Some things that help:
 
-- The people you name are cast first, in your order. Set cast order to "mixed" to shuffle them.
+- The characters you name are cast first, in your order. Set cast order to "mixed" to shuffle them.
 - Name the period ("1965", "ancient Rome", "1813"). It keeps modern clothes and objects out, and
   the vision check rejects stills that show them.
 - Say the tone: "played straight like an epic film", "over the top", "cinematic".

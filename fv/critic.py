@@ -25,6 +25,11 @@ _CLIP = None
 RUBRIC = """You are checking one picture for a music video before it is used. It should show exactly one person: {who}. Wearing: {wear}. The video is set in: {world}.
 Look carefully at the whole picture and answer with one JSON object only, no other text:
 {{"people": <how many living people you can see anywhere in the picture, counting small, blurred or far-away figures and reflections, but not statues, paintings or carvings>, "gender": "man" or "woman" or "unclear", "facial_hair": true if this person has a beard, a moustache or stubble, else false, "glasses": true if this person wears glasses, sunglasses or goggles, else false, "head_in_frame": true if the whole head and face are inside the picture, else false, "text": true if any letters, words, numbers or logos are visible anywhere, else false, "{modern_key}": [{modern_q}], "outfit_matches": true if the clothes match the description, else false, "problems": "<short list of what is wrong, or none>"}}"""
+# a creature World (theme.rules): one creature, nobody else, nothing human about it, and as described;
+# the gender, facial-hair and glasses questions would pull it back into a person
+RUBRIC_CREATURE = """You are checking one picture for a music video before it is used. It should show exactly one creature: {who}. The video is set in: {world}.
+Look carefully at the whole picture and answer with one JSON object only, no other text:
+{{"people": <how many people or human figures you can see anywhere in the picture, counting small, blurred or far-away figures and reflections, but not statues or carvings>, "creatures": <how many creatures you can see>, "human": true if the creature looks like a person, a person in a costume or a mask, or has a human face, skin or hair, else false, "head_in_frame": true if its whole face is inside the picture, else false, "text": true if any letters, words, numbers or logos are visible anywhere, else false, "{modern_key}": [{modern_q}], "matches": true if the creature matches the description, else false, "problems": "<short list of what is wrong, or none>"}}"""
 MODERN_PERIOD = ("objects, clothes or hairstyles you can see that did not exist in {era}; leave out the photograph "
                  "itself, the camera, the lighting and the picture's style")
 MODERN_NOW = "things you can see that clearly do not belong in this world; leave out the photograph itself, the camera and the lighting"
@@ -38,7 +43,7 @@ _NOT_A_THING = re.compile(r"(?i)\b(camera|lighting|light|lens|photo|photograph|p
 
 # how bad each fault is (the best take has the lowest total)
 WEIGHT = {"people": 3, "gender": 3, "beard": 3, "glasses": 3, "head": 3, "mono": 3, "crowd": 2, "text": 1, "modern": 1,
-          "outfit": 1,
+          "outfit": 1, "human": 3, "look": 1,
           "unread": 0}
 
 
@@ -76,6 +81,13 @@ def ask(image_path: str, prompt: str, max_length: int = 320) -> str | None:
 
 
 def rubric(check: dict, world: str, era: str) -> str:
+    if check.get("kind") == "creature":
+        from .theme import _article
+        role = check.get("role") or "creature"
+        who = f"{_article(role)} {role}" + (f": {check['look']}" if check.get("look") else "")
+        return RUBRIC_CREATURE.format(who=who, world=world.split(":")[0].strip(),
+                                      modern_key="modern" if era else "out_of_place",
+                                      modern_q=MODERN_PERIOD.format(era=era) if era else MODERN_NOW)
     g = check.get("gender") or ""
     age = check.get("age") or ""
     from .theme import _article
@@ -113,7 +125,8 @@ def parse(text: str | None) -> dict | None:
         pass
     # one key per line, no commas (rare): pick the fields out one by one
     out = {}
-    for k in ("people", "gender", "facial_hair", "glasses", "head_in_frame", "text", "outfit_matches", "crowd_modern"):
+    for k in ("people", "gender", "facial_hair", "glasses", "head_in_frame", "text", "outfit_matches", "crowd_modern",
+              "creatures", "human", "matches"):
         mm = re.search(rf'"{k}"\s*:\s*("?)([^",}}\n]+)\1', t)
         if mm:
             v = mm.group(2).strip().lower()
@@ -139,6 +152,22 @@ def faults(ans: dict | None, check: dict, kind: str = "portrait", era: str = "")
         people = int(ans.get("people", 1))
     except (TypeError, ValueError):
         people = 1
+    if check.get("kind") == "creature":
+        try:
+            creatures = int(ans.get("creatures", 1))
+        except (TypeError, ValueError):
+            creatures = 1
+        if people >= 1 or creatures >= 2:  # a creature World has nobody in it
+            out.append("people")
+        if _yes(ans.get("human")):
+            out.append("human")
+        if kind == "portrait" and "head_in_frame" in ans and not _yes(ans.get("head_in_frame")):
+            out.append("head")
+        if _yes(ans.get("text")):
+            out.append("text")
+        if "matches" in ans and not _yes(ans.get("matches")):
+            out.append("look")
+        return out
     if people >= 2:
         out.append("people")
     want = (check.get("gender") or "").lower()
@@ -233,6 +262,21 @@ def fix_lines(fs: list[str], check: dict, era: str, ans: dict | None = None) -> 
     unwanted thing draws it: 'glasses' in the period line puts glasses on every other face)."""
     g = (check.get("gender") or "").lower()
     out = []
+    if check.get("kind") == "creature":
+        look = check.get("look") or check.get("role") or ""
+        if "human" in fs and look:
+            out.append(f"It is a creature made only of what it is made of: {look}.")
+        if "people" in fs:
+            out.append("It is completely alone: an empty landscape around it, with nothing else alive anywhere, near or far.")
+        if "head" in fs:
+            out.append("Its whole face is in the picture, with space all around it.")
+        if "text" in fs:
+            out.append("Plain, unmarked surfaces everywhere, with no writing or symbols.")
+        if "look" in fs and look and "human" not in fs:
+            out.append(f"It looks exactly like this: {look}.")
+        if "mono" in fs:
+            out.append("A full-colour photograph: rich, natural colour everywhere.")
+        return " ".join(out)
     if "gender" in fs and g:
         out.append(f"The person is clearly a {g}.")
     if "beard" in fs:
