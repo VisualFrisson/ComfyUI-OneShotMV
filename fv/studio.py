@@ -395,29 +395,16 @@ def _progress(pid: str, rec: dict) -> dict:
 
 
 # ------------------------------------------------------------------ start, job, recut, cancel
-def _director_has(name: str) -> bool:
-    """Whether the loaded Director node has this input (a ComfyUI that hasn't restarted since an
-    update still runs the old node)."""
-    try:
-        import nodes as comfy_nodes  # type: ignore
-        it = comfy_nodes.NODE_CLASS_MAPPINGS["FVDirector"].INPUT_TYPES()
-        return name in it.get("required", {}) or name in it.get("optional", {})
-    except Exception:
-        return False
-
-
 def _director_graph(b: dict) -> dict:
-    cuts = {k: b.get(k) for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)}
-    d = {"audio": ["1", 0], "mode": "voice", "pack": "crowd", "format": b.get("format", "16:9"),
-         "preset": b.get("preset", "quality"), "seconds": float(b.get("seconds", 30)),
-         "start": float(b.get("start", -1)), "seed": int(b.get("seed", 1)), "twins": "auto",
-         "queue_renders": bool(b.get("render", False)), "theme": (b.get("theme") or "").strip(),
-         "run_name": b.get("run_name", ""), "queue_assemble": True, "framing": "mixed",
-         "broll_share": float(b.get("broll", 0.125)), "broll_style": "mix", "qc_retries": int(b.get("qc", 2)),
-         "staged": True, "audio_fx": b.get("fx", "subtle"), "cast_order": b.get("cast_order", "as written"),
-         "crowd": b.get("crowd", "auto"), **cuts}
-    if b.get("models") in ("auto", "24gb", "full") and _director_has("models"):
-        d["models"] = b["models"]
+    """The Brief as a Director job: the same inputs the node shows in a workflow."""
+    d = {"audio": ["1", 0], "world": (b.get("theme") or "").strip(), "seconds": float(b.get("seconds", 30)),
+         "start": float(b.get("start", -1)), "format": b.get("format", "16:9"),
+         "quality": b.get("preset", "quality"), "models": b.get("models") if b.get("models") in ("auto", "24gb", "full")
+         else "auto", "preview_only": not b.get("render", False), "seed": int(b.get("seed", 1)),
+         "audio_fx": b.get("fx", "subtle"), "crowd": b.get("crowd", "auto"),
+         "cast_order": b.get("cast_order", "as written"), "broll_share": float(b.get("broll", 0.125)),
+         "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", "")}
+    d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
     return {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
             "2": {"class_type": "FVDirector", "inputs": d}}
 

@@ -112,15 +112,15 @@ packages alone. It asks for the song (drag the file in), the World line and the 
 also pass options:
 
 ```
-run_sdk.bat --song "song.wav" --theme "the gladiator games in ancient Rome" --seconds 40
+run_sdk.bat --song "song.wav" --world "the gladiator games in ancient Rome" --seconds 40
 ```
 
 Anywhere else:
 
 ```
 pip install comfy-sdk comfy-api-proxy
-python sdk_run.py --song track.wav --theme "a 1965 airline: pilots, stewardesses and passengers" --preview
-python sdk_run.py --song track.wav --theme "a 1965 airline: pilots, stewardesses and passengers" --seconds 30
+python sdk_run.py --song track.wav --world "a 1965 airline: pilots, stewardesses and passengers" --preview
+python sdk_run.py --song track.wav --world "a 1965 airline: pilots, stewardesses and passengers" --seconds 30
 python sdk_run.py --song track.wav --format 9:16 --fx intense --cuts-high "to the music (intense)"
 python sdk_run.py --recut "<run folder>" --fx none
 ```

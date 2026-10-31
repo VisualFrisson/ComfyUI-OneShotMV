@@ -1,41 +1,34 @@
 {
- "1": {
-  "class_type": "LoadAudio",
-  "inputs": {
-   "audio": "song.wav"
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "song.wav"
+    }
+  },
+  "2": {
+    "class_type": "FVDirector",
+    "inputs": {
+      "audio": [
+        "1",
+        0
+      ],
+      "world": "",
+      "seconds": 30.0,
+      "start": -1.0,
+      "format": "16:9",
+      "quality": "quality",
+      "models": "auto",
+      "preview_only": false,
+      "seed": 1,
+      "cuts_low": "every 2 bars",
+      "cuts_medium": "every bar",
+      "cuts_high": "to the music (subtle)",
+      "audio_fx": "subtle",
+      "crowd": "auto",
+      "cast_order": "as written",
+      "broll_share": 0.125,
+      "qc_retries": 2,
+      "run_name": ""
+    }
   }
- },
- "2": {
-  "class_type": "FVDirector",
-  "inputs": {
-   "audio": [
-    "1",
-    0
-   ],
-   "mode": "voice",
-   "pack": "crowd",
-   "format": "16:9",
-   "preset": "quality",
-   "seconds": 30.0,
-   "start": -1.0,
-   "seed": 1,
-   "twins": "auto",
-   "queue_renders": true,
-   "theme": "",
-   "run_name": "",
-   "queue_assemble": true,
-   "framing": "mixed",
-   "broll_share": 0.125,
-   "broll_style": "mix",
-   "qc_retries": 2,
-   "staged": true,
-   "cuts_low": "every 2 bars",
-   "cuts_medium": "every bar",
-   "cuts_high": "to the music (subtle)",
-   "audio_fx": "subtle",
-   "cast_order": "as written",
-   "crowd": "auto",
-   "models": "auto"
-  }
- }
 }

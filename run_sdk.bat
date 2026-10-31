@@ -1,7 +1,7 @@
 @echo off
 rem OneShot MV through the Comfy SDK, on this PC's ComfyUI. Start ComfyUI first.
 rem   run_sdk.bat                      asks for the song, the World line and the length
-rem   run_sdk.bat --song x.wav --theme "..." --seconds 30 [--preview] [--fx intense] ...
+rem   run_sdk.bat --song x.wav --world "..." --seconds 30 [--preview] [--fx intense] ...
 rem The first run installs comfy-sdk and comfy-api-proxy into .sdk\ next to this file;
 rem ComfyUI's own Python packages are left alone.
 setlocal
@@ -25,7 +25,7 @@ set "THEME="
 set /p "THEME=World line (Enter for none): "
 set "SECS=30"
 set /p "SECS=Seconds (Enter for 30, 0 = whole song): "
-"%PY%" sdk_run.py --song "%SONG%" --theme "%THEME%" --seconds %SECS%
+"%PY%" sdk_run.py --song "%SONG%" --world "%THEME%" --seconds %SECS%
 goto :end
 
 :withargs
