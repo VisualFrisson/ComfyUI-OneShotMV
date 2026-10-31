@@ -716,7 +716,7 @@ function setSteps(cur, run, stage){
   const enc = encodeURIComponent(run || "");
   const href = i => {
     if (i === cur) return "";
-    if (i === 0) return run && store.get("briefs", {})[run] ? "#/brief/" + enc : "#/";
+    if (i === 0) return run ? "#/brief/" + enc : "#/";
     if (!run) return "";
     if (i === 1) return "#/plan/" + enc;
     if (i === 2) return stage && stage !== "preview" && stage !== "done" ? "#/render/" + enc : "";
@@ -740,17 +740,23 @@ function route(){
   stopTimer();
   const h = location.hash.replace(/^#\/?/, "").split("/");
   const [page, run] = [h[0] || "", decodeURIComponent(h.slice(1).join("/") || "")];
-  if (page === "brief" && run){  // the Brief this video was made from, to change it and make another
-    const b = store.get("briefs", {})[run];
-    if (b){ S.brief = Object.assign({}, DEFAULT_BRIEF, b); saveBrief(); S.fromRun = run; }
-    else toast("This video was made outside the Studio, so its brief can't be loaded here.");
-    return viewBrief();
-  }
+  if (page === "brief" && run) return openBrief(run);  // the Brief this video was made from, to change it and make another
   if (page !== "brief") S.fromRun = null;
   if (page === "plan" && run) return viewPlan(run);
   if (page === "render" && run) return viewRender(run);
   if (page === "result" && run) return viewResult(run);
   if (page === "videos") return viewVideos();
+  return viewBrief();
+}
+
+async function openBrief(run){
+  // saved in this browser when it started the run; else the one the run keeps (any browser)
+  let b = store.get("briefs", {})[run];
+  if (!b){ try{ b = (await api("run/" + encodeURIComponent(run))).form; }catch(e){} }
+  if (b && (b.theme || b.song)){
+    S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; saveBrief(); S.fromRun = run;
+    if (!b.song) toast("This video's song isn't recorded, so pick it again. Everything else is as it was.");
+  } else toast("This video's brief couldn't be found, so this is your last one.");
   return viewBrief();
 }
 
@@ -1111,7 +1117,7 @@ async function viewPlan(run){
   ${made ? `<p class="note" style="margin:0 0 16px">This is the plan this video was made from. A new World, or Shuffle the cast, makes a new video; this one stays in <a href="#/videos">Your videos</a>.</p>` : ""}
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
-     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="${brief ? "#/brief/" + encodeURIComponent(run) : "#/"}" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
+     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="#/brief/${encodeURIComponent(run)}" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
      <p style="margin:0;font-size:18px;line-height:1.35;font-weight:600">${esc(w.headline || "The house look: no World line")}</p>
      ${w.camera ? `<div><div class="kv">Camera</div><div style="font-size:14px;color:#D4D4D4">${esc(w.camera)}</div></div>` : ""}
      ${w.places && w.places.length ? `<div><div class="kv">Places</div><div style="font-size:14px;color:#D4D4D4">${esc(w.places.slice(0,6).map(p=>String(p).replace(/^(in|on|at|near|by) (the )?/i,"")).join(" · "))}${w.places.length > 6 ? " · …" : ""}</div></div>` : ""}
@@ -1129,7 +1135,7 @@ async function viewPlan(run){
    </section>
   </div>
   <div class="bar">
-    <a class="btn" href="${brief ? "#/brief/" + encodeURIComponent(run) : "#/"}">Change the World</a>
+    <a class="btn" href="#/brief/${encodeURIComponent(run)}">Change the World</a>
     <button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
     ${made ? `<a class="btn primary big" href="${r.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(run)}">${r.stage === "done" ? "Back to the video" : "Back to the render"}</a>`
