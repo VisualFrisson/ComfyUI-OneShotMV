@@ -482,6 +482,7 @@ def _characters(v, allow_eyewear: bool = False, rules: dict | None = None) -> li
                          "age": "", "look": look}
             else:
                 look = _no_props(_drop_clauses(look, EYEWEAR))  # a face never comes with glasses unasked
+                role = _one_person(role)  # "medical staff", "cheerleaders": one person to a portrait
                 gender = _gender_of(low.get("gender", ""), role, look, wear)
                 if rules.get("gender") and gender and gender != rules["gender"]:
                     continue  # "No men": a man is left out (more women are written to take his place)
@@ -785,6 +786,30 @@ def _role(role: str) -> str:
         parts = w.split("-")
         parts = [x if len(x) > 1 and not x[1:].islower() else x[:1].lower() + x[1:] for x in parts]
         words.append("-".join(parts))
+    return " ".join(words)
+
+
+# one person to a portrait: "the blockers" is a blocker, and Gemma's "medical staff" a staff member
+_GROUP_WORD = {"staff": "staff member", "crew": "crew member", "personnel": "staff member", "team": "team member",
+               "maintenance": "maintenance worker", "catering": "caterer", "security": "security guard",
+               "management": "manager", "medical": "medic"}
+
+
+def _one_person(role: str) -> str:
+    words = role.split()
+    if not words:
+        return role
+    last = words[-1]
+    if last.lower() in _GROUP_WORD:
+        words[-1] = _GROUP_WORD[last.lower()]
+    elif re.search(r"(?i)men$", last) and len(last) > 4:
+        words[-1] = last[:-3] + "man"  # fishermen
+    elif re.search(r"(?i)[^aeiou]ies$", last):
+        words[-1] = last[:-3] + "y"  # ladies, fireflies
+    elif re.search(r"(?i)esses$", last):
+        words[-1] = last[:-2]  # actresses
+    elif re.search(r"(?i)[a-z]{3}[^su']s$", last) and not re.search(r"(?i)(?:ics|ous|ss|us|is|as|os)$", last):
+        words[-1] = last[:-1]  # blockers, referees, gladiators
     return " ".join(words)
 
 
@@ -1200,6 +1225,9 @@ def named_characters(theme: str) -> list[tuple[str, str]]:
             role = _ROLE_CUT.split(role)[0].strip()  # "glacier creature of clear blue ice" -> "glacier creature"
         if _GEAR.search(role.split()[-1] if role.split() else ""):
             continue  # "..., a short sword and a tall shield": the last character's kit, not a character
+        one = _one_person(role)
+        if one != role and desc.startswith(role):
+            desc, role = one + desc[len(role):], one  # "the blockers": a blocker
         if 2 <= len(role) <= 40 and len(role.split()) <= 4 and role.lower() not in [r.lower() for r, _ in out]:  # the DJ
             out.append((role, desc))
     return out

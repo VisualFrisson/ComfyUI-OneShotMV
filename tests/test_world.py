@@ -149,6 +149,19 @@ def test_the_cast_the_world_line_names(line, want):
     assert [r for r, _ in theme.named_characters(line)] == want
 
 
+def test_one_person_to_each_role():
+    """From the stress test of Oct 31: 'a blockers, a woman aged 35'; 'a medical staff', 'a track maintenance'."""
+    assert [r for r, _ in theme.named_characters(STRESS[2][0])][:1] == ["jammer"]
+    named = dict(theme.named_characters("Present day, all women: roller derby night: the jammer, the blockers in black "
+                                        "helmets, the fishermen, the actresses, the ladies; hard light"))
+    assert named["blocker"] == "blocker in black helmets" and {"fisherman", "actress", "lady"} <= set(named)
+    r = theme.rules("Present day, all women: roller derby night")
+    w = "a navy polo shirt and black trousers"
+    cs = theme._characters([_char(x, gender="woman", wear=w) for x in
+                            ("medical staff", "track maintenance", "boss", "physics teacher")], rules=r)
+    assert [c["role"] for c in cs] == ["medical staff member", "track maintenance worker", "boss", "physics teacher"]
+
+
 def test_a_described_character_keeps_all_its_words():
     named = dict(theme.named_characters(STRESS[3][0]))
     assert named["owner"] == "owner, a man in his sixties with a grey crew cut and a brown cardigan"
