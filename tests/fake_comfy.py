@@ -45,6 +45,8 @@ def node_classes() -> set:
         gs.append(graphs.twin_key(video_path="v", prefix="k", size=(1280, 768)).nodes)
         gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
                                          size2=(2016, 1152), editor="qwen").nodes)  # Single Artist on Qwen
+        gs.append(graphs.world_image(path="w.png", prefix="w", size1=(1344, 768), size2=(2016, 1152),
+                                     extend=True).nodes)  # World images, extended to fit
     finally:
         if saved is not None:
             sys.modules["nodes"] = saved

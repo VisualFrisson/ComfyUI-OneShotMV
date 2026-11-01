@@ -84,7 +84,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
            queue: bool = True, do_stems: bool = True, queue_assemble: bool = True, artist_path: str = "",
            qc_retries: int = 2, theme: str = "", broll_share: float = 0.125, staged: bool = True,
            cuts: dict | None = None, audio_fx: str = "", cast_order: str = "as written", crowd: str = "auto",
-           log=print, models: str = "auto", artist_description: str = "", **legacy) -> dict:
+           log=print, models: str = "auto", artist_description: str = "", world_images: str = "",
+           image_order: str = "in order", **legacy) -> dict:
     """staged (runs queued here, with QC): the 4-load order. Krea makes every portrait and the
     b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC re-rolls the
     singer shots while LTX stays loaded; then Klein makes every look keyframe from the final
@@ -94,10 +95,23 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     legacy: settings an older Director node still passes until ComfyUI restarts (mode, pack,
     framing, ...); motion mode and the style packs were removed on Oct 31, 2026.
     Single Artist: artist_path (a photo) or artist_description (a new person: the run's first job
-    makes their studio headshot, which every portrait then re-stages like a photo)."""
+    makes their studio headshot, which every portrait then re-stages like a photo).
+    world_images (a folder of the user's own images, fv/world_images.py): the images are the World
+    and the cast; no World line, no Krea 2 portraits, no vision check."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
+    imgs = None
+    if (world_images or "").strip():
+        from . import world_images as wi
+        imgs = wi.inspect(wi.list_images(world_images), *formats.portrait_size(fmt)[1], log=log)
+        if not imgs:
+            raise ValueError(f"None of the images in {world_images} could be read.")
+        if not any(it["sings"] for it in imgs):
+            raise ValueError("None of the World images has a face big enough to sing. Add a few with a clear face, "
+                             "or describe a World instead.")
+        log("[OneShotMV] " + wi.summary(imgs))
+        theme, artist_path, artist_description = "", "", ""
     artist_description = " ".join((artist_description or "").split()) if not artist_path else ""
     pack = "artist" if (artist_path or artist_description) else "crowd"
     # the model set ("24gb" fp8 files, or "full" bf16 files on 48 GB cards): every job this run
@@ -108,7 +122,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # before they are queued)
     setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue),
                                         theme=bool(theme and theme.strip()),
-                                        artist=bool(artist_path or (artist_description or "").strip())), model_set,
+                                        artist=bool(artist_path or (artist_description or "").strip()),
+                                        images=imgs is not None,
+                                        extend=any(it["fit"] == "extend" for it in imgs or [])), model_set,
                       lead="It can't start yet." if queue else "It can't write the plan yet.")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
@@ -222,16 +238,43 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         except Exception as e:  # never let it stop a run
             log(f"[OneShotMV] crowd dress skipped ({e})")
     p["cast_order"], p["crowd"] = (cast_order or "as written"), pk["casting"]["crowd_mode"]
-    cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
     s1, s2 = formats.portrait_size(fmt)
+    staged_img = {}  # World images: each image used, brought to the video's shape once (img00, img01...)
+    if imgs is not None:
+        singers = [it for it in imgs if it["sings"]]
+        cast = wi.cast(p, singers, image_order, seed)
+        rest = [it for it in imgs if not it["sings"]]
+        p["world_images"] = {"folder": world_images, "order": image_order, "n_cutaway": len(rest),
+                             "images": [{k: v for k, v in it.items() if k != "path"} for it in imgs]}
+        from . import broll as _broll
+        cut_n = 2 * _broll.slots(p, broll_share)  # staged runs render twice the slots up front
+        cuts_seq = wi.sequence(rest, min(len(rest), cut_n), image_order, seed + 1)
+        by_path = {it["path"]: it for it in singers}
+        for it in [by_path[c["image"]] for c in cast] + cuts_seq:
+            if it["path"] not in staged_img:
+                staged_img[it["path"]] = (f"img{len(staged_img):02d}", it)
+        p["world_images"]["cutaways"] = [os.path.join(run_dir, f"{staged_img[it['path']][0]}_00001_.png")
+                                         for it in cuts_seq]
+        if not p["world_images"]["cutaways"]:  # no image without a face: cutaways from the singers' images
+            p["world_images"]["cutaways"] = [os.path.join(run_dir, f"{n}_00001_.png")
+                                             for n, _ in list(staged_img.values())[::-1]]
+    else:
+        cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
     port = {}
     # the Director's own language-model work (World, cast, crowd dress) and whatever ran before
     # stay loaded under --highvram: the first portrait then shares the card with them
-    jobs.append(("free_before_portraits", graphs.free_memory("before Krea 2 portraits").nodes))
+    stills_are = "the World images" if imgs is not None else "Krea 2 portraits"
+    jobs.append(("free_before_portraits", graphs.free_memory(f"before {stills_are}").nodes))
     if ref_job:
         jobs.append(ref_job)
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
+    for name, it in staged_img.values():
+        jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size1=s1, size2=s2,
+                                              extend=it["fit"] == "extend", seed=seed * 31 + len(jobs)).nodes))
     for c in cast:
+        if imgs is not None:  # the image's own staged copy (the looks too: each its own image)
+            port[c["id"]] = os.path.join(run_dir, f"{staged_img[c['image']][0]}_00001_.png")
+            continue
         if c["id"] not in need_portrait:
             continue
         name = f"p{c['id']:03d}"
@@ -244,8 +287,12 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
                                                        prefix=f"{rel}/{name}", size1=s1, size2=s2,
                                                        turbo_only=(label == "fast")).nodes))
         port[c["id"]] = os.path.join(run_dir, f"{name}_00001_.png")
+    if imgs is not None:  # the Studio shows each shot's image before its clip is made
+        for r in p["renders"]:
+            if r["role"] == "A":
+                r["portrait"] = port[r["performer"]]
     free_idx = len(jobs)
-    jobs.append(("free_after_portraits", graphs.free_memory("after Krea 2 portraits").nodes))
+    jobs.append(("free_after_portraits", graphs.free_memory(f"after {stills_are}").nodes))
     neg = pk["casting"]["negative"]
     by_id = {r["id"]: r for r in p["renders"]}
     for r in p["renders"]:
@@ -273,7 +320,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}A",
             audio_path=vocal_path, audio_seek=seek(r)).nodes))
     twins_ = [r for r in p["renders"] if r["role"] == "B"]
-    for r in twins_:
+    for r in twins_ if imgs is None else []:
         a = by_id[r["twin_of"]]
         r["key"] = os.path.join(run_dir, f"k{r['id']:03d}_00001_.png")
         c = cast[r["performer"]]
@@ -292,6 +339,12 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         a = by_id[r["twin_of"]]
         c = cast[r["performer"]]
         text = casting.articulate(c["sing"]) if a.get("vocal_density", 0.0) >= dense_from else c["sing"]
+        if imgs is not None:  # a look from another image: its own sung take, no pose guide
+            r["key"] = port[r["performer"]]
+            jobs.append((f"r{r['id']:03d}B", graphs.ltx_render(
+                preset=preset, fmt=fmt, key_path=r["key"], prompt=text, negative=neg, frames=r["frames"],
+                seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B", audio_path=vocal_path, audio_seek=seek(r)).nodes))
+            continue
         jobs.append((f"r{r['id']:03d}B", graphs.ltx_render(
             preset=preset, fmt=fmt, key_path=r["key"], prompt=text, negative=neg,
             frames=r["frames"], seed=c["seed"], prefix=f"{rel}/r{r['id']:03d}B",
@@ -303,6 +356,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     if bible:
         p["theme"] = {k: v for k, v in bible.items() if k != "raw"}
         p["finish"] = pk["finish"]
+    if imgs is not None:  # the images keep their own colours
+        p["finish"] = dict(pk.get("finish") or {}, **wi.FINISH)
     p["run_dir"], p["run_rel"] = run_dir, rel
     deferred = set()
     if staged:
@@ -850,7 +905,9 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                 g2, nk = remake(f"k{r['id']:03d}", g)
                 if g2 is not None:
                     g, needs_key, r["key"] = g2, True, nk
-            if r["role"] == "A" and voice and set(fails) & {"noface", "tooclose", "identity", "headcut", "sideways", "people", "bars"}:
+            # (a World image is the user's own: it is never re-made, only the take re-shot)
+            if r["role"] == "A" and voice and not p.get("world_images") \
+                    and set(fails) & {"noface", "tooclose", "identity", "headcut", "sideways", "people", "bars"}:
                 # a framing / identity fault that is already in the portrait (the head out of
                 # frame in the still itself) needs a new portrait, not just a new seed for LTX
                 pname = f"p{r['performer']:03d}"

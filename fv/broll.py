@@ -66,6 +66,8 @@ def slots(p: dict, share: float) -> int:
     if share <= 0 or not p.get("shots"):
         return 0
     n = max(1, int(round(len(p["shots"]) * share)))
+    # World images: every image without a face is a cutaway, as far as there is room
+    n = max(n, int((p.get("world_images") or {}).get("n_cutaway") or 0))
     ok = [s for s in p["shots"] if s.get("phase", "quiet") in ("quiet", "build") and s.get("index", 0) > 0
           and s["t1"] - s["t0"] >= 1.0]
     return max(1, min(n, len(ok) // 3)) if ok else 0
@@ -276,8 +278,20 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         stills = bool(p.get("broll_stills", True))
         if kind in ("dance", "moment") and p.get("artist_path"):
             kind = "words"  # the artist's own dance would need an identity edit (another model swap)
+        wimgs = (p.get("world_images") or {}).get("cutaways") or []
+        if p.get("world_images"):
+            kind = "image"  # one of the user's own images, brought to life (staged by the Director)
         check, still_job = None, None
-        if kind == "moment":
+        if kind == "image":
+            from .world_images import MOTION as IMAGE_MOTION
+            key = wimgs[k % len(wimgs)] if wimgs else None
+            img = os.path.basename(key or "")
+            seek = round(t_start + p["song_t0"] - p.get("stems_t0", 0.0), 4)
+            clips.append(graphs.ltx_render(preset=preset, fmt=fmt, key_path=key, prompt=IMAGE_MOTION,
+                                           negative=NEGATIVE, frames=frames, seed=seed, prefix=f"{rel}/r{rid:03d}R",
+                                           audio_path=drums if os.path.exists(drums) else None,
+                                           audio_seek=seek).nodes)
+        elif kind == "moment":
             d = _dancer(p, pack, k)
             check = d.pop("check", None)
             d["light"] = d["light"][:1].upper() + d["light"][1:]

@@ -145,6 +145,9 @@ def assemble(run_dir: str, *, fx_intensity: float = 1.0, do_finish: bool = True,
     pack["finish"] = dict(pack["finish"], **STUDIO_DEFAULTS)  # the Studio's starting settings
     if plan.get("finish_user"):  # the Studio's colour grade, grain and vignette for this run
         pack["finish"] = dict(pack["finish"], **plan["finish_user"])
+    from .finish import plain
+    if plain(plan.get("finish_user")):  # a test run: the clips as they came out, no grade, grain or vignette
+        do_finish = False
     fps = plan["out_fps"]
     fmt = plan["format"]
     rw, rh = formats.render_size(fmt, plan["preset"])

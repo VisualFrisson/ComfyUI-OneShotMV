@@ -3,3 +3,4 @@ __pycache__/
 weights/
 .sdk/
 oneshot_mv_out/
+fv/local.json

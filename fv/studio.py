@@ -228,7 +228,7 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
 # 111 s window takes about 16 min, most of it writing 53 extra characters 8 at a time). A World
 # already written for the same line and seed is reused, so a second preview is quick.
 T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
-     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5}
+     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5, "images": 10, "per_image": 0.4}
 
 
 def _bible(theme: str, seed: int) -> dict | None:
@@ -253,13 +253,21 @@ def _estimate(b: dict) -> dict:
                            seconds=float(b.get("seconds", 30)), start=float(b.get("start", -1)),
                            seed=int(b.get("seed", 1)), framing="mixed")
     win = float(p["song_t1"] - p["song_t0"])
-    theme = (b.get("theme") or "").strip()
+    folder = _images_of(b)
+    theme = "" if folder else (b.get("theme") or "").strip()
     share = float(b.get("broll", 0.125))
     artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
     need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme and not artist else 0
     bible = _bible(theme, int(b.get("seed", 1))) if theme else None
     have = len((bible or {}).get("characters") or [])
     parts = [{"id": "listen", "name": "Listening to the song", "s": T["listen"]}]
+    if folder:  # a World from images: no language model, only a look at each image for a face
+        try:
+            n = len(_fv("world_images").list_images(folder))
+        except ValueError:
+            n = 0
+        parts.append({"id": "images", "name": f"Looking at your {n} images" if n else "Looking at your images",
+                      "s": round(T["images"] + T["per_image"] * n)})
     if theme:
         batches = 0
         if not bible:
@@ -302,6 +310,10 @@ def _form(d: str, p: dict) -> dict:
             "broll": p.get("broll_share", 0.125), "fx": p.get("fx_level") or "subtle"}
     form.update({f"cuts_{k}": cuts[k] for k in ("low", "medium", "high") if cuts.get(k)})
     form.update({k: p[k] for k in ("format", "preset", "crowd", "cast_order", "models") if p.get(k)})
+    if p.get("world_images"):  # a World from images
+        wi = p["world_images"]
+        form.update(world_mode="images", world_images=wi.get("folder", ""), image_order=wi.get("order", "in order"),
+                    theme="")
     if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
         form.update(cast="single artist", artist_description=p.get("artist_description", ""),
                     artist_mode="describe" if p.get("artist_description") else "photo")
@@ -365,6 +377,8 @@ def _progress(pid: str, rec: dict) -> dict:
     for ts, m in lines:
         if "Requested to load LTXAVTEModel" in m and "load" not in done:
             done.add("listen"); done.add("load"); last_t = ts
+        if "[OneShotMV] World images:" in m:
+            done.update({"listen", "images"}); last_t = ts
         if "[OneShotMV] Theme:" in m:
             done.update({"listen", "load", "world"}); last_t = ts
         if "new roles:" in m:
@@ -375,9 +389,9 @@ def _progress(pid: str, rec: dict) -> dict:
         if "every role has its real gender" in m:
             done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "voice plan:" in m or "] plan:" in m:  # older Directors logged "voice plan:"
-            done.update({"listen", "load", "world", "roles", "cast", "gender"}); last_t = ts
+            done.update({"listen", "images", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "[OneShotMV] stems:" in m or "lyrics:" in m or "lyrics skipped" in m:  # older runs logged lyrics
-            done.update({"listen", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
+            done.update({"listen", "images", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
     now = time.time()
     left, cur = 0.0, None
     for x in parts:
@@ -408,7 +422,11 @@ def _director_graph(b: dict) -> dict:
          "audio_fx": b.get("fx", "subtle"), "crowd": b.get("crowd", "auto"),
          "cast_order": b.get("cast_order", "as written"), "broll_share": float(b.get("broll", 0.125)),
          "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", ""),
-         "cast": "single artist" if b.get("cast") == "single artist" else "crowd"}
+         "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
+         "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
+         else "in order"}
+    if d["world_images"]:  # the images are the World and the cast
+        d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
     g = {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
          "2": {"class_type": "FVDirector", "inputs": d}}
@@ -420,6 +438,31 @@ def _director_graph(b: dict) -> dict:
         elif text:
             d["artist_description"] = text
     return g
+
+
+def _images_of(b: dict) -> str:
+    """The folder of a brief's World images ("" when the World is described): the tab that is showing counts."""
+    folder = str(b.get("world_images") or "").strip().strip('"')
+    if b.get("world_mode") == "describe" or (b.get("world_mode") != "images" and not folder):
+        return ""
+    return folder
+
+
+def _images(folder: str) -> dict:
+    """A World images folder for the Brief: how many images it has, and the first few to show
+    (those inside ComfyUI's input or output folder; other folders show the count only)."""
+    wi = _fv("world_images")
+    try:
+        paths = wi.list_images(folder)
+    except ValueError as e:
+        return {"folder": folder, "count": 0, "images": [], "error": str(e)}
+    shown = []
+    for p in paths[:12]:
+        url = _view(p)
+        if url:
+            shown.append({"name": os.path.basename(p), "url": url})
+    return {"folder": folder, "path": wi.resolve(folder), "count": len(paths), "images": shown,
+            "names": [os.path.basename(p) for p in paths[:200]]}
 
 
 def _artist_of(b: dict) -> tuple[str, str]:
@@ -441,7 +484,7 @@ def _restart_needed() -> list:
     try:
         import nodes as comfy_nodes  # type: ignore
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
-        if cls is not None and "world" not in (cls.INPUT_TYPES().get("required") or {}):
+        if cls is not None and "world_images" not in (cls.INPUT_TYPES().get("required") or {}):
             return [RESTART]
     except Exception:
         pass
@@ -453,12 +496,19 @@ def _cant_start(b: dict) -> list:
     each: Make the video and Preview refuse at once instead of after minutes of planning."""
     if _restart_needed():
         return _restart_needed()
-    artist = b.get("cast") == "single artist"
+    folder = _images_of(b)
+    if b.get("world_mode") == "images" and not folder:
+        return ["Pick a folder of images for the World."]
+    if folder:
+        err = _images(folder).get("error")
+        if err:
+            return [err]
+    artist = b.get("cast") == "single artist" and not folder
     if artist and not any(_artist_of(b)):
         return ["Add a photo of the artist, or describe a new one."]
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
-                                        b.get("format") or "16:9", artist=artist)
+                                        b.get("format") or "16:9", artist=artist, images=bool(folder))
     except Exception as e:  # never let the check itself stop a run: the Director checks again
         print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
         return []
@@ -600,7 +650,8 @@ def _still(d: str, info: dict, p: dict) -> str:
     if info.get("performer") is not None:
         n = info["performer"]
         cands = [x for x in glob.glob(os.path.join(d, f"p{n:03d}_*.png")) if "_fit" not in x]
-        return _newest(cands)
+        img = next((c.get("image", "") for c in p.get("cast") or [] if c.get("id") == n), "")
+        return _newest(cands) or (img if img and os.path.isfile(img) and _view(img) else "")
     return ""
 
 
@@ -1336,7 +1387,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
             try:
                 rep["setup"] = _fv("setup_check").report(q.get("models") or "auto", q.get("preset") or "quality",
                                                          q.get("format") or "16:9",
-                                                         artist=q.get("cast") == "single artist")
+                                                         artist=q.get("cast") == "single artist",
+                                                         images=bool(q.get("images")))
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
             stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts
@@ -1346,6 +1398,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
         return web.json_response(await _blocking(models))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
+    if route == "images":  # a World images folder: the count and the first few images
+        return web.json_response(await _blocking(_images, q.get("folder", "")))
     if route.startswith("xml/"):
         path = await _blocking(_xml, route[4:])
         stem = _file_stem(_project(os.path.dirname(path))) or os.path.basename(os.path.dirname(path))

@@ -48,8 +48,8 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
 
 1. **The Brief.** Name the project, then drop in a song. The waveform shows the low, medium and
    high energy sections and the stretch the video will use; click it to start somewhere else.
-   Pick a length, a World (four examples, or write your own), who sings (Crowd or Single Artist)
-   and a format. The buttons say how long the plan and the video will take.
+   Pick a length, a World (four examples, write your own, or use a folder of your own images), who
+   sings (Crowd or Single Artist) and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
    where), before anything long renders. Change the World and plan again, or make the video.
 3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
@@ -83,7 +83,8 @@ simulated there in seconds, and nothing is sent to ComfyUI.
 Open an example from Templates in the left sidebar, under Extensions, ComfyUI-OneShotMV. You can
 also drag a file from `example_workflows/` onto the canvas.
 
-- `OneShotMV.json` is the Director: a song and a World line, then the Studio's settings.
+- `OneShotMV.json` is the Director: a song and a World line (or a folder of your own images), then
+  the Studio's settings.
 - `OneShotMV_App.json` opens in ComfyUI's App mode: a song, a World line and a few settings, then
   Run. App / Graph at the top left shows the graph behind it.
 - `OneShotMV_Recut.json` cuts a finished run again with other FX or without the finish.
@@ -121,6 +122,7 @@ pip install comfy-sdk comfy-api-proxy
 python sdk_run.py --song track.wav --world "a 1965 airline: pilots, stewardesses and passengers" --preview
 python sdk_run.py --song track.wav --world "a 1965 airline: pilots, stewardesses and passengers" --seconds 30
 python sdk_run.py --song track.wav --format 9:16 --fx intense --cuts-high "to the music (intense)"
+python sdk_run.py --song track.wav --world-images "D:/shoots/october" --image-order "random order"
 python sdk_run.py --recut "<run folder>" --fx none
 ```
 
@@ -168,6 +170,25 @@ Some things that help:
 - For events such as a stadium, a ball or a club, people appear behind the singers, dressed for
   the World. The crowd setting turns this on or off.
 - Leave out real people and brands. Brand names are replaced, and signs are kept free of writing.
+
+### Your own images instead
+
+Instead of writing a World, give the tool a folder of images you have already made. It skips its
+own image stage and animates yours:
+
+- Images with a face big enough to sing become the singers; the rest (places, objects, people too
+  small or turned away) become cutaways with slow camera moves.
+- **In order** plays them by file name; **Random order** shuffles them, never showing the same
+  image twice in a row. Images repeat when there are more shots than images.
+- An image close to the video's shape is cropped a little. One further off (a 2:3 portrait in a
+  16:9 video) is extended to fit: FLUX.2 Klein draws the missing sides and your original pixels
+  are kept in the middle.
+- There is no World line, no cast and no vision check on stills; the take check runs as usual.
+
+In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
+of a folder on this computer. In the workflow, put the folder in the Director's `world_images`
+(a full path, or a folder inside ComfyUI's input or output folder) and pick `image_order`. Use only
+images you made or have the rights to.
 
 ### Crowd or Single Artist
 
@@ -345,6 +366,7 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 | OneShot MV: Load Image / Video / Audio (path) | Loaders for the Director's jobs. |
 | OneShot MV: Face Match | Puts a look's face where its lead's face is (Single Artist's looks). |
 | OneShot MV: Fit to Shape | Extends an image to another shape without cropping (Single Artist with Qwen-Image). |
+| OneShot MV: Extend Canvas | Puts an image on a canvas of the video's shape, with masks for drawing the new edges (World images). |
 
 `fv/packs/crowd.json` holds the casting rules, the edit and the effects of Crowd runs;
 `fv/packs/artist.json` those of Single Artist.

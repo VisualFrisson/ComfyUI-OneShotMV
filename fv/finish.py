@@ -79,6 +79,23 @@ BASE_LOOK = "natural"  # under every grade, "None" included; not offered as a gr
 # 25% grain at the finest size, no vignette (audio-reactive FX start at subtle, in fx.py)
 STUDIO_DEFAULTS = {"look": "none", "grain": 0.05, "grain_size": 0.5, "vignette": 0.0}
 
+# no finish at all (no grade, glow, grain or vignette: the cut skips the finish) on a machine whose
+# fv/local.json says {"finish": "plain"}, or for a run whose finish_user says {"plain": true}. Test runs use
+# it (the user, Oct 31: "for all tests there should be no grade, grain or vignette")
+def local_settings() -> dict:
+    """This computer's own settings (fv/local.json, not part of the pack: an update never touches it)."""
+    import json
+    import os
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local.json")
+    try:
+        return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def plain(finish_user: dict | None = None) -> bool:
+    return bool((finish_user or {}).get("plain")) or local_settings().get("finish") == "plain"
+
 # the reference and what each look is after
 LOOK_NOTES = {
     "teal_orange": ("Transformers, Mad Max: Fury Road", "Teal shadows, warm skin and highlights, pushed halfway to Fury Road: complementary colours make faces jump out."),

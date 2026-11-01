@@ -13,6 +13,8 @@
         0
       ],
       "world": "",
+      "world_images": "",
+      "image_order": "in order",
       "cast": "crowd",
       "seconds": 30.0,
       "start": -1.0,

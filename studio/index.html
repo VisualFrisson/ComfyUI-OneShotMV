@@ -510,6 +510,24 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 html[data-look="neon"] .castpick .tier[aria-pressed=true] svg{color:var(--text)}
 html[data-look="neon"] .aphoto{border-radius:12px}
 html[data-look="neon"] .aphoto.over{border:1px solid transparent;background:linear-gradient(var(--panel2),var(--panel2)) padding-box,var(--grad) border-box}
+/* the World from the user's own images: a folder uploaded or on this computer, its count and first images */
+.worldtop{justify-content:space-between;gap:10px 14px;margin-bottom:16px}
+.wfold{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
+.wfold.over{border-color:var(--accent);background:var(--accent-bg)}
+.wfh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px}
+.wfh .tx{flex:1 1 180px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.wfh .tx b{font-size:15px}
+.wfh .tx .mono{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wfh .row{gap:8px}
+.wfh .btn.sm{padding:0 10px}
+.wthumbs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(52px,72px);gap:6px;overflow-x:auto;min-width:0;max-width:100%}
+.wthumbs img,.wthumbs .noimg,.wthumbs .more{width:100%;aspect-ratio:1;border-radius:8px;object-fit:cover;display:block;background:var(--bg)}
+.wthumbs .more{display:flex;align-items:center;justify-content:center;font:600 12px/1 var(--mono);color:var(--muted);border:1px dashed var(--line3);background:none}
+.werr{color:var(--warn);font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.worder{margin-top:14px;gap:8px 12px}
+html[data-look="neon"] .wfold{border-radius:12px}
+html[data-look="neon"] .wfold.over{border:1px solid transparent;background:linear-gradient(var(--panel2),var(--panel2)) padding-box,var(--grad) border-box}
+html[data-look="neon"] .wthumbs img,html[data-look="neon"] .wthumbs .noimg,html[data-look="neon"] .wthumbs .more{border-radius:6px}
 </style>
 </head>
 <body>
@@ -546,7 +564,8 @@ const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
   cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto",
-  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:""};
+  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"",
+  world_mode:"describe", world_images:"", image_order:"in order"};  // the World: described, or a folder of the user's images
 
 // ---------------------------------------------------------------- state
 const store = {
@@ -555,7 +574,8 @@ const store = {
 };
 const S = { brief: Object.assign({}, DEFAULT_BRIEF, store.get("brief", {})), songs: null, analysis: null, sys: null, timer: null,
             stageOf: {}, showPlan: null, fromRun: null,
-            crowdTouched: false, artistV: 0 };  // crowd set by hand (Single Artist leaves it alone); the artist photo's upload time
+            crowdTouched: false, artistV: 0,  // crowd set by hand (Single Artist leaves it alone); the artist photo's upload time
+            worldInfo: null };  // the World images folder as api/images last saw it
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, el=document) => el.querySelector(s);
@@ -593,7 +613,7 @@ async function demoApi(path, body){
   const parts = path.split("?")[0].split("/"), what = parts[0], arg = decodeURIComponent(parts.slice(1).join("/"));
   if (what === "start"){
     const run = await demoSource(body), render = !!body.render;
-    return demoJob(render ? 6000 : 5000, run, ["Analysing the song", "Writing the World", "Planning every shot", render ? "Queueing every shot" : "Writing the shot list"],
+    return demoJob(render ? 6000 : 5000, run, ["Analysing the song", body.world_mode === "images" ? "Looking at your images" : "Writing the World", "Planning every shot", render ? "Queueing every shot" : "Writing the shot list"],
       () => { DM.phase[run] = render ? "render" : "preview"; DM.t0[run] = Date.now(); DM.stop[run] = 0; });
   }
   if (what === "job"){
@@ -713,6 +733,11 @@ function saveBrief(){ store.set("brief", S.brief); }
 // the project name: saved with the run (studio.json); in demo mode the brief's name stands in
 const projectOf = r => (r && r.project) || (DEMO && r ? ((store.get("briefs", {})[r.run] || {}).name || "") : "");
 const fileStem = r => (projectOf(r).replace(/[^\w\- ]+/g, "").replace(/\s+/g, " ").trim().slice(0, 80)) || r.run;
+// a run made from the user's World images (its brief says so): no World line, no characters, no vision check
+const imagesOf = r => { const f = (r && (r.form || store.get("briefs", {})[r.run])) || {};
+  const folder = f.world_mode === "images" ? String(f.world_images || "").trim() : "";
+  return folder ? {folder, order: f.image_order === "random order" ? "random order" : "in order"} : null; };
+const worldName = r => (r.world && r.world.headline) || (imagesOf(r) ? "Your images" : "House look");
 // asks for the project name before the first step forward; resolves with the name, or null
 function askName(){
   return new Promise(res => {
@@ -778,8 +803,11 @@ async function openBrief(run){
   // saved in this browser when it started the run; else the one the run keeps (any browser)
   let b = store.get("briefs", {})[run];
   if (!b){ try{ b = (await api("run/" + encodeURIComponent(run))).form; }catch(e){} }
-  if (b && (b.theme || b.song)){
-    S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; saveBrief(); S.fromRun = run;
+  if (b && (b.theme || b.song || b.world_images)){
+    S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; S.worldInfo = null; S.fromRun = run;
+    // a folder with no mode is a World from images, as the server reads it
+    if (!b.world_mode) S.brief.world_mode = String(b.world_images || "").trim() ? "images" : "describe";
+    saveBrief();
     if (!b.song) toast("This video's song isn't recorded, so pick it again. Everything else is as it was.");
   } else toast("This video's brief couldn't be found, so this is your last one.");
   return viewBrief();
@@ -829,11 +857,21 @@ async function viewBrief(){
     </section>
 
     <section class="card" aria-labelledby="worldh">
-      <h2 class="label" id="worldh" style="margin-bottom:16px">World</h2>
+      <div class="row worldtop"><h2 class="label" id="worldh">World</h2><div class="seg" role="group" aria-label="How to set the World" id="wmode"></div></div>
+      <div id="wdescribe">
       <div class="tiles" role="group" aria-label="World examples" id="tiles"></div>
       <label for="world" style="display:block;margin:16px 0 8px;font-size:13px;color:var(--muted)">Describe the world in a line: who they are, what they wear, where they are, the light</label>
       <textarea id="world" rows="6" placeholder="Like “the gladiator games in ancient Rome”. For more control: the people in the order you want them; the places; the light."></textarea>
+      </div>
+      <div id="wimages" class="hide">
+        <div id="wbox"></div>
+        <input type="file" id="wdir" webkitdirectory multiple class="hide" aria-label="A folder of images">
+        <input type="file" id="wfiles" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide" aria-label="Images">
+        <label class="field" style="margin-top:14px">Or use a folder on this computer<input id="wpath" type="text" autocomplete="off" spellcheck="false" placeholder="Like D:\\Shoots\\my-shoot"></label>
+        <div class="row worder"><span class="field" id="worderl">Image order</span><div class="seg" role="group" aria-labelledby="worderl" id="worder"></div><span class="tiny">In order goes by file name.</span></div>
+      </div>
       <p class="note" id="worldnote"></p>
+      <p class="note hide" id="wrights">Use only images you made or have the rights to.</p>
     </section>
 
     <section class="card" id="castcard">
@@ -896,10 +934,15 @@ async function viewBrief(){
   };
   drawTiles();
   ta.oninput = () => { b.theme = ta.value; const w = WORLDS.find(x => x.text && x.text === ta.value); b.world = w ? w.id : "custom"; saveBrief(); drawTiles(); };
-  // who sings: Crowd or Single Artist (the setup check wants more files for one artist)
+  // or the World from the user's own images (the toggle hides who sings: the images are the cast)
+  initWorldImages(); drawWorld();
+  // who sings: Crowd or Single Artist (the setup check wants more files for one artist, others for images)
   drawCast();
-  let setupCast = b.cast;
-  $("#casts").addEventListener("click", () => { if (b.cast !== setupCast){ setupCast = b.cast; loadSetup(); } });
+  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images" : "describe");
+  let setupWas = setupKey();
+  const setupAgain = () => { const k = setupKey(); if (k !== setupWas){ setupWas = k; loadSetup(); } };
+  $("#casts").addEventListener("click", setupAgain);
+  $("#wmode").addEventListener("click", setupAgain);
 
   // format, quality
   const drawFmt = () => {
@@ -949,8 +992,9 @@ async function viewBrief(){
       <ul>${(rend.length ? rend : plan).map(x => `<li>${link(x)}</li>`).join("")}</ul>
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
-  const loadSetup = () => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}`)
-    .then(r => { S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
+  let setupN = 0;  // the newest check wins when the World or cast is switched quickly
+  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" : ""}`)
+    .then(r => { if (n !== setupN) return; S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
   // advanced
@@ -975,6 +1019,7 @@ async function viewBrief(){
   $("#go-preview").onclick = () => start(false);
   $("#go-render").onclick = () => start(true);
   drawSong();
+  if (!b.song) refreshEstimate();  // the line under Preview follows the World even before a song
   if (!S.sys) loadSystem().then(drawTiers);
 }
 
@@ -1065,11 +1110,13 @@ function refreshEstimate(){
   _estT = setTimeout(async () => {
     const b = S.brief, ep = $("#eta-prev"), ea = $("#eta-all"), why = $("#eta-why");
     if (!ep) return;
-    if (!b.song){ ep.textContent = ""; ea.textContent = ""; why.textContent = "See the World the tool writes and every shot before the long render."; return; }
+    const imgs = b.world_mode === "images";
+    if (!b.song){ ep.textContent = ""; ea.textContent = ""; why.textContent = imgs ? "See every shot and its image before the long render." :"See the World the tool writes and every shot before the long render."; return; }
     const n = ++_estN;
-    const c = Object.assign({}, b, castOf(b));
+    const c = Object.assign({}, b, castOf(b), worldOf(b));
+    if (imgs) c.theme = "";  // the images are the World: no World line to write
     const qs = ["song","seconds","start","theme","seed","broll","format","preset","cuts_low","cuts_medium","cuts_high","crowd",
-                "cast","artist_mode","artist_image","artist_description"].map(k => k + "=" + encodeURIComponent(c[k] ?? "")).join("&");
+                "cast","artist_mode","artist_image","artist_description","world_mode","world_images"].map(k => k + "=" + encodeURIComponent(c[k] ?? "")).join("&");
     try{
       const e = await api("estimate?" + qs);
       if (n !== _estN) return;
@@ -1077,7 +1124,8 @@ function refreshEstimate(){
       ep.textContent = "about " + dur(e.total_s);
       ea.textContent = "about " + mins(e.total_s / 60 + e.render_min) + " in all";
       const chars = e.parts.find(x => x.id === "cast");
-      why.textContent = !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
+      why.textContent = imgs ? `About ${dur(e.total_s)}: the song is analysed and each image checked for a face.`
+        : !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
         : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analysed.`
         : c.cast === "single artist" ? `About ${dur(e.total_s)}: Gemma writes the World the artist sings in. A second preview with the same line and seed is quick.`
         : `About ${dur(e.total_s)}: Gemma writes the World and a character for each of the ${e.shots} shots${chars ? ", 8 at a time" : ""}. A second preview with the same line and seed is quick.`;
@@ -1105,8 +1153,9 @@ const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ICON_CROWD = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M16.6 14.1c2.5.3 4.4 2.6 4.4 5.4"/></svg>`;
 const ICON_ONE = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>`;
 // what a brief sends for who sings: only the tab that is showing counts, and none of it for a Crowd
+// or a World from images (the images are the cast)
 function castOf(b){
-  const single = b.cast === SINGLE, mode = b.artist_mode === "describe" ? "describe" : "photo";
+  const single = b.cast === SINGLE && b.world_mode !== "images", mode = b.artist_mode === "describe" ? "describe" : "photo";
   return {cast: single ? SINGLE : "crowd", artist_mode: mode,
           artist_image: single && mode === "photo" ? String(b.artist_image || "").trim() : "",
           artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : ""};
@@ -1134,9 +1183,7 @@ function drawCast(){
   box.innerHTML = [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line.", ICON_ONE]]
     .map(([k, n, d, ic]) => `<button type="button" class="tier" data-c="${k}" aria-pressed="${(single ? SINGLE : "crowd") === k}"><span class="t">${ic}<b>${n}</b></span><small>${d}</small></button>`).join("");
   box.querySelectorAll(".tier").forEach(el => el.onclick = () => setCast(el.dataset.c));
-  $("#worldnote").textContent = single ? "One line is enough. The artist sings every line, in the World's outfits and places."
-    : "One line is enough. The characters you name are cast first, in the order you name them, and every shot is a different invented person.";
-  $("#rights").textContent = "Use music you have the rights to. " + (single && photo ? "Every other face is invented." : "Every face is invented.");
+  drawNotes();
   const art = $("#artist");
   art.classList.toggle("hide", !single);
   if (!single){ art.innerHTML = ""; return; }
@@ -1194,10 +1241,171 @@ async function uploadArtist(file){
   }catch(e){ overlay(); toast("Upload failed: " + e.message); }
 }
 
+// ---------------------------------------------------------------- the World from images
+// The user's own finished images instead of a described World (fv/world_images.py): a folder uploaded
+// to ComfyUI's input folder (oneshot-mv/worlds/<folder>), or one already on this computer. Images with
+// a face sing, the rest become cutaways; the cast card hides, since the images are the cast.
+const WORLD_EXT = /\.(jpe?g|png|webp)$/i;  // the files the Director reads from a folder
+const ICON_IMAGES = `<svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v10"/><path d="M3.5 17.5l4-4 3 3 2-2 4 4"/><circle cx="8" cy="11" r="1.3"/></svg>`;
+const cleanPath = v => String(v || "").trim().replace(/^["']+|["']+$/g, "").trim();  // "Copy as path" adds quotes
+// what a brief sends for its World: described, or a folder of images in order or shuffled
+function worldOf(b){
+  return {world_mode: b.world_mode === "images" ? "images" : "describe", world_images: cleanPath(b.world_images),
+          image_order: b.image_order === "random order" ? "random order" : "in order"};
+}
+// the World note and the rights line follow both the World and who sings
+function drawNotes(){
+  const b = S.brief, wn = $("#worldnote"), rt = $("#rights"); if (!wn || !rt) return;
+  if (b.world_mode === "images"){
+    wn.textContent = "Images with a face sing; the rest become cutaways. Images that aren't the video's shape are cropped or extended to fit.";
+    rt.textContent = "Use music and images you have the rights to.";
+    return;
+  }
+  const single = b.cast === SINGLE, photo = b.artist_mode !== "describe";
+  wn.textContent = single ? "One line is enough. The artist sings every line, in the World's outfits and places."
+    : "One line is enough. The characters you name are cast first, in the order you name them, and every shot is a different invented person.";
+  rt.textContent = "Use music you have the rights to. " + (single && photo ? "Every other face is invented." : "Every face is invented.");
+}
+function setWorldMode(m){
+  const b = S.brief;
+  if (b.world_mode !== m){ b.world_mode = m; saveBrief(); refreshEstimate(); }
+  drawWorld();
+  const el = $(`#wmode [data-wm="${m}"]`); if (el) el.focus();
+}
+function drawWorld(){
+  const b = S.brief, seg = $("#wmode"); if (!seg) return;
+  const imgs = b.world_mode === "images";
+  seg.innerHTML = [["describe", "Describe it"], ["images", "Use my images"]].map(([k, n]) =>
+    `<button type="button" class="opt" data-wm="${k}" aria-pressed="${(imgs ? "images" : "describe") === k}">${n}</button>`).join("");
+  seg.querySelectorAll("[data-wm]").forEach(el => el.onclick = () => setWorldMode(el.dataset.wm));
+  $("#wdescribe").classList.toggle("hide", imgs);
+  $("#wimages").classList.toggle("hide", !imgs);
+  $("#wrights").classList.toggle("hide", !imgs);
+  $("#castcard").classList.toggle("hide", imgs);
+  drawNotes();
+  if (imgs){ drawOrder(); lookWorld(); }
+}
+function drawOrder(){
+  const box = $("#worder"); if (!box) return;
+  const cur = S.brief.image_order === "random order" ? "random order" : "in order";
+  box.innerHTML = [["in order", "In order"], ["random order", "Random order"]].map(([k, n]) =>
+    `<button type="button" class="opt" data-o="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
+  box.querySelectorAll("[data-o]").forEach(el => el.onclick = () => {
+    const o = el.dataset.o;
+    if (S.brief.image_order !== o){ S.brief.image_order = o; saveBrief(); }
+    drawOrder(); const f = $(`#worder [data-o="${o}"]`); if (f) f.focus();
+  });
+}
+// the path field and the two pickers (a folder, or loose images); set up once per Brief
+function initWorldImages(){
+  const wp = $("#wpath"), dir = $("#wdir"), fl = $("#wfiles"); if (!wp) return;
+  wp.value = S.brief.world_images || "";
+  let t = 0;
+  wp.oninput = () => { S.brief.world_images = cleanPath(wp.value); saveBrief(); clearTimeout(t); t = setTimeout(() => { lookWorld(); refreshEstimate(); }, 500); };
+  dir.onchange = () => { const fs = [...dir.files].map(f => ({file: f, rel: f.webkitRelativePath || f.name})); dir.value = ""; uploadWorld(fs); };
+  fl.onchange = () => { const fs = [...fl.files].map(f => ({file: f, rel: f.name})); fl.value = ""; uploadWorld(fs); };
+}
+// the folder as the server sees it: how many images, and the first few (api/images)
+let _wN = 0;
+async function lookWorld(){
+  const folder = cleanPath(S.brief.world_images), n = ++_wN;
+  if (!folder){ S.worldInfo = null; drawWorldBox(); return; }
+  if (!S.worldInfo || S.worldInfo.folder !== folder) S.worldInfo = {folder, loading: true};  // the same folder stays up while it refreshes
+  drawWorldBox();
+  let info;
+  try{ info = await api("images?folder=" + encodeURIComponent(folder)); }catch(e){ info = {count: 0, images: [], error: e.message}; }
+  if (n !== _wN || cleanPath(S.brief.world_images) !== folder) return;
+  S.worldInfo = Object.assign({}, info, {folder}); drawWorldBox();
+}
+function drawWorldBox(){
+  const box = $("#wbox"); if (!box) return;
+  const had = box.contains(document.activeElement) ? document.activeElement.id : "";  // focus survives the redraw
+  const folder = cleanPath(S.brief.world_images), w = S.worldInfo && S.worldInfo.folder === folder ? S.worldInfo : null;
+  const btns = sm => `<button class="btn${sm}" id="wpickdir" type="button">Upload a folder</button><button class="btn ghost${sm}" id="wpickfiles" type="button">Pick images</button>`;
+  if (!folder){
+    box.innerHTML = `<div class="drop" id="wzone">${ICON_IMAGES}
+        <div style="font-weight:700;font-size:16px">Drop a folder of images here</div>
+        <div class="muted" style="font-size:13px">JPG, PNG or WebP. They go into ComfyUI's input folder.</div>
+        <div class="row" style="gap:8px;justify-content:center">${btns("")}</div></div>`;
+  } else {
+    const where = `<span class="tiny mono" title="${esc((w && w.path) || folder)}">${esc(folder)}</span>`;
+    let head, body = "";
+    if (!w || w.loading) head = `<b>Looking in the folder…</b>${where}`;
+    else if (w.error) head = `<b class="werr">${esc(w.error)}</b>`;
+    else {
+      const shown = (w.images || []).slice(0, 12), more = (+w.count || 0) - shown.length;
+      head = `<b>${w.count} image${w.count === 1 ? "" : "s"}</b>${where}`;
+      body = shown.length ? `<div class="wthumbs" role="img" aria-label="${more > 0 ? `The first ${shown.length} of ${w.count} images` : "The images"}">${shown.map(x =>
+          `<img src="${esc(x.url)}" alt="" title="${esc(x.name)}" decoding="async">`).join("")}${more > 0 ? `<span class="more">+${more}</span>` : ""}</div>`
+        : `<p class="tiny" style="margin:0">${(w.names || []).length ? `<span class="mono">${esc(w.names.slice(0, 3).join(", "))}${w.count > 3 ? ", …" : ""}</span><br>` : ""}Previews show only for folders in ComfyUI's input or output folder.</p>`;
+    }
+    box.innerHTML = `<div class="wfold" id="wzone"><div class="wfh"><div class="tx">${head}</div><div class="row">${btns(" sm")}</div></div>${body}</div>`;
+  }
+  const zone = $("#wzone"), pickDir = () => $("#wdir").click();
+  $("#wpickdir").onclick = e => { e.stopPropagation(); pickDir(); };
+  $("#wpickfiles").onclick = e => { e.stopPropagation(); $("#wfiles").click(); };
+  if (!folder) zone.onclick = pickDir;
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
+  zone.ondragleave = e => { if (!zone.contains(e.relatedTarget)) zone.classList.remove("over"); };
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over");
+    filesFromDrop(e.dataTransfer).then(uploadWorld).catch(err => toast("Couldn't read what was dropped: " + err.message)); };
+  box.querySelectorAll(".wthumbs img").forEach(im => im.onerror = () => { const s = document.createElement("span"); s.className = "noimg"; im.replaceWith(s); });
+  if (had){ const el = document.getElementById(had); if (el) el.focus(); }
+}
+// what was dropped: a folder (walked, hidden ones skipped) or loose files, each with its path in the drop
+function filesFromDrop(dt){
+  const loose = [...(dt.files || [])];  // read now: the drop's items are gone once the handler returns
+  const entries = [...(dt.items || [])].map(it => it.kind === "file" && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null).filter(Boolean);
+  if (!entries.length) return Promise.resolve(loose.map(f => ({file: f, rel: f.name})));
+  const readDir = d => new Promise((res, rej) => { const r = d.createReader(), out = [];
+    const next = () => r.readEntries(b => { if (!b.length) return res(out); out.push(...b); next(); }, rej); next(); });
+  const walk = async (en, path, out) => {
+    if (en.name.startsWith(".")) return;
+    if (en.isFile) out.push({file: await new Promise((res, rej) => en.file(res, rej)), rel: path + en.name});
+    else if (en.isDirectory) for (const c of await readDir(en)) await walk(c, path + en.name + "/", out);
+  };
+  return (async () => { const out = []; for (const en of entries) await walk(en, "", out); return out; })();
+}
+const slugOf = s => String(s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-+/, "").slice(0, 40).replace(/-+$/, "");
+function stampNow(){ const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; }
+// uploads the images, one at a time, into ComfyUI's input folder: oneshot-mv/worlds/<the folder's name>
+// (loose files: images-<date>-<time>), then uses that folder as the World
+async function uploadWorld(items){
+  const hidden = rel => rel.split("/").some(s => s.startsWith(".") || s === "__MACOSX");
+  items = items.filter(x => x.file && WORLD_EXT.test(x.file.name) && !hidden(x.rel));
+  if (!items.length){ toast("No JPG, PNG or WebP images there."); return; }
+  items.sort((a, b) => a.rel.localeCompare(b.rel, undefined, {numeric: true, sensitivity: "base"}));  // by name, as the folder lists them
+  const top = items.find(x => x.rel.includes("/")), dir = top ? top.rel.split("/")[0] : "";
+  const sub = "oneshot-mv/worlds/" + (slugOf(dir) || "images-" + stampNow());
+  // the folder's own images keep their names; those in a folder inside it get its name in front ("day2-a.jpg")
+  const nameOf = x => (dir && x.rel.startsWith(dir + "/") ? x.rel.slice(dir.length + 1) : x.rel).split("/").join("-");
+  overlay("Uploading your images", `Uploading 1 of ${items.length}`);
+  const bar = $("#ovbar"), fill = $("#ovfill"), line = $("#ovt2");
+  bar.classList.remove("hide"); line.classList.remove("hide");
+  try{
+    for (let i = 0; i < items.length; i++){
+      const x = items[i], name = nameOf(x), pct = Math.round(100 * i / items.length);
+      $("#ovs").textContent = `Uploading ${i + 1} of ${items.length}`; line.textContent = name;
+      fill.style.width = pct + "%"; bar.setAttribute("aria-valuenow", pct);
+      const fd = new FormData(); fd.append("image", x.file, name); fd.append("subfolder", sub); fd.append("type", "input"); fd.append("overwrite", "true");
+      const r = await fetch("/api/upload/image", {method:"POST", body:fd});
+      if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
+    }
+    S.brief.world_images = sub; S.worldInfo = null; saveBrief();
+    const wp = $("#wpath"); if (wp) wp.value = sub;
+    overlay(); refreshEstimate(); await lookWorld();
+    const f = $("#wpickdir"); if (f) f.focus();
+  }catch(e){ overlay(); toast("Upload failed: " + e.message); }
+}
+
 async function start(render, briefOverride){
   const b = Object.assign({}, briefOverride || S.brief);
   if (!b.song){ toast("Pick a song first."); return; }
-  Object.assign(b, castOf(b));  // only the artist tab that is showing goes with the brief
+  Object.assign(b, castOf(b), worldOf(b));  // only the artist tab that is showing goes with the brief; none with images
+  const imgs = b.world_mode === "images";
+  if (imgs && !b.world_images){ toast("Pick a folder of images for the World."); return; }
   if (b.cast === SINGLE && !b.artist_image && !b.artist_description){ toast("Add a photo of the artist, or describe a new one."); return; }
   if (!String(b.name || "").trim()){
     const pn = $("#pname"); if (pn) pn.classList.add("bad");
@@ -1208,7 +1416,8 @@ async function start(render, briefOverride){
   b.name = String(b.name).trim();
   b.render = !!render;
   try{
-    overlay(render ? "Starting the video" : "Writing the plan", render ? "Analysing the song, writing the World and queueing every shot. This takes a minute or two." : "Analysing the song, writing the World and planning every shot. Nothing renders yet.");
+    const what = imgs ? "looking at your images" : "writing the World";
+    overlay(render ? "Starting the video" : "Writing the plan", render ? `Analysing the song, ${what} and queueing every shot. This takes a minute or two.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
     const {prompt_id} = await api("start", b);
     const brief = Object.assign({}, b); delete brief.render;
     const t0 = Date.now();
@@ -1218,7 +1427,7 @@ async function start(render, briefOverride){
       const el = Math.round((Date.now() - t0) / 1000);
       if (j.state === "queued") $("#ovs").textContent = `Waiting in ComfyUI's queue (${j.ahead} ahead) · ${el} s`;
       else if (j.state === "running"){
-        $("#ovs").textContent = j.step ? j.step + "…" : (render ? "Analysing the song, writing the World and queueing every shot" : "Analysing the song, writing the World and planning every shot");
+        $("#ovs").textContent = j.step ? j.step + "…" : (render ? `Analysing the song, ${what} and queueing every shot` : `Analysing the song, ${what} and planning every shot`);
         if (j.elapsed_s != null && j.left_s != null) overlayProgress(j.elapsed_s, j.left_s);
       }
       else if (j.state === "error") throw new Error(j.error);
@@ -1243,26 +1452,29 @@ async function viewPlan(run){
   if (r.stage !== "preview" && !asked){ location.hash = (r.stage === "done" ? "#/result/" : "#/render/") + encodeURIComponent(run); return; }
   setSteps(1, run, r.stage);
   const made = r.stage !== "preview";
-  const w = r.world, b = r.brief;
+  const w = r.world, b = r.brief, im = imagesOf(r);
   const brief = store.get("briefs", {})[run];
   const sing = r.shots.filter(s => s.kind === "sing").length, cut = r.shots.length - sing;
   const est = brief ? estimate(Object.assign({}, brief)) : r.estimate_min;
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
-  <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(w.headline || "House look")} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
+  <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
     <span class="mono muted" style="font-size:12px">${made ? (r.stage === "done" ? "This video is made" : "This video is rendering") : "Nothing is rendered yet"}</span></div>
   ${made ? `<p class="note" style="margin:0 0 16px">This is the plan this video was made from. A new World, or Shuffle the cast, makes a new video; this one stays in <a href="#/videos">Your videos</a>.</p>` : ""}
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
      <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="#/brief/${encodeURIComponent(run)}" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
-     <p style="margin:0;font-size:18px;line-height:1.35;font-weight:600">${esc(w.headline || "The house look: no World line")}</p>
+     <p style="margin:0;font-size:18px;line-height:1.35;font-weight:600">${esc(w.headline || (im ? "Your images" : "The house look: no World line"))}</p>
+     ${im ? `<div><div class="kv">Images</div><div style="font-size:14px;color:#D4D4D4;overflow-wrap:anywhere">${esc(im.folder)} · ${esc(im.order)}</div></div>` : ""}
      ${w.camera ? `<div><div class="kv">Camera</div><div style="font-size:14px;color:#D4D4D4">${esc(w.camera)}</div></div>` : ""}
      ${w.places && w.places.length ? `<div><div class="kv">Places</div><div style="font-size:14px;color:#D4D4D4">${esc(w.places.slice(0,6).map(p=>String(p).replace(/^(in|on|at|near|by) (the )?/i,"")).join(" · "))}${w.places.length > 6 ? " · …" : ""}</div></div>` : ""}
      ${w.light && w.light.length ? `<div><div class="kv">Light</div><div style="font-size:14px;color:#D4D4D4">${esc(w.light.slice(0,4).join(" · "))}</div></div>` : ""}
-     <div><div class="kv">Cast</div><div style="font-size:14px;color:#D4D4D4">${w.characters} characters in the World${w.left_out.length ? `; not in this cut: ${esc(w.left_out.slice(0,10).join(", "))}${w.left_out.length > 10 ? "…" : ""}` : ""}.</div></div>
+     <div><div class="kv">Cast</div><div style="font-size:14px;color:#D4D4D4">${im ? `The images with a face sing, ${im.order === "random order" ? "in random order" : "in order"}; the rest are cutaways.`
+       : `${w.characters} characters in the World${w.left_out.length ? `; not in this cut: ${esc(w.left_out.slice(0,10).join(", "))}${w.left_out.length > 10 ? "…" : ""}` : ""}.`}</div></div>
      <div><div class="kv">Energy</div><div class="emap" aria-hidden="true">${levels}</div>
        <ul class="tiny" style="margin:8px 0 0;padding-left:16px">${(r.energy_map||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
-     <p class="tiny" style="margin:0">To change who is in it, edit the World line: the characters it names are cast first, in that order. Same seed, same cast; a new seed re-casts.</p>
+     <p class="tiny" style="margin:0">${im ? "To change who is in it, change the images or their order in the Brief."
+       : "To change who is in it, edit the World line: the characters it names are cast first, in that order. Same seed, same cast; a new seed re-casts."}</p>
    </section>
    <section class="card" style="flex:999 1 720px;min-width:0" aria-labelledby="sh">
      <div class="row" style="margin-bottom:10px"><h2 class="label" id="sh">Every shot</h2><span class="tiny">${sing} sung, ${cut} cutaway${cut===1?"":"s"}</span></div>
@@ -1306,7 +1518,7 @@ function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : "
 function renderSkeleton(r){
   const app = $("#app");
   app.innerHTML = `
-  <div class="head"><div><h1>Making your video</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(r.world.headline || "House look")} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
+  <div class="head"><div><h1>Making your video</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600" id="elapsed"></div><div class="muted" style="font-size:14px" id="left"></div></div></div>
   <div id="stall"></div>
   <div class="progress" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="pbar"><div id="pfill" style="width:0"></div></div>
@@ -1340,7 +1552,8 @@ function renderUpdate(r){
     ? (last ? `<div class="banner"><b>This video stopped: a step failed.</b> The last error:${lastHtml}Fix that, then start it again from <a href="#/">The Brief</a>; the ComfyUI console has the full error.</div>`
             : `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>`)
     : (last ? `<div class="banner">${r.failed_jobs} job${r.failed_jobs === 1 ? "" : "s"} of this video failed so far; the take check re-shoots clips that didn't render${sageNote}. The last error:${lastHtml}</div>` : "");
-  $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(s.meta)}</div></li>`).join("");
+  const im = imagesOf(r);  // a World from images has no vision check: the images are the stills
+  $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(im && s.id === "check" ? "none for your images" : s.meta)}</div></li>`).join("");
   const cls = shotClass(r.brief.format);
   $("#board").innerHTML = r.shots.map(s => {
     const img = s.still ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">` : `<div class="ph">${s.kind==="broll" ? "Cutaway, chosen after the take check" : "Waiting for its still"}</div>`;
@@ -1355,7 +1568,7 @@ function renderUpdate(r){
   }
   const icon = {fix:['↻','var(--warn)'], redo:['↻','var(--warn)'], ok:['✓','var(--ok)']};
   $("#notes").innerHTML = r.notes.length ? r.notes.map(n => `<li><i aria-hidden="true" style="color:${(icon[n.kind]||['·','var(--muted)'])[1]}">${(icon[n.kind]||['·'])[0]}</i><span>${esc(n.text)}</span></li>`).join("")
-    : `<li><i aria-hidden="true" class="muted">·</i><span class="muted">The vision check looks at every still before any clip is made; the take check scores every clip's lip sync.</span></li>`;
+    : `<li><i aria-hidden="true" class="muted">·</i><span class="muted">${im ? "The take check scores every clip's lip sync." : "The vision check looks at every still before any clip is made; the take check scores every clip's lip sync."}</span></li>`;
 }
 
 // ---------------------------------------------------------------- 4. Result
@@ -1374,7 +1587,7 @@ async function viewResult(run){
   const F0 = Object.assign({fx: Object.assign({}, fx0)}, r.finish || {});
   const E = Object.assign({}, F0, {fx: Object.assign({}, fx0)});
   app.innerHTML = `
-  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(r.world.headline || "House look") + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
+  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(worldName(r)) + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
     <div class="row"><a class="btn" href="#/">New video</a>
       <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(fileStem(r))}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
       <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(fileStem(r))}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
@@ -1397,7 +1610,7 @@ async function viewResult(run){
         </div>
       </section>
       <section class="card" aria-labelledby="wh2"><h2 class="label" id="wh2" style="margin-bottom:10px">The World</h2>
-        <p style="margin:0;font-size:14px;color:var(--muted);line-height:1.55">${esc(r.world.line || "The house look.")}</p>
+        <p style="margin:0;font-size:14px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere">${esc(r.world.line || (imagesOf(r) ? `Your images, from ${imagesOf(r).folder}, ${imagesOf(r).order === "random order" ? "in random order" : "in order"}.` : "The house look."))}</p>
         ${r.world.camera ? `<p class="tiny" style="margin:10px 0 0">Camera: ${esc(r.world.camera)}</p>` : ""}
         <p style="margin:12px 0 0"><a href="#" id="showplan" style="font-size:13px;font-weight:600">The plan, shot by shot</a></p></section>
     </div>
