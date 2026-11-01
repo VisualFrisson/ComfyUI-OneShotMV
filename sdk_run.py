@@ -119,6 +119,9 @@ def main() -> int:
     ap.add_argument("--world", "--theme", dest="world", default="",
                     help='the World in a line, e.g. "a 1965 airline: pilots, '
                     'stewardesses and passengers; the cabin, the tarmac; warm afternoon light"')
+    ap.add_argument("--world-images", default="", help="instead of --world: a folder of your own images on the "
+                    "ComfyUI machine (images with a face sing, the rest become cutaways)")
+    ap.add_argument("--image-order", default="in order", choices=["in order", "random order"])
     ap.add_argument("--seconds", type=float, default=30.0, help="length of the video; 0 = the whole song")
     ap.add_argument("--start", type=float, default=-1.0, help="song time to start at; -1 = the strongest stretch")
     ap.add_argument("--format", default="16:9", choices=["16:9", "9:16", "1:1"])
@@ -184,7 +187,8 @@ def main() -> int:
         song, d = node_id(wf, "LoadAudio"), node_id(wf, "FVDirector")
         say(f"uploading {Path(a.song).name}")
         wf.set_input(song, "audio", client.assets.from_file(a.song))
-        for k, v in (("world", a.world), ("seconds", a.seconds), ("start", a.start), ("format", a.format),
+        for k, v in (("world", a.world), ("world_images", a.world_images), ("image_order", a.image_order),
+                     ("seconds", a.seconds), ("start", a.start), ("format", a.format),
                      ("quality", a.quality), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
                      ("cuts_medium", a.cuts_medium), ("cuts_high", a.cuts_high), ("cast_order", a.cast_order),
                      ("crowd", a.crowd), ("models", a.models), ("broll_share", a.broll), ("qc_retries", a.qc),

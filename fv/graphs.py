@@ -401,6 +401,34 @@ def artist_reference(*, description, seed, prefix):
                           seed=seed, prefix=prefix, size1=(896, 1152), size2=(1344, 1728))
 
 
+EXTEND = ("Fill the plain grey areas at the edges by extending the photograph outward: continue the same scene, "
+          "background, ground, walls, sky and light naturally into them, as if the camera had a wider view. Keep "
+          "everything already in the photo exactly as it is. No borders, no frames, no text or lettering anywhere.")
+
+
+def world_image(*, path, prefix, size1, size2, extend=False, seed=7):
+    """World from images: one of the user's images brought to the video's shape. Close to it: a
+    centre crop. Further off (extend): the image on a canvas of the video's shape, FLUX.2 Klein draws
+    the new edges (inpainting only there, with the image as reference), and the original pixels are
+    pasted back over the middle with a soft seam."""
+    g = Graph()
+    img = O(g.add("FVLoadImagePath", path=path))
+    if not extend:
+        out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size2[0], height=size2[1],
+                      crop="center"))
+    else:
+        ext = g.add("FVExtendCanvas", image=img, width=size2[0], height=size2[1])
+        small = O(g.add("ImageScale", image=O(ext, 0), upscale_method="lanczos", width=size1[0], height=size1[1],
+                        crop="disabled"))
+        filled = _klein_fill(g, small, O(ext, 1), EXTEND, seed=seed, size=size1)
+        up = O(g.add("ImageScale", image=filled, upscale_method="lanczos", width=size2[0], height=size2[1],
+                     crop="disabled"))
+        out = O(g.add("ImageCompositeMasked", destination=up, source=O(ext, 0), x=0, y=0, resize_source=False,
+                      mask=O(ext, 2)))
+    g.add("SaveImage", images=out, filename_prefix=prefix)
+    return g
+
+
 # ------------------------------------------------------------------ LTX models
 def _has_node(name: str) -> bool:
     """Whether the server this graph is built on has a node class (True when not inside ComfyUI)."""
@@ -604,6 +632,26 @@ def _klein(g, image_ref, prompt, refs=(), seed=7, steps=4, size=None):
     guider = g.add("CFGGuider", model=O(unet), positive=p_ref, negative=n_ref, cfg=1.0)
     sched = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
     lat = g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=1)
+    smp = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=seed)), guider=O(guider),
+                sampler=O(g.add("KSamplerSelect", sampler_name="euler")), sigmas=O(sched), latent_image=O(lat))
+    return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))
+
+
+def _klein_fill(g, image, mask, prompt, seed=7, steps=4, size=None):
+    """FLUX.2 Klein inpainting: only the masked part of `image` is drawn (the rest of the latent is
+    kept), with the image itself as the reference. The output is `size` (w, h), image's own size."""
+    unet = g.add("UNETLoader", unet_name=M["klein_unet"], weight_dtype="default")
+    clip = g.add("CLIPLoader", clip_name=M["klein_te"], type="flux2", device="default")
+    vae = g.add("VAELoader", vae_name=M["klein_vae"])
+    W, H = int(size[0]), int(size[1])
+    pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
+    neg = g.add("ConditioningZeroOut", conditioning=O(pos))
+    enc = g.add("VAEEncode", pixels=image, vae=O(vae))
+    p_ref = O(g.add("ReferenceLatent", conditioning=O(pos), latent=O(enc)))
+    n_ref = O(g.add("ReferenceLatent", conditioning=O(neg), latent=O(enc)))
+    guider = g.add("CFGGuider", model=O(unet), positive=p_ref, negative=n_ref, cfg=1.0)
+    sched = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
+    lat = g.add("SetLatentNoiseMask", samples=O(enc), mask=mask)
     smp = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=seed)), guider=O(guider),
                 sampler=O(g.add("KSamplerSelect", sampler_name="euler")), sigmas=O(sched), latent_image=O(lat))
     return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))

@@ -1,0 +1,153 @@
+"""World from a folder of images (Oct 31, 2026): the user's own images are the World and the cast.
+Images with a face sing, the rest are cutaways; in order or random order, repeating when there are
+more shots than images; an image close to the video's shape is cropped, one further off extended
+(Klein draws the edges); no Krea 2, no Gemma and no vision check.
+
+Runs without ComfyUI:  python tests/test_world_images.py"""
+import json
+import os
+import sys
+import tempfile
+
+import numpy as np
+import pytest
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, HERE)
+import fake_comfy as fc  # noqa: E402
+from fv import director, faces, graphs, world_images as wi  # noqa: E402
+
+
+def _folder(spec):
+    """spec: [(name, (w, h))]; a file named face_* has a face in the middle, place_* none."""
+    from PIL import Image
+    d = tempfile.mkdtemp()
+    for name, size in spec:
+        Image.new("RGB", size, (120, 110, 100)).save(os.path.join(d, name))
+    return d
+
+
+@pytest.fixture
+def detector(monkeypatch):
+    """A face detector that finds a face in images whose colour is (120, 110, 100) and the file is
+    a face_* image: the test reads the name from the last image opened."""
+    opened = []
+    from PIL import Image
+    real_open = Image.open
+
+    def open_(path, *a, **k):
+        opened.append(os.path.basename(str(path)))
+        return real_open(path, *a, **k)
+    monkeypatch.setattr(Image, "open", open_)
+    monkeypatch.setattr(faces, "method", lambda: "haar")
+    monkeypatch.setattr(faces, "detect_all", lambda rgb, size=320: [[0.5, 0.4, 0.3]]
+                        if opened and opened[-1].startswith("face") else [])
+    return opened
+
+
+def _direct(folder, **kw):
+    sr = 44100
+    t = np.arange(int(sr * 45)) / sr
+    env = np.where(t > 20, 1.0, 0.4)
+    x = (0.6 * (np.mod(t, 0.5) < 0.03) * env + 0.2 * np.sin(2 * np.pi * 220 * t) * env).astype(np.float32)
+    return director.direct(audio=np.stack([x, x]), sr=sr, out_root=tempfile.mkdtemp(), seconds=20, do_stems=False,
+                           log=lambda *a: None, world_images=folder, **kw)
+
+
+def _jobs(res):
+    d = os.path.join(res["run_dir"], "jobs")
+    return [(f, json.load(open(os.path.join(d, f)))) for f in sorted(os.listdir(d))]
+
+
+def _types(g):
+    return [n["class_type"] for n in g.values()]
+
+
+def test_faces_sing_and_the_rest_are_cutaways(monkeypatch, detector):
+    posted = fc.install(monkeypatch, artist=True)
+    folder = _folder([("face_01.png", (1664, 2496)), ("face_02.png", (2016, 1152)), ("place_01.png", (2016, 1152))])
+    res = _direct(folder)
+    p = json.load(open(os.path.join(res["run_dir"], "plan.json")))
+    jobs = _jobs(res)
+    names = [f.split("_", 1)[1][:-5] for f, _ in jobs]
+    # no Krea 2 and no Gemma: the images are staged (cropped or extended), then sung
+    assert not any("krea" in str(n["inputs"].get("unet_name", "")).lower() or n["inputs"].get("type") == "krea2"
+                   for _, g in jobs for n in g.values())
+    assert "zz_critic" not in names
+    staged = {n: g for n, g in zip(names, (g for _, g in jobs)) if n.startswith("img")}
+    assert len(staged) == 3
+    tall = next(g for g in staged.values() if any(n["inputs"].get("path", "").endswith("face_01.png")
+                                                  for n in g.values()))
+    wide = next(g for g in staged.values() if any(n["inputs"].get("path", "").endswith("face_02.png")
+                                                  for n in g.values()))
+    assert "FVExtendCanvas" in _types(tall) and "SetLatentNoiseMask" in _types(tall)  # 2:3 in 16:9: extended
+    assert "FVExtendCanvas" not in _types(wide)  # already 16:9: cropped
+    # every singer's clip starts from a face image; the cutaways from the place image
+    sung = [r for r in p["renders"] if r["role"] == "A"]
+    imgs = {c["id"]: c["image"] for c in p["cast"]}
+    assert {os.path.basename(imgs[r["performer"]]) for r in sung} == {"face_01.png", "face_02.png"}
+    assert [os.path.basename(imgs[r["performer"]]) for r in sung][:4] == ["face_01.png", "face_02.png"] * 2  # in order
+    cut_keys = {os.path.basename(c) for c in p["world_images"]["cutaways"]}
+    place_job = next(n for n, g in staged.items() if any(x["inputs"].get("path", "").endswith("place_01.png")
+                                                          for x in g.values()))
+    assert cut_keys == {f"{place_job}_00001_.png"}
+    assert p["world_images"]["n_cutaway"] == 1
+    assert posted  # queued
+
+
+def test_random_order_repeats_without_twice_in_a_row():
+    items = [{"path": f"{i}.png"} for i in range(5)]
+    seq = wi.sequence(items, 23, "random order", seed=3)
+    assert len(seq) == 23 and all(a is not b for a, b in zip(seq, seq[1:]))
+    assert {it["path"] for it in seq[:5]} == {it["path"] for it in items}  # each image once before any repeats
+    assert wi.sequence(items, 7, "in order")[5:] == items[:2]
+
+
+def test_close_shapes_are_cropped_and_faces_set_the_shot_size():
+    assert wi.fit_of(1664, 2496, 1152, 2016) == "crop"   # 2:3 in 9:16 loses 16% of its width
+    assert wi.fit_of(1664, 2496, 2016, 1152) == "extend"
+    assert wi.size_of(0.4) == "close" and wi.size_of(0.2) == "medium" and wi.size_of(0.11) == "wide"
+
+
+def test_no_face_anywhere_says_so(monkeypatch, detector):
+    fc.install(monkeypatch, artist=True)
+    folder = _folder([("place_01.png", (2016, 1152))])
+    with pytest.raises(ValueError, match="face big enough to sing"):
+        _direct(folder)
+    with pytest.raises(ValueError, match="wasn't found"):
+        _direct(os.path.join(folder, "nope"))
+
+
+def test_extend_needs_klein_and_crop_does_not(monkeypatch):
+    from fv import setup_check
+    fc.install(monkeypatch)  # the 24 GB set, without Klein
+    assert not setup_check.problems(setup_check.probe(images=True, extend=False))["files"]
+    files = setup_check.problems(setup_check.probe(images=True, extend=True))["files"]
+    assert any("klein" in f.lower() for f in files)
+
+
+def test_the_studio_sends_the_folder(monkeypatch):
+    fc.install(monkeypatch)
+    import types
+    srv = types.ModuleType("server")
+    srv.PromptServer = types.SimpleNamespace(instance=types.SimpleNamespace(routes=None, prompt_queue=None))
+    monkeypatch.setitem(sys.modules, "server", srv)
+    from fv import studio
+    base = {"song": "a.mp3", "theme": "a night market", "cast": "single artist", "artist_mode": "describe",
+            "artist_description": "x"}
+    g = studio._director_graph(dict(base, world_mode="images", world_images="E:/pics", image_order="random order"))
+    d = g["2"]["inputs"]
+    assert d["world_images"] == "E:/pics" and d["image_order"] == "random order"
+    assert d["world"] == "" and d["cast"] == "crowd" and "artist_description" not in d
+    g = studio._director_graph(dict(base, world_mode="describe", world_images="E:/pics"))
+    assert g["2"]["inputs"]["world_images"] == "" and g["2"]["inputs"]["world"] == "a night market"
+    assert studio._cant_start({"song": "a.mp3", "world_mode": "images"}) == ["Pick a folder of images for the World."]
+    folder = _folder([("face_01.png", (64, 96))])
+    info = studio._images(folder)
+    assert info["count"] == 1 and info["names"] == ["face_01.png"]
+
+
+if __name__ == "__main__":  # pytest from the pack root would import the pack itself
+    sys.exit(pytest.main([__file__, "-q", f"--confcutdir={HERE}", f"--rootdir={HERE}", "--import-mode=importlib",
+                          "-p", "no:cacheprovider"]))
