@@ -27,6 +27,10 @@
  "qwen21_unet": "qwen_image_2.1_bf16.safetensors",
  "qwen21_te": "qwen3vl_8b_bf16.safetensors",
  "qwen21_vae": "qwen_image_2.1_vae_bf16.safetensors",
+ "qwen_edit_unet": "qwen_image_edit_2511_fp8mixed.safetensors",
+ "qwen_edit_te": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+ "qwen_edit_vae": "qwen_image_vae.safetensors",
+ "qwen_edit_lora": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
  "dwpose_bbox": "yolox_l.torchscript.pt",
  "dwpose_pose": "dw-ll_ucoco_384_bs5.torchscript.pt"
 }

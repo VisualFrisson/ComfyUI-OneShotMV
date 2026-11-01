@@ -26,6 +26,13 @@ def _clean():
     graphs.M.pop("artist_editor_test", None)
 
 
+def _editor(monkeypatch, name):
+    """artist_editor as fv/models.json would set it (the Director reloads the model set)."""
+    real = graphs._set_files
+    monkeypatch.setattr(graphs, "_set_files", lambda set_name: dict(real(set_name), artist_editor=name))
+    graphs.use_models("auto")
+
+
 def _direct(**kw):
     sr = 44100
     t = np.arange(int(sr * 45)) / sr
@@ -69,6 +76,40 @@ def test_qwen_pads_the_photo_to_the_videos_shape(monkeypatch):
                                size2=(2016, 1152), editor="qwen").nodes
     fit = next(n for n in g.values() if n["class_type"] == "FVFitAspect")
     assert (fit["inputs"]["width"], fit["inputs"]["height"]) == (1344, 768)
+
+
+def test_qwen_image_edit_2511_does_the_portraits_the_looks_and_the_extensions(monkeypatch):
+    """artist_editor qwen_edit (Oct 31 test: likeness 0.84-0.85 against Klein's 0.41-0.60): one editor
+    for the portraits, the looks on the drop (the photo as image 2) and the World images' edges."""
+    fc.install(monkeypatch, artist=True)
+    _editor(monkeypatch, "qwen_edit")
+    res = _direct(artist_path=_photo())
+    jobs = _jobs(res)
+    ports = [g for f, g in jobs if "_p0" in f]
+    looks = [g for f, g in jobs if f.split("_", 1)[1].startswith("k")]
+    assert ports and looks
+    for g in ports + looks:
+        t_ = _types(g)
+        assert "TextEncodeQwenImageEditPlus" in t_ and "ReferenceLatent" not in t_  # no Klein anywhere
+        ks = next(n for n in g.values() if n["class_type"] == "KSampler")["inputs"]
+        assert (ks["steps"], ks["cfg"]) == (4, 1.0)  # the Lightning LoRA
+        unet = next(n for n in g.values() if n["class_type"] == "UNETLoader")["inputs"]["unet_name"]
+        assert unet.endswith("qwen_image_edit_2511_fp8mixed.safetensors")  # the 24 GB set
+    for g in looks:  # the artist photo rides along as image 2
+        enc = next(n for n in g.values() if n["class_type"] == "TextEncodeQwenImageEditPlus")["inputs"]
+        assert "image2" in enc and "same person" in enc["prompt"]
+    ext = graphs.world_image(path="w.png", prefix="w", size1=(1344, 768), size2=(2016, 1152), extend=True).nodes
+    assert "TextEncodeQwenImageEditPlus" in _types(ext) and "SetLatentNoiseMask" not in _types(ext)
+    graphs.M["qwen_edit_lora"] = ""  # without the LoRA: ComfyUI's 40 steps at CFG 4
+    g = graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
+                               size2=(2016, 1152)).nodes
+    ks = next(n for n in g.values() if n["class_type"] == "KSampler")["inputs"]
+    assert (ks["steps"], ks["cfg"]) == (40, 4.0)
+
+
+def test_qwen_image_edit_has_a_24gb_file_and_a_full_one():
+    assert graphs._set_files("24gb")["qwen_edit_unet"] == "qwen_image_edit_2511_fp8mixed.safetensors"
+    assert graphs._set_files("full")["qwen_edit_unet"] == "qwen_image_edit_2511_bf16.safetensors"
 
 
 def test_a_described_artist_is_made_first(monkeypatch):
@@ -119,6 +160,10 @@ def test_the_setup_check_asks_for_the_editors_files(monkeypatch):
     assert any("comfyui_controlnet_aux" in x for x in artist["render"])
     fc.install(monkeypatch, artist=True)
     assert setup_check.report("24gb", artist=True)["render"] == []
+    fc.install(monkeypatch)  # Qwen-Image-Edit as the editor: its own files, and no Klein
+    _editor(monkeypatch, "qwen_edit")
+    need = " ".join(setup_check.report("24gb", artist=True)["render"])
+    assert "qwen_image_edit_2511_fp8mixed" in need and "Lightning" in need and "klein" not in need.lower()
 
 
 def test_the_studio_sends_the_artist(monkeypatch):

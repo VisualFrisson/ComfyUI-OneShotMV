@@ -331,6 +331,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
             size=rsize, seed=seed + r["id"], start_s=r.get("guide_start", 0.0),
             identity_path=artist_path if (c.get("artist_edit") and artist_path) else None,
+            editor="qwen_edit" if (c.get("artist_edit") and graphs.artist_editor() == "qwen_edit") else "klein",
             prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
                     " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split()) + " " +
                     casting.edit_realism(cast[a["performer"]].get("size", "close") == "close")),

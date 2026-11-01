@@ -201,6 +201,8 @@ KEY_FOLDERS = {"krea_turbo": "diffusion_models", "krea_raw": "diffusion_models",
                "ltx23_te": "text_encoders", "ltx23_upscaler": "latent_upscale_models", "ltx23_loras": "loras",
                "klein_unet": "diffusion_models", "klein_te": "text_encoders", "klein_vae": "vae",
                "qwen21_unet": "diffusion_models", "qwen21_te": "text_encoders", "qwen21_vae": "vae",
+               "qwen_edit_unet": "diffusion_models", "qwen_edit_te": "text_encoders", "qwen_edit_vae": "vae",
+               "qwen_edit_lora": "loras",
                "ltx_union_lora": "loras"}
 
 

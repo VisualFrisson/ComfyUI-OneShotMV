@@ -4,5 +4,6 @@
  "krea_raw": "krea2_raw_bf16.safetensors",
  "krea_te": "qwen3vl_4b_bf16.safetensors",
  "ltx23_ckpt": "ltx-2.3-22b-dev.safetensors",
- "ltx23_te": "gemma_3_12B_it.safetensors"
+ "ltx23_te": "gemma_3_12B_it.safetensors",
+ "qwen_edit_unet": "qwen_image_edit_2511_bf16.safetensors"
 }

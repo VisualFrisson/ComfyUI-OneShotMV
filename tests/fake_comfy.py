@@ -20,9 +20,12 @@ FILES = {
     "latent_upscale_models": ["ltx-2.3-spatial-upscaler-x2-1.1.safetensors"],
 }
 PACKS = ("RES4LYF", "ComfyUI-KJNodes", "ComfyUI-LTXVideo")
-ARTIST_FILES = {"diffusion_models": ["Flux-2 Klein\\flux-2-klein-9b-fp8.safetensors"],
-                "text_encoders": ["qwen_3_8b_fp8mixed.safetensors"], "vae": ["full_encoder_small_decoder.safetensors"],
-                "loras": ["ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"]}
+ARTIST_FILES = {"diffusion_models": ["Flux-2 Klein\\flux-2-klein-9b-fp8.safetensors",
+                                     "Qwen\\qwen_image_edit_2511_fp8mixed.safetensors"],
+                "text_encoders": ["qwen_3_8b_fp8mixed.safetensors", "Qwen\\qwen_2.5_vl_7b_fp8_scaled.safetensors"],
+                "vae": ["full_encoder_small_decoder.safetensors"],
+                "loras": ["ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+                          "Qwen\\Lightning\\Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"]}
 KJ_MODES = ["disabled", "auto", "sageattn_qk_int8_pv_fp16_cuda", "sageattn_qk_int8_pv_fp16_triton",
             "sageattn_qk_int8_pv_fp8_cuda", "sageattn_qk_int8_pv_fp8_cuda++", "sageattn3", "sageattn3_per_block_mean"]
 CLIP_TYPES = ["stable_diffusion", "ltxv", "flux2", "qwen_image", "krea2"]
@@ -47,6 +50,8 @@ def node_classes() -> set:
                                          size2=(2016, 1152), editor="qwen").nodes)  # Single Artist on Qwen
         gs.append(graphs.world_image(path="w.png", prefix="w", size1=(1344, 768), size2=(2016, 1152),
                                      extend=True).nodes)  # World images, extended to fit
+        gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
+                                         size2=(2016, 1152), editor="qwen_edit").nodes)  # Qwen-Image-Edit 2511
     finally:
         if saved is not None:
             sys.modules["nodes"] = saved

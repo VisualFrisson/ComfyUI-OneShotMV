@@ -72,7 +72,10 @@ RUN_KEYS = ("krea_turbo", "krea_raw", "krea_turbo_lora", "krea_te", "krea_vae", 
 # drop, the union-control LoRA that keeps each look in its lead's pose
 ARTIST_KEYS = {"klein": ("klein_unet", "klein_te", "klein_vae", "ltx_union_lora"),
                "qwen": ("qwen21_unet", "qwen21_te", "qwen21_vae", "klein_unet", "klein_te", "klein_vae",
-                        "ltx_union_lora")}
+                        "ltx_union_lora"),
+               # Qwen-Image-Edit 2511 does the portraits and the looks itself (no Klein)
+               "qwen_edit": ("qwen_edit_unet", "qwen_edit_te", "qwen_edit_vae", "qwen_edit_lora", "ltx_union_lora")}
+EDITORS = tuple(ARTIST_KEYS)
 
 
 def _set_files(name: str) -> dict:
@@ -362,9 +365,16 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_on
 
 
 def artist_editor() -> str:
-    """The one image editor for Single Artist: "klein" (FLUX.2 Klein) or "qwen" (Qwen-Image 2.1),
-    set as artist_editor in fv/models.json."""
-    return "qwen" if M.get("artist_editor") == "qwen" else "klein"
+    """The image editor, set as artist_editor in fv/models.json: "klein" (FLUX.2 Klein 9B), "qwen"
+    (Qwen-Image 2.1, portraits only; Klein does the looks) or "qwen_edit" (Qwen-Image-Edit 2511: the
+    portraits, the looks and the World images' extensions)."""
+    e = M.get("artist_editor")
+    return e if e in EDITORS else "klein"
+
+
+def extend_editor() -> str:
+    """Who draws a World image's new edges: Qwen-Image-Edit 2511 when it is the editor, else Klein."""
+    return "qwen_edit" if artist_editor() == "qwen_edit" else "klein"
 
 
 def artist_portrait(*, artist_path, prompt, seed, prefix, size1, size2, resolution=1024, editor=None):
@@ -374,10 +384,12 @@ def artist_portrait(*, artist_path, prompt, seed, prefix, size1, size2, resoluti
     padded to size1's shape (FVFitAspect)."""
     g = Graph()
     ref = O(g.add("FVLoadImagePath", path=artist_path))
-    if (editor or artist_editor()) == "qwen":
+    ed = editor or artist_editor()
+    if ed in ("qwen", "qwen_edit"):  # both take their shape from image 1
         if _has_node("FVFitAspect"):
             ref = O(g.add("FVFitAspect", image=ref, width=size1[0], height=size1[1]))
-        out = _qwen21(g, ref, prompt, seed=seed, resolution=resolution)
+        out = _qwen21(g, ref, prompt, seed=seed, resolution=resolution) if ed == "qwen" else \
+            _qwen_edit(g, ref, prompt, seed=seed)
     else:
         out = _klein(g, ref, prompt, seed=seed, size=size1)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size2[0], height=size2[1], crop="center"))
@@ -406,7 +418,7 @@ EXTEND = ("Fill the plain grey areas at the edges by extending the photograph ou
           "everything already in the photo exactly as it is. No borders, no frames, no text or lettering anywhere.")
 
 
-def world_image(*, path, prefix, size1, size2, extend=False, seed=7):
+def world_image(*, path, prefix, size1, size2, extend=False, seed=7, editor=None):
     """World from images: one of the user's images brought to the video's shape. Close to it: a
     centre crop. Further off (extend): the image on a canvas of the video's shape, FLUX.2 Klein draws
     the new edges (inpainting only there, with the image as reference), and the original pixels are
@@ -418,9 +430,12 @@ def world_image(*, path, prefix, size1, size2, extend=False, seed=7):
                       crop="center"))
     else:
         ext = g.add("FVExtendCanvas", image=img, width=size2[0], height=size2[1])
-        small = O(g.add("ImageScale", image=O(ext, 0), upscale_method="lanczos", width=size1[0], height=size1[1],
-                        crop="disabled"))
-        filled = _klein_fill(g, small, O(ext, 1), EXTEND, seed=seed, size=size1)
+        if (editor or extend_editor()) == "qwen_edit":  # the whole canvas edited; the middle pasted back below
+            filled = _qwen_edit(g, O(ext, 0), EXTEND, seed=seed)
+        else:
+            small = O(g.add("ImageScale", image=O(ext, 0), upscale_method="lanczos", width=size1[0],
+                            height=size1[1], crop="disabled"))
+            filled = _klein_fill(g, small, O(ext, 1), EXTEND, seed=seed, size=size1)
         up = O(g.add("ImageScale", image=filled, upscale_method="lanczos", width=size2[0], height=size2[1],
                      crop="disabled"))
         out = O(g.add("ImageCompositeMasked", destination=up, source=O(ext, 0), x=0, y=0, resize_source=False,
@@ -657,6 +672,34 @@ def _klein_fill(g, image, mask, prompt, seed=7, steps=4, size=None):
     return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))
 
 
+def _qwen_edit(g, image_ref, prompt, refs=(), seed=7):
+    """Qwen-Image-Edit 2511 (ComfyUI's own template): image 1 brought to a Kontext size (about one
+    megapixel, its own shape), up to two more reference images, shift 3.1 and CFG norm. With the
+    4-step Lightning LoRA (qwen_edit_lora): 4 steps at CFG 1; without it, 40 steps at CFG 4."""
+    lora = M.get("qwen_edit_lora") or ""
+    model = O(g.add("UNETLoader", unet_name=M["qwen_edit_unet"], weight_dtype="default"))
+    model = O(g.add("ModelSamplingAuraFlow", model=model, shift=3.1))
+    model = O(g.add("CFGNorm", model=model, strength=1.0))
+    if lora:
+        model = O(g.add("LoraLoaderModelOnly", model=model, lora_name=lora, strength_model=1.0))
+    clip = O(g.add("CLIPLoader", clip_name=M["qwen_edit_te"], type="qwen_image", device="default"))
+    vae = O(g.add("VAELoader", vae_name=M["qwen_edit_vae"]))
+    img1 = O(g.add("FluxKontextImageScale", image=image_ref))
+    imgs = {"image1": img1}
+    for i, r in enumerate(list(refs)[:2]):
+        imgs[f"image{i + 2}"] = r
+    conds = []
+    for text in (prompt, ""):
+        c = O(g.add("TextEncodeQwenImageEditPlus", clip=clip, vae=vae, prompt=text, **imgs))
+        conds.append(O(g.add("FluxKontextMultiReferenceLatentMethod", conditioning=c,
+                             reference_latents_method="index_timestep_zero")))
+    lat = O(g.add("VAEEncode", pixels=img1, vae=vae))
+    ks = g.add("KSampler", model=model, seed=seed, steps=4 if lora else 40, cfg=1.0 if lora else 4.0,
+               sampler_name="euler", scheduler="simple", positive=conds[0], negative=conds[1], latent_image=lat,
+               denoise=1.0)
+    return O(g.add("VAEDecode", samples=O(ks), vae=vae))
+
+
 def _qwen21(g, image_ref, prompt, refs=(), seed=7, steps=25, resolution=1024):
     unet = g.add("UNETLoader", unet_name=M["qwen21_unet"], weight_dtype="default")
     cache = g.add("QwenImage21Cache", model=O(unet), device="auto", dtype="default")
@@ -695,13 +738,19 @@ def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, p
     """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth).
     editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
     editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose).
+    editor 'qwen_edit' (Qwen-Image-Edit 2511, Single Artist when it is the editor): the frame re-dressed
+    with the artist photo as image 2 (the Oct 31 test: likeness 0.85 against Klein's 0.60).
     identity_path (artist runs, Klein): the artist photo as a second reference image, so a new
     outfit, hairstyle and place keep the artist's face (without it the looks drift into other
     people: ArcFace similarity to the artist 0.20-0.37 without, 0.33-0.63 with)."""
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
                start_seconds=float(start_s), force_fps=0.0)
-    if editor == "qwen":
+    if editor == "qwen_edit":  # Qwen-Image-Edit 2511, with the artist photo as image 2 when there is one
+        refs = [O(g.add("FVLoadImagePath", path=identity_path))] if identity_path else []
+        text = f"{prompt} {TWIN_IDENTITY}" if identity_path else prompt
+        out = _qwen_edit(g, O(fr), text, refs=refs, seed=seed)
+    elif editor == "qwen":
         ref = g.add("FVLoadImagePath", path=portrait_path)
         out = _qwen21(g, O(fr), prompt or TWIN_PROMPT, [O(ref)], seed=seed)
     elif identity_path:
