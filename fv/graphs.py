@@ -406,16 +406,34 @@ def artist_reference(*, description, seed, prefix):
                           seed=seed, prefix=prefix, size1=(896, 1152), size2=(1344, 1728))
 
 
-def world_image(*, path, prefix, size, crop=None):
-    """World from images: one of the user's images brought to the video's shape by a crop (x, y, w, h
-    in the image's pixels, placed by fv/world_images.py around the face), then scaled. Nothing is drawn:
-    no editor extends an image (the Oct 31 test left grey bands and seams)."""
+EXTEND = ("Fill the plain grey areas at the edges by extending the photograph outward: continue the same scene, "
+          "background, ground, walls, sky and light naturally into them, as if the camera had a wider view. Keep "
+          "everything already in the photo exactly as it is. No borders, no frames, no text or lettering anywhere.")
+EXTEND_KEYS = ("qwen21_unet", "qwen21_te", "qwen21_vae")  # World images with fit "extend": Qwen-Image 2.1
+
+
+def world_image(*, path, prefix, size, crop=None, extend=False, seed=7):
+    """World from images: one of the user's images brought to the video's shape. A crop (x, y, w, h in
+    the image's pixels, placed by fv/world_images.py around the face), then scaled; nothing drawn in.
+    extend: the whole image on a canvas of the video's shape (Extend Canvas), Qwen-Image 2.1 redraws it
+    with the grey edges filled, and the original pixels go back over the middle with a soft seam (the
+    Oct 31 editor test: Qwen 2.1, Klein and 2511 at 40 steps each left 1 bad frame in 6; 2511 with its
+    4-step LoRA 3 or 4)."""
     g = Graph()
     img = O(g.add("FVLoadImagePath", path=path))
-    if crop:
-        x, y, w, h = (int(v) for v in crop)
-        img = O(g.add("ImageCrop", image=img, width=w, height=h, x=x, y=y))
-    out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size[0], height=size[1], crop="center"))
+    if extend:
+        ext = g.add("FVExtendCanvas", image=img, width=size[0], height=size[1])
+        filled = _qwen21(g, O(ext, 0), EXTEND, seed=seed)
+        up = O(g.add("ImageScale", image=filled, upscale_method="lanczos", width=size[0], height=size[1],
+                     crop="disabled"))
+        out = O(g.add("ImageCompositeMasked", destination=up, source=O(ext, 0), x=0, y=0, resize_source=False,
+                      mask=O(ext, 2)))
+    else:
+        if crop:
+            x, y, w, h = (int(v) for v in crop)
+            img = O(g.add("ImageCrop", image=img, width=w, height=h, x=x, y=y))
+        out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size[0], height=size[1],
+                      crop="center"))
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 

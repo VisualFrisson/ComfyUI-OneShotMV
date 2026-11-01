@@ -193,6 +193,16 @@
           "link": null
         },
         {
+          "label": "Images not in the video's shape",
+          "localized_name": "image_fit",
+          "name": "image_fit",
+          "type": "COMBO",
+          "widget": {
+            "name": "image_fit"
+          },
+          "link": null
+        },
+        {
           "label": "Who sings",
           "localized_name": "cast",
           "name": "cast",
@@ -401,6 +411,7 @@
         "the gladiator games in ancient Rome",
         "",
         "in order",
+        "crop",
         "crowd",
         30.0,
         -1.0,
@@ -528,6 +539,13 @@
           "image_order",
           {
             "description": "World images: in order or shuffled"
+          }
+        ],
+        [
+          "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:image_fit",
+          "image_fit",
+          {
+            "description": "World images: crop around the face, or extend (Qwen-Image 2.1)"
           }
         ],
         [

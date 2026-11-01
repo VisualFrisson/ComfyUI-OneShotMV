@@ -180,16 +180,21 @@ own image stage and animates yours:
   small or turned away) become cutaways with slow camera moves.
 - **In order** plays them by file name; **Random order** shuffles them, never showing the same
   image twice in a row. Images repeat when there are more shots than images.
-- An image that isn't the video's shape is cropped to fit, around the face: the face is centred
-  across the frame and sits a little above the middle (with two people, the crop centres between
-  them). Nothing is drawn in. A close-up too big for the frame (a tall image in a 16:9 video) keeps
-  the eyes, mouth and chin, and loses the forehead first.
+- Images that aren't the video's shape are cropped or extended:
+  - **Crop** (the default) cuts each image to the shape around the face: the face is centred across
+    the frame and sits a little above the middle (with two people, the crop centres between them).
+    Nothing is drawn in. A close-up too big for the frame (a tall image in a 16:9 video) keeps the
+    eyes, mouth and chin, and loses the forehead first.
+  - **Extend** keeps the whole image. One far off the shape (a 2:3 portrait in a 16:9 video) goes on
+    a wider canvas, Qwen-Image 2.1 draws the missing sides, and your original pixels are pasted back
+    over the middle with a soft seam. One close to the shape (within 20%) is cropped a little. It
+    adds a few minutes, and needs the Qwen-Image 2.1 files (see the model tables).
 - There is no World line, no cast and no vision check on stills; the take check runs as usual.
 
 In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
 of a folder on this computer. In the workflow, put the folder in the Director's `world_images`
-(a full path, or a folder inside ComfyUI's input or output folder) and pick `image_order`. Use only
-images you made or have the rights to.
+(a full path, or a folder inside ComfyUI's input or output folder) and pick `image_order` and
+`image_fit`. Use only images you made or have the rights to.
 
 ### Crowd or Single Artist
 
@@ -229,6 +234,7 @@ the model tables). The Brief says if anything is missing.
 | Cast order | as written, mixed | as written |
 | Crowd behind singers | auto, on, off | auto |
 | For professional use (Single Artist) | off: Qwen-Image 2.1; on: Qwen-Image-Edit 2511 | off |
+| Images not in the video's shape (World images) | crop (around the face), extend (Qwen-Image 2.1 draws the missing sides) | crop |
 | B-roll share | 0 to 0.5 of the shots | 0.125 |
 | Take-check rounds | 0 to 3 | 2 |
 | Seed | any number | 1 |
@@ -374,6 +380,7 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 | OneShot MV: Load Image / Video / Audio (path) | Loaders for the Director's jobs. |
 | OneShot MV: Face Match | Puts a look's face where its lead's face is (Single Artist's looks). |
 | OneShot MV: Fit to Shape | Brings the artist's photo to the video's shape without cropping, so a tall photo keeps its head (Single Artist). |
+| OneShot MV: Extend Canvas | Puts an image on a canvas of the video's shape, with masks for pasting the original back over the redrawn canvas (World images with Extend). |
 
 `fv/packs/crowd.json` holds the casting rules, the edit and the effects of Crowd runs;
 `fv/packs/artist.json` those of Single Artist.
@@ -400,7 +407,7 @@ pass. Both use the same LTX LoRAs, upscaler and VAE.
 | Krea 2 Raw and the Turbo LoRA (rank 64) | not used | `krea2_raw_bf16.safetensors`, 26.3 GB, and `krea2_turbo_lora_rank_64_bf16.safetensors`, 0.5 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
 | Qwen3-VL 4B (Krea 2's text encoder) | `qwen3vl_4b_fp8_scaled.safetensors`, 5.2 GB | `qwen3vl_4b_bf16.safetensors`, 8.9 GB | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
 | Both sets | The LTX-2.3 distilled LoRA 384 v1.1 (7.6 GB), the IC-LoRA Detailer (about 2.4 GB), Crisp and Soft Enhance (about 0.7 GB), the spatial upscaler x2 v1.1 (1.0 GB) and the Qwen-Image VAE (0.25 GB) | | See the table below |
-| Single Artist: Qwen-Image 2.1 and its Qwen3-VL 8B text encoder | `qwen_image_2.1_int8_convrot.safetensors`, 7.3 GB, and `qwen3vl_8b_int8_convrot.safetensors`, 9.4 GB | `qwen_image_2.1_bf16.safetensors`, 14.2 GB, and `qwen3vl_8b_bf16.safetensors`, 17.5 GB | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+| Single Artist, and World images with Extend: Qwen-Image 2.1 and its Qwen3-VL 8B text encoder | `qwen_image_2.1_int8_convrot.safetensors`, 7.3 GB, and `qwen3vl_8b_int8_convrot.safetensors`, 9.4 GB | `qwen_image_2.1_bf16.safetensors`, 14.2 GB, and `qwen3vl_8b_bf16.safetensors`, 17.5 GB | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 | Single Artist, for professional use: Qwen-Image-Edit 2511 | `qwen_image_edit_2511_fp8mixed.safetensors`, 20.5 GB | `qwen_image_edit_2511_bf16.safetensors`, 40.9 GB | [Comfy-Org/Qwen-Image-Edit_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/tree/main/split_files/diffusion_models) |
 | Single Artist, both sets | The Qwen-Image 2.1 VAE (0.7 GB) and the union-control LoRA (0.65 GB); for professional use also the Qwen2.5-VL 7B fp8 text encoder (9.4 GB) and the 4-step Lightning LoRA (0.85 GB) | | See the tables below |
 
@@ -431,7 +438,7 @@ Single Artist also uses (Crowd runs never load them):
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
-| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | The artist's portraits and looks | Reported as the Qwen Research License (research use); check the model page before any commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | The artist's portraits and looks (also World images with Extend) | Reported as the Qwen Research License (research use); check the model page before any commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 | Qwen-Image-Edit 2511, the Qwen2.5-VL 7B text encoder, the Qwen-Image VAE and the 4-step Lightning LoRA | The artist's portraits and looks, with For professional use on | Apache-2.0 | [Comfy-Org/Qwen-Image-Edit_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/tree/main/split_files/diffusion_models), [Comfy-Org/Qwen-Image_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main/split_files/text_encoders), [lightx2v/Qwen-Image-Edit-2511-Lightning](https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning) |
 | LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
 | DWPose and YOLOX-L (TorchScript) | Pose guides for looks | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) |

@@ -150,8 +150,10 @@ def message(p: dict, model_set: str = "", lead: str = "") -> str:
 
 # ------------------------------------------------------------------ what a run will use, before it plans
 def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, theme: bool = True,
-          artist: bool = False, images: bool = False, editor: str | None = None) -> list[dict]:
-    """images: a World from the user's images (no Krea 2, no editor: they are cropped).
+          artist: bool = False, images: bool = False, editor: str | None = None,
+          extend: bool = False) -> list[dict]:
+    """images: a World from the user's images (no Krea 2; Qwen-Image 2.1 only with extend, when images
+    are extended to the video's shape).
     editor: Single Artist's image editor ("qwen" or "qwen_edit"; default graphs.artist_editor()).
     Sample jobs with the nodes and model files a run uses, built the way the Director builds
     them, so the check can run before the run plans (writing the World takes minutes). The full list
@@ -166,7 +168,8 @@ def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, th
         eff = formats.effective_preset(preset)
         s1, s2 = formats.portrait_size(fmt)
         if images:
-            gs.append(graphs.world_image(path="probe.png", prefix="probe/i", size=s2, crop=(0, 0, 64, 36)).nodes)
+            gs.append(graphs.world_image(path="probe.png", prefix="probe/i", size=s2, crop=(0, 0, 64, 36),
+                                         extend=extend).nodes)
         else:
             gs.append(graphs.krea2_portrait(prompt="x", seed=1, prefix="probe/p", size1=s1, size2=s2,
                                             turbo_only=preset == "fast").nodes)
@@ -206,12 +209,14 @@ KEY_FOLDERS = {"krea_turbo": "diffusion_models", "krea_raw": "diffusion_models",
                "ltx_union_lora": "loras"}
 
 
-def set_files(name: str, artist: bool = False, images: bool = False, editor: str | None = None) -> dict:
+def set_files(name: str, artist: bool = False, images: bool = False, editor: str | None = None,
+              extend: bool = False) -> dict:
     """{file: folder} of a model set's files that this ComfyUI doesn't list (graphs.missing_files),
-    without switching the set the running jobs use. artist: with Single Artist's editor and look files."""
+    without switching the set the running jobs use. artist: with Single Artist's editor and look files.
+    extend: World images extended to the video's shape (Qwen-Image 2.1)."""
     keys = set(graphs.RUN_KEYS) | (set(graphs.ARTIST_KEYS[editor or graphs.artist_editor()]) if artist else set())
     if images:  # a World from images makes no Krea 2 stills
-        keys = {k for k in keys if not k.startswith("krea")}
+        keys = {k for k in keys if not k.startswith("krea")} | (set(graphs.EXTEND_KEYS) if extend else set())
     m = {k: v for k, v in graphs._set_files(name).items() if k in keys}
     if m.get("krea_raw") == m.get("krea_turbo"):
         m.pop("krea_turbo_lora", None)
@@ -219,19 +224,19 @@ def set_files(name: str, artist: bool = False, images: bool = False, editor: str
 
 
 def report(models: str = "auto", preset: str = "quality", fmt: str = "16:9", artist: bool = False,
-           images: bool = False, editor: str | None = None) -> dict:
+           images: bool = False, editor: str | None = None, extend: bool = False) -> dict:
     """For the Studio, as soon as the Brief opens: what stops a preview and what stops a render (the
     things to do, one line each), and SageAttention's state. Never switches graphs.M (a run may be
     building jobs with it), so the model files are looked up separately."""
     name = graphs.pick_models(models)
-    files = set_files(name, artist, images, editor)
+    files = set_files(name, artist, images, editor, extend=images and extend)
     sf = graphs._set_files(name)
     llm = {os.path.basename(sf["ltx23_te"]), os.path.basename(sf["ltx23_ckpt"])}  # the World's language model
-    # a World from images needs no language model and no image editor (images are only cropped)
+    # a World from images needs no language model, and an image editor only to extend images
     plan_p = dict(problems(probe(render=False, theme=not images)),
                   files={} if images else {f: d for f, d in files.items() if f in llm})
     render_p = dict(problems(probe(preset=preset, fmt=fmt, render=True, theme=not images, artist=artist,
-                                   images=images, editor=editor)),
+                                   images=images, editor=editor, extend=images and extend)),
                     files=files)
     return {"models": name, "plan": fixes(plan_p, name), "render": fixes(render_p, name),
             "sage": graphs.sage_report()}

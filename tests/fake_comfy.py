@@ -49,6 +49,7 @@ def node_classes() -> set:
         gs.append(graphs.twin_key(video_path="v", prefix="k", size=(1280, 768), identity_path="a.png", prompt="x",
                                   editor="qwen_edit").nodes)  # looks for professional use
         gs.append(graphs.world_image(path="w.png", prefix="w", size=(2016, 1152), crop=(0, 0, 64, 36)).nodes)
+        gs.append(graphs.world_image(path="w.png", prefix="w", size=(2016, 1152), extend=True).nodes)
         gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
                                          size2=(2016, 1152), editor="qwen_edit").nodes)  # Qwen-Image-Edit 2511
     finally:
