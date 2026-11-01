@@ -316,7 +316,8 @@ def _form(d: str, p: dict) -> dict:
                     theme="")
     if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
         form.update(cast="single artist", artist_description=p.get("artist_description", ""),
-                    artist_mode="describe" if p.get("artist_description") else "photo")
+                    artist_mode="describe" if p.get("artist_description") else "photo",
+                    professional=p.get("editor") == "qwen_edit")
     return form
 
 
@@ -424,7 +425,7 @@ def _director_graph(b: dict) -> dict:
          "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", ""),
          "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
          "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
-         else "in order"}
+         else "in order", "professional": bool(b.get("professional")) and b.get("cast") == "single artist"}
     if d["world_images"]:  # the images are the World and the cast
         d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
@@ -508,7 +509,8 @@ def _cant_start(b: dict) -> list:
         return ["Add a photo of the artist, or describe a new one."]
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
-                                        b.get("format") or "16:9", artist=artist, images=bool(folder))
+                                        b.get("format") or "16:9", artist=artist, images=bool(folder),
+                                        editor="qwen_edit" if b.get("professional") else None)
     except Exception as e:  # never let the check itself stop a run: the Director checks again
         print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
         return []
@@ -1388,7 +1390,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
                 rep["setup"] = _fv("setup_check").report(q.get("models") or "auto", q.get("preset") or "quality",
                                                          q.get("format") or "16:9",
                                                          artist=q.get("cast") == "single artist",
-                                                         images=bool(q.get("images")))
+                                                         images=bool(q.get("images")),
+                                                         editor="qwen_edit" if q.get("professional") else None)
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
             stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts

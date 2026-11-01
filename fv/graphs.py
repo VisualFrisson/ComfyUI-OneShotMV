@@ -68,11 +68,13 @@ MODEL_SETS = ("24gb", "full")
 FULL_MIN_GB = 46          # the full set wants a 48 GB card or bigger
 RUN_KEYS = ("krea_turbo", "krea_raw", "krea_turbo_lora", "krea_te", "krea_vae", "ltx23_ckpt", "ltx23_te",
             "ltx23_upscaler", "ltx23_loras")  # what a default (crowd) run loads
-# what Single Artist adds: the image editor (fv/models.json's artist_editor) and, for the looks on the
-# drop, the union-control LoRA that keeps each look in its lead's pose
-ARTIST_KEYS = {"klein": ("klein_unet", "klein_te", "klein_vae", "ltx_union_lora"),
-               "qwen": ("qwen21_unet", "qwen21_te", "qwen21_vae", "klein_unet", "klein_te", "klein_vae",
-                        "ltx_union_lora")}
+# what Single Artist adds: the image editor that makes the portraits and the looks on the drop, and the
+# union-control LoRA that keeps each look in its lead's pose. Qwen-Image 2.1 by default (the Oct 31
+# test: likeness 0.84 portraits, 0.85 looks); Qwen-Image-Edit 2511 for professional use (Apache-2.0;
+# 0.49-0.51 and 0.69-0.71)
+ARTIST_KEYS = {"qwen": ("qwen21_unet", "qwen21_te", "qwen21_vae", "ltx_union_lora"),
+               "qwen_edit": ("qwen_edit_unet", "qwen_edit_te", "qwen_edit_vae", "qwen_edit_lora", "ltx_union_lora")}
+EDITORS = tuple(ARTIST_KEYS)
 
 
 def _set_files(name: str) -> dict:
@@ -361,25 +363,28 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_on
     return g
 
 
-def artist_editor() -> str:
-    """The one image editor for Single Artist: "klein" (FLUX.2 Klein) or "qwen" (Qwen-Image 2.1),
-    set as artist_editor in fv/models.json."""
-    return "qwen" if M.get("artist_editor") == "qwen" else "klein"
+def artist_editor(professional: bool = False) -> str:
+    """The image editor: "qwen" (Qwen-Image 2.1, the default in fv/models.json's artist_editor) or
+    "qwen_edit" (Qwen-Image-Edit 2511), which `professional` (the Director's "for professional use")
+    always picks: its licence is Apache-2.0, Qwen-Image 2.1's is reported research-only."""
+    if professional:
+        return "qwen_edit"
+    e = M.get("artist_editor")
+    return e if e in EDITORS else "qwen"
 
 
 def artist_portrait(*, artist_path, prompt, seed, prefix, size1, size2, resolution=1024, editor=None):
     """Single Artist: the artist's photo re-staged in a new outfit, place and light, identity kept.
-    The portrait comes out in the video's shape, so a tall phone photo keeps its head: Klein draws
-    at size1 with the photo as a reference; Qwen takes its shape from image 1, so the photo is first
-    padded to size1's shape (FVFitAspect)."""
+    Both editors take their output shape from image 1, so the photo is first padded to the video's
+    shape (FVFitAspect): a tall phone photo keeps its head."""
     g = Graph()
     ref = O(g.add("FVLoadImagePath", path=artist_path))
-    if (editor or artist_editor()) == "qwen":
-        if _has_node("FVFitAspect"):
-            ref = O(g.add("FVFitAspect", image=ref, width=size1[0], height=size1[1]))
-        out = _qwen21(g, ref, prompt, seed=seed, resolution=resolution)
+    if _has_node("FVFitAspect"):
+        ref = O(g.add("FVFitAspect", image=ref, width=size1[0], height=size1[1]))
+    if (editor or artist_editor()) == "qwen_edit":
+        out = _qwen_edit(g, ref, prompt, seed=seed)
     else:
-        out = _klein(g, ref, prompt, seed=seed, size=size1)
+        out = _qwen21(g, ref, prompt, seed=seed, resolution=resolution)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size2[0], height=size2[1], crop="center"))
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
@@ -401,30 +406,16 @@ def artist_reference(*, description, seed, prefix):
                           seed=seed, prefix=prefix, size1=(896, 1152), size2=(1344, 1728))
 
 
-EXTEND = ("Fill the plain grey areas at the edges by extending the photograph outward: continue the same scene, "
-          "background, ground, walls, sky and light naturally into them, as if the camera had a wider view. Keep "
-          "everything already in the photo exactly as it is. No borders, no frames, no text or lettering anywhere.")
-
-
-def world_image(*, path, prefix, size1, size2, extend=False, seed=7):
-    """World from images: one of the user's images brought to the video's shape. Close to it: a
-    centre crop. Further off (extend): the image on a canvas of the video's shape, FLUX.2 Klein draws
-    the new edges (inpainting only there, with the image as reference), and the original pixels are
-    pasted back over the middle with a soft seam."""
+def world_image(*, path, prefix, size, crop=None):
+    """World from images: one of the user's images brought to the video's shape by a crop (x, y, w, h
+    in the image's pixels, placed by fv/world_images.py around the face), then scaled. Nothing is drawn:
+    no editor extends an image (the Oct 31 test left grey bands and seams)."""
     g = Graph()
     img = O(g.add("FVLoadImagePath", path=path))
-    if not extend:
-        out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size2[0], height=size2[1],
-                      crop="center"))
-    else:
-        ext = g.add("FVExtendCanvas", image=img, width=size2[0], height=size2[1])
-        small = O(g.add("ImageScale", image=O(ext, 0), upscale_method="lanczos", width=size1[0], height=size1[1],
-                        crop="disabled"))
-        filled = _klein_fill(g, small, O(ext, 1), EXTEND, seed=seed, size=size1)
-        up = O(g.add("ImageScale", image=filled, upscale_method="lanczos", width=size2[0], height=size2[1],
-                     crop="disabled"))
-        out = O(g.add("ImageCompositeMasked", destination=up, source=O(ext, 0), x=0, y=0, resize_source=False,
-                      mask=O(ext, 2)))
+    if crop:
+        x, y, w, h = (int(v) for v in crop)
+        img = O(g.add("ImageCrop", image=img, width=w, height=h, x=x, y=y))
+    out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size[0], height=size[1], crop="center"))
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 
@@ -611,50 +602,32 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
 
 
 # ------------------------------------------------------------------ image edits
-def _klein(g, image_ref, prompt, refs=(), seed=7, steps=4, size=None):
-    """FLUX.2 Klein edit of image_ref (refs: more reference images). The output has image_ref's size,
-    or `size` (w, h): a photo re-staged in the video's shape, with nothing cropped off."""
-    unet = g.add("UNETLoader", unet_name=M["klein_unet"], weight_dtype="default")
-    clip = g.add("CLIPLoader", clip_name=M["klein_te"], type="flux2", device="default")
-    vae = g.add("VAELoader", vae_name=M["klein_vae"])
-    if size:
-        W, H = int(size[0]), int(size[1])
-    else:
-        gs = g.add("GetImageSize", image=image_ref)
-        W, H = O(gs, 0), O(gs, 1)
-    pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
-    neg = g.add("ConditioningZeroOut", conditioning=O(pos))
-    p_ref, n_ref = O(pos), O(neg)
-    for im in [image_ref] + list(refs):
-        enc = g.add("VAEEncode", pixels=im, vae=O(vae))
-        p_ref = O(g.add("ReferenceLatent", conditioning=p_ref, latent=O(enc)))
-        n_ref = O(g.add("ReferenceLatent", conditioning=n_ref, latent=O(enc)))
-    guider = g.add("CFGGuider", model=O(unet), positive=p_ref, negative=n_ref, cfg=1.0)
-    sched = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
-    lat = g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=1)
-    smp = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=seed)), guider=O(guider),
-                sampler=O(g.add("KSamplerSelect", sampler_name="euler")), sigmas=O(sched), latent_image=O(lat))
-    return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))
-
-
-def _klein_fill(g, image, mask, prompt, seed=7, steps=4, size=None):
-    """FLUX.2 Klein inpainting: only the masked part of `image` is drawn (the rest of the latent is
-    kept), with the image itself as the reference. The output is `size` (w, h), image's own size."""
-    unet = g.add("UNETLoader", unet_name=M["klein_unet"], weight_dtype="default")
-    clip = g.add("CLIPLoader", clip_name=M["klein_te"], type="flux2", device="default")
-    vae = g.add("VAELoader", vae_name=M["klein_vae"])
-    W, H = int(size[0]), int(size[1])
-    pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
-    neg = g.add("ConditioningZeroOut", conditioning=O(pos))
-    enc = g.add("VAEEncode", pixels=image, vae=O(vae))
-    p_ref = O(g.add("ReferenceLatent", conditioning=O(pos), latent=O(enc)))
-    n_ref = O(g.add("ReferenceLatent", conditioning=O(neg), latent=O(enc)))
-    guider = g.add("CFGGuider", model=O(unet), positive=p_ref, negative=n_ref, cfg=1.0)
-    sched = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
-    lat = g.add("SetLatentNoiseMask", samples=O(enc), mask=mask)
-    smp = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=seed)), guider=O(guider),
-                sampler=O(g.add("KSamplerSelect", sampler_name="euler")), sigmas=O(sched), latent_image=O(lat))
-    return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))
+def _qwen_edit(g, image_ref, prompt, refs=(), seed=7):
+    """Qwen-Image-Edit 2511 (ComfyUI's own template): image 1 brought to a Kontext size (about one
+    megapixel, its own shape), up to two more reference images, shift 3.1 and CFG norm. With the
+    4-step Lightning LoRA (qwen_edit_lora): 4 steps at CFG 1; without it, 40 steps at CFG 4."""
+    lora = M.get("qwen_edit_lora") or ""
+    model = O(g.add("UNETLoader", unet_name=M["qwen_edit_unet"], weight_dtype="default"))
+    model = O(g.add("ModelSamplingAuraFlow", model=model, shift=3.1))
+    model = O(g.add("CFGNorm", model=model, strength=1.0))
+    if lora:
+        model = O(g.add("LoraLoaderModelOnly", model=model, lora_name=lora, strength_model=1.0))
+    clip = O(g.add("CLIPLoader", clip_name=M["qwen_edit_te"], type="qwen_image", device="default"))
+    vae = O(g.add("VAELoader", vae_name=M["qwen_edit_vae"]))
+    img1 = O(g.add("FluxKontextImageScale", image=image_ref))
+    imgs = {"image1": img1}
+    for i, r in enumerate(list(refs)[:2]):
+        imgs[f"image{i + 2}"] = r
+    conds = []
+    for text in (prompt, ""):
+        c = O(g.add("TextEncodeQwenImageEditPlus", clip=clip, vae=vae, prompt=text, **imgs))
+        conds.append(O(g.add("FluxKontextMultiReferenceLatentMethod", conditioning=c,
+                             reference_latents_method="index_timestep_zero")))
+    lat = O(g.add("VAEEncode", pixels=img1, vae=vae))
+    ks = g.add("KSampler", model=model, seed=seed, steps=4 if lora else 40, cfg=1.0 if lora else 4.0,
+               sampler_name="euler", scheduler="simple", positive=conds[0], negative=conds[1], latent_image=lat,
+               denoise=1.0)
+    return O(g.add("VAEDecode", samples=O(ks), vae=vae))
 
 
 def _qwen21(g, image_ref, prompt, refs=(), seed=7, steps=25, resolution=1024):
@@ -690,25 +663,26 @@ TWIN_TEXT = ("Change only the person into {who}. {detail} {wear} Light: {light}.
 # tight, mouth-shut face shot (in one test all 24 looks came out tighter than their lead's frame)
 
 
-def twin_key(*, video_path, prefix, size, seed=7, editor="klein", prompt=None, portrait_path=None,
+def twin_key(*, video_path, prefix, size, seed=7, editor=None, prompt=None, portrait_path=None,
              start_s=0.0, identity_path=None, keep=None):
-    """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth).
-    editor 'klein' (default): text-described B, pose kept by construction (fast, no portrait).
-    editor 'qwen': B's Krea 2 portrait as the identity reference (tends to copy the portrait's pose).
-    identity_path (artist runs, Klein): the artist photo as a second reference image, so a new
-    outfit, hairstyle and place keep the artist's face (without it the looks drift into other
-    people: ArcFace similarity to the artist 0.20-0.37 without, 0.33-0.63 with)."""
+    """The frame of performer A's clip at `start_s` re-cast as performer B (same pose and mouth), by the
+    run's image editor ("qwen", Qwen-Image 2.1, or "qwen_edit", Qwen-Image-Edit 2511).
+    identity_path (Single Artist): the artist photo as image 2, so a new outfit, hairstyle and place keep
+    the artist's face (the Oct 31 test: likeness 0.85 with Qwen 2.1, 0.71 with 2511, 0.60 with Klein).
+    Without it: B's portrait as image 2 (TWIN_PROMPT), or the prompt alone."""
     g = Graph()
     fr = g.add("FVLoadVideoPath", path=video_path, width=size[0], height=size[1], frame_cap=1,
                start_seconds=float(start_s), force_fps=0.0)
-    if editor == "qwen":
-        ref = g.add("FVLoadImagePath", path=portrait_path)
-        out = _qwen21(g, O(fr), prompt or TWIN_PROMPT, [O(ref)], seed=seed)
-    elif identity_path:
-        ref = g.add("FVLoadImagePath", path=identity_path)
-        out = _klein(g, O(fr), f"{prompt} {TWIN_IDENTITY}", refs=[O(ref)], seed=seed)
+    if identity_path:
+        refs, text = [O(g.add("FVLoadImagePath", path=identity_path))], f"{prompt} {TWIN_IDENTITY}"
+    elif portrait_path:
+        refs, text = [O(g.add("FVLoadImagePath", path=portrait_path))], prompt or TWIN_PROMPT
     else:
-        out = _klein(g, O(fr), prompt, seed=seed)
+        refs, text = [], prompt or TWIN_PROMPT
+    if (editor or artist_editor()) == "qwen_edit":
+        out = _qwen_edit(g, O(fr), text, refs=refs, seed=seed)
+    else:
+        out = _qwen21(g, O(fr), text, refs, seed=seed)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size[0], height=size[1], crop="center"))
     if _has_node("FVFaceMatch"):  # the edit pulls the camera back: put the face back where the lead's is
         out = O(g.add("FVFaceMatch", image=out, reference=O(fr), max_scale=2.2))
@@ -732,7 +706,7 @@ def assemble(*, run_dir, prefix):
 
 def keep_ltx(g, preset="quality"):
     """Wire LTX's loaders into an FVKeep node of graph g, so a job that doesn't use LTX (a QC
-    pass, a Klein edit) keeps it loaded for the next video job instead of a reload from disk."""
+    pass, an image edit) keeps it loaded for the next video job instead of a reload from disk."""
     if not _has_node("FVKeep"):
         return g
     pr = formats.PRESETS.get(preset, formats.PRESETS["quality"])

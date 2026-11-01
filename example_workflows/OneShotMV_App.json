@@ -366,6 +366,16 @@
             "name": "artist_description"
           },
           "link": null
+        },
+        {
+          "label": "For professional use",
+          "localized_name": "professional",
+          "name": "professional",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "professional"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -409,7 +419,8 @@
         0.125,
         2,
         "",
-        ""
+        "",
+        false
       ],
       "title": "OneShot MV: Director"
     },
@@ -532,6 +543,13 @@
           {
             "height": 80,
             "description": "Single artist without a photo: describe a new person"
+          }
+        ],
+        [
+          "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:professional",
+          "professional",
+          {
+            "description": "Single artist: Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1"
           }
         ],
         [

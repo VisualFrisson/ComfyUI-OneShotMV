@@ -77,12 +77,13 @@ def test_faces_sing_and_the_rest_are_cutaways(monkeypatch, detector):
     assert "zz_critic" not in names
     staged = {n: g for n, g in zip(names, (g for _, g in jobs)) if n.startswith("img")}
     assert len(staged) == 3
+    for g in staged.values():  # cropped to the video's shape, nothing drawn in
+        assert "ImageCrop" in _types(g) and "UNETLoader" not in _types(g)
     tall = next(g for g in staged.values() if any(n["inputs"].get("path", "").endswith("face_01.png")
                                                   for n in g.values()))
-    wide = next(g for g in staged.values() if any(n["inputs"].get("path", "").endswith("face_02.png")
-                                                  for n in g.values()))
-    assert "FVExtendCanvas" in _types(tall) and "SetLatentNoiseMask" in _types(tall)  # 2:3 in 16:9: extended
-    assert "FVExtendCanvas" not in _types(wide)  # already 16:9: cropped
+    crop = next(n for n in tall.values() if n["class_type"] == "ImageCrop")["inputs"]
+    assert (crop["width"], crop["height"]) == (1664, 951)  # a 2:3 photo's 16:9 band, around the face
+    assert crop["y"] == round(0.4 * 2496 - 0.4 * 951)  # the face (40% down the photo) 40% down the crop
     # every singer's clip starts from a face image; the cutaways from the place image
     sung = [r for r in p["renders"] if r["role"] == "A"]
     imgs = {c["id"]: c["image"] for c in p["cast"]}
@@ -118,9 +119,14 @@ def test_random_order_repeats_without_twice_in_a_row():
     assert wi.sequence(items, 7, "in order")[5:] == items[:2]
 
 
-def test_close_shapes_are_cropped_and_faces_set_the_shot_size():
-    assert wi.fit_of(1664, 2496, 1152, 2016) == "crop"   # 2:3 in 9:16 loses 16% of its width
-    assert wi.fit_of(1664, 2496, 2016, 1152) == "extend"
+def test_the_crop_keeps_the_face():
+    # a 2:3 photo in 16:9: the full width and a band of the height, the face's centre 40% down it
+    assert wi.crop_box(1664, 2496, 2016, 1152, [0.5, 0.25, 0.3]) == [0, 244, 1664, 951]
+    assert wi.crop_box(1664, 2496, 2016, 1152, [0.5, 0.05, 0.3]) == [0, 0, 1664, 951]  # kept inside the photo
+    assert wi.crop_box(1664, 2496, 2016, 1152, None) == [0, 772, 1664, 951]  # no face: the middle
+    # in 9:16 the same photo loses width instead, the face kept in
+    x, y, w, h = wi.crop_box(1664, 2496, 1152, 2016, [0.8, 0.3, 0.2])
+    assert (y, h) == (0, 2496) and x <= 0.8 * 1664 <= x + w
     assert wi.size_of(0.4) == "close" and wi.size_of(0.2) == "medium" and wi.size_of(0.11) == "wide"
 
 
@@ -133,12 +139,10 @@ def test_no_face_anywhere_says_so(monkeypatch, detector):
         _direct(os.path.join(folder, "nope"))
 
 
-def test_extend_needs_klein_and_crop_does_not(monkeypatch):
+def test_images_need_no_editor(monkeypatch):
     from fv import setup_check
-    fc.install(monkeypatch)  # the 24 GB set, without Klein
-    assert not setup_check.problems(setup_check.probe(images=True, extend=False))["files"]
-    files = setup_check.problems(setup_check.probe(images=True, extend=True))["files"]
-    assert any("klein" in f.lower() for f in files)
+    fc.install(monkeypatch)  # the 24 GB set, without either image editor
+    assert not setup_check.problems(setup_check.probe(images=True))["files"]
 
 
 def test_the_studio_sends_the_folder(monkeypatch):
