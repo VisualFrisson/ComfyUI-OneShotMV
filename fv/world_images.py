@@ -1,9 +1,13 @@
 """World from a folder of images (Oct 31, 2026): the user's own finished images instead of a
 described World. The tool skips its image stage: images with a face big enough to sing become the
 singers, the rest become cutaways with camera moves. In order (by file name) or random order;
-images repeat when there are more shots than images. Each image is cropped to the video's shape
-around its face (a 2:3 portrait in 16:9 keeps the face and loses the legs); nothing is drawn in
-(the Oct 31 editor test: extending left grey bands and seams).
+images repeat when there are more shots than images.
+
+Images that aren't the video's shape: "crop" (the default) cuts each to the shape around its face (a 2:3
+portrait in 16:9 keeps the face and loses the legs); nothing is drawn in. "extend" keeps the whole image:
+one close to the shape is still cropped a little, one further off goes on a canvas of the video's shape,
+Qwen-Image 2.1 draws the new edges, and the original pixels are pasted back over the middle with a soft
+seam (the Oct 31 editor test: 1 bad frame in 6, a halo where the model changed a plain backdrop).
 
 No Gemma, no World bible, no vision check on stills: the images are the cast. The take check runs
 as usual."""
@@ -16,6 +20,8 @@ import re
 import numpy as np
 
 EXTS = (".png", ".jpg", ".jpeg", ".webp")
+FITS = ("crop", "extend")
+CROP_WITHIN = 0.2   # extend: shape difference up to which an image is still cropped (a 2:3 photo in 9:16 loses 16% of its width)
 FACE_AT = 0.4       # where the face's centre sits in a crop that loses height: 40% down, leaving headroom
 MIN_FACE_H = 0.1    # face height / frame height: smaller faces don't lip-sync well, so the image is a cutaway
 GROUP_FACE = 0.6    # a second face at least this big against the first: two people, so a cutaway
@@ -89,6 +95,15 @@ def crop_box(w: int, h: int, W: int, H: int, face=None) -> list[int]:
     return [int(x), int(y), int(cw), int(ch)]
 
 
+def fit_of(w: int, h: int, W: int, H: int, fit: str = "crop") -> str:
+    """How an image is brought to the video's shape: "crop", or with fit "extend" for an image more than
+    CROP_WITHIN off the shape, "extend"."""
+    if fit != "extend":
+        return "crop"
+    r = (w / h) / (W / H)
+    return "crop" if max(r, 1 / r) - 1 <= CROP_WITHIN else "extend"
+
+
 def size_of(face_h: float) -> str:
     for lim, name in SIZES:
         if face_h >= lim:
@@ -96,9 +111,9 @@ def size_of(face_h: float) -> str:
     return "wide"
 
 
-def inspect(paths: list[str], W: int, H: int, log=print) -> list[dict]:
-    """Each image's shape, its crop to the video's shape (around the face), and its largest face on
-    the final frame."""
+def inspect(paths: list[str], W: int, H: int, log=print, fit: str = "crop") -> list[dict]:
+    """Each image's shape, how it is brought to the video's shape (a crop around the face, or with fit
+    "extend" the whole image on a wider canvas), and its largest face on the final frame."""
     from PIL import Image, ImageOps
     from . import faces
     how = faces.method()
@@ -124,9 +139,11 @@ def inspect(paths: list[str], W: int, H: int, log=print) -> list[dict]:
             group = len(fs) > 1 and fs[1][2] >= GROUP_FACE * fs[0][2]
         # two people: the crop is centred between them
         aim = [(fs[0][0] + fs[1][0]) / 2, (fs[0][1] + fs[1][1]) / 2, fs[0][2]] if group else face
-        crop = crop_box(w, h, W, H, aim)
-        face_h = round(face[2] * w * (W / crop[2]) / H, 3) if face else 0.0
-        out.append({"path": path, "name": os.path.basename(path), "w": w, "h": h, "fit": "crop", "crop": crop,
+        how_fit = fit_of(w, h, W, H, fit)
+        crop = crop_box(w, h, W, H, aim) if how_fit == "crop" else None
+        scale = W / crop[2] if crop else min(W / w, H / h)  # image pixels -> final frame pixels
+        face_h = round(face[2] * w * scale / H, 3) if face else 0.0
+        out.append({"path": path, "name": os.path.basename(path), "w": w, "h": h, "fit": how_fit, "crop": crop,
                     "face": [round(float(v), 3) for v in face] if face else None, "face_h": face_h,
                     "group": group, "sings": (face_h >= MIN_FACE_H and not group) if how else True,
                     "size": size_of(face_h) if how else "medium"})
@@ -168,4 +185,41 @@ def cast(p: dict, singers: list[dict], order: str, seed: int) -> list[dict]:
 
 def summary(items: list[dict]) -> str:
     sing = sum(1 for it in items if it["sings"])
-    return f"World images: {len(items)} images, {sing} sing, {len(items) - sing} are cutaways; each cropped around its face"
+    ext = sum(1 for it in items if it["fit"] == "extend")
+    how = (f"{ext} extended to the video's shape, the rest cropped around the face" if ext
+           else "each cropped around its face")
+    return f"World images: {len(items)} images, {sing} sing, {len(items) - sing} are cutaways; {how}"
+
+
+def _ramp(torch, n_total, a, b, band):
+    """1-D keep profile: 0 outside [a, b), 1 inside, rising over `band` pixels on a side that has new
+    space next to it (a side that touches the canvas edge stays sharp)."""
+    k = torch.zeros(n_total)
+    k[a:b] = 1.0
+    if a > 0 and band > 0:
+        e = min(b, a + band)
+        k[a:e] = torch.linspace(0.0, 1.0, e - a)
+    if b < n_total and band > 0:
+        s = max(a, b - band)
+        k[s:b] = torch.minimum(k[s:b], torch.linspace(1.0, 0.0, b - s))
+    return k
+
+
+def extend_canvas(image, width, height):
+    """(canvas, fill, keep) for OneShot MV: Extend Canvas. The image fitted inside width x height and
+    centred on plain grey; `keep` is 1 over the image and fades to 0 over its last few per cent on a
+    side with new space (the seam), `fill` is 1 - keep. The editor redraws the whole canvas and the
+    original is pasted back through `keep`, so the new edges grow out of the image instead of meeting
+    it at a line (Oct 31: a hard 60 px band left visible seams on a street scene)."""
+    import torch
+    _, h, w, _ = image.shape
+    s = min(width / w, height / h)
+    nw, nh = max(1, min(width, int(round(w * s)))), max(1, min(height, int(round(h * s))))
+    x0, y0 = (width - nw) // 2, (height - nh) // 2
+    x = torch.nn.functional.interpolate(image.permute(0, 3, 1, 2).float(), size=(nh, nw), mode="bicubic",
+                                        align_corners=False, antialias=True).clamp(0, 1).permute(0, 2, 3, 1)
+    canvas = torch.full((1, height, width, 3), 0.5)
+    canvas[:, y0:y0 + nh, x0:x0 + nw] = x.cpu()
+    band = max(16, int(round(0.12 * min(nw, nh))))
+    keep = _ramp(torch, height, y0, y0 + nh, band)[:, None] * _ramp(torch, width, x0, x0 + nw, band)[None, :]
+    return canvas, (1.0 - keep)[None], keep[None]

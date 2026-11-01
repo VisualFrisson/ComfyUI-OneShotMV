@@ -85,7 +85,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
            qc_retries: int = 2, theme: str = "", broll_share: float = 0.125, staged: bool = True,
            cuts: dict | None = None, audio_fx: str = "", cast_order: str = "as written", crowd: str = "auto",
            log=print, models: str = "auto", artist_description: str = "", world_images: str = "",
-           image_order: str = "in order", professional: bool = False, **legacy) -> dict:
+           image_order: str = "in order", image_fit: str = "crop", professional: bool = False,
+           **legacy) -> dict:
     """staged (runs queued here, with QC): the 4-load order. Krea makes every portrait and the
     b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC re-rolls the
     singer shots while LTX stays loaded; then the image editor makes every look keyframe from the
@@ -97,7 +98,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     Single Artist: artist_path (a photo) or artist_description (a new person: the run's first job
     makes their studio headshot, which every portrait then re-stages like a photo).
     world_images (a folder of the user's own images, fv/world_images.py): the images are the World
-    and the cast; no World line, no Krea 2 portraits, no vision check.
+    and the cast; no World line, no Krea 2 portraits, no vision check. image_fit: "crop" (around the face)
+    or "extend" (Qwen-Image 2.1 draws new edges on an image far off the video's shape).
     professional: Single Artist's portraits and looks by Qwen-Image-Edit 2511 (Apache-2.0) instead of
     the default editor, Qwen-Image 2.1 (reported research-only)."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
@@ -106,7 +108,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     imgs = None
     if (world_images or "").strip():
         from . import world_images as wi
-        imgs = wi.inspect(wi.list_images(world_images), *formats.portrait_size(fmt)[1], log=log)
+        image_fit = image_fit if image_fit in wi.FITS else "crop"
+        imgs = wi.inspect(wi.list_images(world_images), *formats.portrait_size(fmt)[1], log=log, fit=image_fit)
         if not imgs:
             raise ValueError(f"None of the images in {world_images} could be read.")
         if not any(it["sings"] for it in imgs):
@@ -126,7 +129,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue),
                                         theme=bool(theme and theme.strip()),
                                         artist=bool(artist_path or (artist_description or "").strip()),
-                                        images=imgs is not None, editor=editor), model_set,
+                                        images=imgs is not None, editor=editor,
+                                        extend=any(it["fit"] == "extend" for it in imgs or [])), model_set,
                       lead="It can't start yet." if queue else "It can't write the plan yet.")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
@@ -248,7 +252,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         singers = [it for it in imgs if it["sings"]]
         cast = wi.cast(p, singers, image_order, seed)
         rest = [it for it in imgs if not it["sings"]]
-        p["world_images"] = {"folder": world_images, "order": image_order, "n_cutaway": len(rest),
+        p["world_images"] = {"folder": world_images, "order": image_order, "fit": image_fit, "n_cutaway": len(rest),
                              "images": [{k: v for k, v in it.items() if k != "path"} for it in imgs]}
         from . import broll as _broll
         cut_n = 2 * _broll.slots(p, broll_share)  # staged runs render twice the slots up front
@@ -274,7 +278,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
     for name, it in staged_img.values():
         jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size=s2,
-                                              crop=it.get("crop")).nodes))
+                                              crop=it.get("crop"), extend=it["fit"] == "extend",
+                                              seed=seed * 31 + len(jobs)).nodes))
     for c in cast:
         if imgs is not None:  # the image's own staged copy (the looks too: each its own image)
             port[c["id"]] = os.path.join(run_dir, f"{staged_img[c['image']][0]}_00001_.png")

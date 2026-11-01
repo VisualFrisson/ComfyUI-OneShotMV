@@ -1,7 +1,8 @@
 """World from a folder of images (Oct 31, 2026): the user's own images are the World and the cast.
 Images with a face sing, the rest are cutaways; in order or random order, repeating when there are
-more shots than images; an image close to the video's shape is cropped, one further off extended
-(Klein draws the edges); no Krea 2, no Gemma and no vision check.
+more shots than images; images not in the video's shape are cropped around the face, or with
+image_fit "extend" the ones far off it get new edges from Qwen-Image 2.1; no Krea 2, no Gemma and no
+vision check.
 
 Runs without ComfyUI:  python tests/test_world_images.py"""
 import json
@@ -98,6 +99,30 @@ def test_faces_sing_and_the_rest_are_cutaways(monkeypatch, detector):
     assert posted  # queued
 
 
+def test_extend_keeps_the_whole_image(monkeypatch, detector):
+    """image_fit "extend": a 2:3 photo in 16:9 goes on a canvas and Qwen-Image 2.1 draws the sides, the
+    original pasted back over the middle; a 3:2 photo (close to the shape) is still cropped a little."""
+    fc.install(monkeypatch, artist=True)
+    folder = _folder([("face_01.png", (1664, 2496)), ("face_02.png", (1728, 1152)), ("place_01.png", (2016, 1152))])
+    res = _direct(folder, image_fit="extend")
+    p = json.load(open(os.path.join(res["run_dir"], "plan.json")))
+    assert p["world_images"]["fit"] == "extend"
+    assert [it["fit"] for it in p["world_images"]["images"]] == ["extend", "crop", "crop"]
+    path = lambda g: next(n["inputs"]["path"] for n in g.values() if n["class_type"] == "FVLoadImagePath")
+    staged = {os.path.basename(path(g)): g for f, g in _jobs(res) if f.split("_", 1)[1].startswith("img")}
+    tall = _types(staged["face_01.png"])
+    assert {"FVExtendCanvas", "TextEncodeQwenImage21", "ImageCompositeMasked"} <= set(tall)
+    unet = next(n for n in staged["face_01.png"].values() if n["class_type"] == "UNETLoader")["inputs"]["unet_name"]
+    assert unet.endswith("qwen_image_2.1_int8_convrot.safetensors")
+    for name in ("face_02.png", "place_01.png"):
+        assert "ImageCrop" in _types(staged[name]) and "UNETLoader" not in _types(staged[name])
+    # the extended photo's face on the final frame: 0.3 of 1664 px, scaled to fit 1152 px of height
+    face_h = next(it for it in p["world_images"]["images"] if it["name"] == "face_01.png")["face_h"]
+    assert face_h == round(0.3 * 1664 * (1152 / 2496) / 1152, 3)
+    assert wi.fit_of(1664, 2496, 1152, 2016, "extend") == "crop"  # 2:3 in 9:16 loses only 16% of its width
+    assert wi.fit_of(1664, 2496, 2016, 1152, "crop") == "crop"
+
+
 def test_two_people_side_by_side_are_a_cutaway(monkeypatch, tmp_path):
     from PIL import Image
     Image.new("RGB", (2016, 1152)).save(tmp_path / "pair.png")
@@ -143,10 +168,15 @@ def test_no_face_anywhere_says_so(monkeypatch, detector):
         _direct(os.path.join(folder, "nope"))
 
 
-def test_images_need_no_editor(monkeypatch):
+def test_only_extending_needs_qwen_image_21(monkeypatch):
     from fv import setup_check
     fc.install(monkeypatch)  # the 24 GB set, without either image editor
     assert not setup_check.problems(setup_check.probe(images=True))["files"]
+    assert any("qwen_image_2.1" in f for f in setup_check.problems(setup_check.probe(images=True, extend=True))["files"])
+    assert "qwen_image_2.1" not in " ".join(setup_check.report("24gb", images=True)["render"])
+    assert "qwen_image_2.1_int8_convrot" in " ".join(setup_check.report("24gb", images=True, extend=True)["render"])
+    fc.install(monkeypatch, artist=True)
+    assert setup_check.report("24gb", images=True, extend=True)["render"] == []
 
 
 def test_the_studio_sends_the_folder(monkeypatch):
@@ -162,6 +192,9 @@ def test_the_studio_sends_the_folder(monkeypatch):
     d = g["2"]["inputs"]
     assert d["world_images"] == "E:/pics" and d["image_order"] == "random order"
     assert d["world"] == "" and d["cast"] == "crowd" and "artist_description" not in d
+    assert d["image_fit"] == "crop"  # the default
+    g = studio._director_graph(dict(base, world_mode="images", world_images="E:/pics", image_fit="extend"))
+    assert g["2"]["inputs"]["image_fit"] == "extend"
     g = studio._director_graph(dict(base, world_mode="describe", world_images="E:/pics"))
     assert g["2"]["inputs"]["world_images"] == "" and g["2"]["inputs"]["world"] == "a night market"
     assert studio._cant_start({"song": "a.mp3", "world_mode": "images"}) == ["Pick a folder of images for the World."]

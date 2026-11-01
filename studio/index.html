@@ -568,7 +568,7 @@ const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
   cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto",
   cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"", professional:false,
-  world_mode:"describe", world_images:"", image_order:"in order"};  // the World: described, or a folder of the user's images
+  world_mode:"describe", world_images:"", image_order:"in order", image_fit:"crop"};  // the World: described, or a folder of the user's images
 
 // ---------------------------------------------------------------- state
 const store = {
@@ -872,6 +872,8 @@ async function viewBrief(){
         <input type="file" id="wfiles" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide" aria-label="Images">
         <label class="field" style="margin-top:14px">Or use a folder on this computer<input id="wpath" type="text" autocomplete="off" spellcheck="false" placeholder="Like D:\\Shoots\\my-shoot"></label>
         <div class="row worder"><span class="field" id="worderl">Image order</span><div class="seg" role="group" aria-labelledby="worderl" id="worder"></div><span class="tiny">In order goes by file name.</span></div>
+        <div class="row worder"><span class="field" id="wfitl">Images not in the video's shape</span><div class="seg" role="group" aria-labelledby="wfitl" id="wfit"></div></div>
+        <p class="note" id="wfitnote" style="margin-top:8px"></p>
       </div>
       <p class="note" id="worldnote"></p>
       <p class="note hide" id="wrights">Use only images you made or have the rights to.</p>
@@ -941,12 +943,13 @@ async function viewBrief(){
   initWorldImages(); drawWorld();
   // who sings: Crowd or Single Artist (the setup check wants more files for one artist, others for images)
   drawCast();
-  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images" : "describe") + "|" + castOf(b).professional;
+  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images|" + worldOf(b).image_fit : "describe") + "|" + castOf(b).professional;
   let setupWas = setupKey();
   const setupAgain = () => { const k = setupKey(); if (k !== setupWas){ setupWas = k; loadSetup(); } };
   $("#casts").addEventListener("click", setupAgain);
   $("#artist").addEventListener("click", setupAgain);  // For professional use wants the other editor's files
   $("#wmode").addEventListener("click", setupAgain);
+  $("#wfit").addEventListener("click", setupAgain);  // Extend wants Qwen-Image 2.1's files
 
   // format, quality
   const drawFmt = () => {
@@ -997,7 +1000,7 @@ async function viewBrief(){
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
   let setupN = 0;  // the newest check wins when the World or cast is switched quickly
-  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" : ""}${castOf(b).professional ? "&professional=1" : ""}`)
+  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" + (worldOf(b).image_fit === "extend" ? "&extend=1" : "") : ""}${castOf(b).professional ? "&professional=1" : ""}`)
     .then(r => { if (n !== setupN) return; S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
@@ -1120,7 +1123,7 @@ function refreshEstimate(){
     const c = Object.assign({}, b, castOf(b), worldOf(b));
     if (imgs) c.theme = "";  // the images are the World: no World line to write
     const qs = ["song","seconds","start","theme","seed","broll","format","preset","cuts_low","cuts_medium","cuts_high","crowd",
-                "cast","artist_mode","artist_image","artist_description","world_mode","world_images"].map(k => k + "=" + encodeURIComponent(c[k] ?? "")).join("&");
+                "cast","artist_mode","artist_image","artist_description","world_mode","world_images","image_fit"].map(k => k + "=" + encodeURIComponent(c[k] ?? "")).join("&");
     try{
       const e = await api("estimate?" + qs);
       if (n !== _estN) return;
@@ -1263,13 +1266,14 @@ const cleanPath = v => String(v || "").trim().replace(/^["']+|["']+$/g, "").trim
 // what a brief sends for its World: described, or a folder of images in order or shuffled
 function worldOf(b){
   return {world_mode: b.world_mode === "images" ? "images" : "describe", world_images: cleanPath(b.world_images),
-          image_order: b.image_order === "random order" ? "random order" : "in order"};
+          image_order: b.image_order === "random order" ? "random order" : "in order",
+          image_fit: b.image_fit === "extend" ? "extend" : "crop"};
 }
 // the World note and the rights line follow both the World and who sings
 function drawNotes(){
   const b = S.brief, wn = $("#worldnote"), rt = $("#rights"); if (!wn || !rt) return;
   if (b.world_mode === "images"){
-    wn.textContent = "Images with a face sing; the rest become cutaways. Images that aren't the video's shape are cropped to fit, keeping the face in.";
+    wn.textContent = "Images with a face sing; the rest become cutaways.";
     rt.textContent = "Use music and images you have the rights to.";
     return;
   }
@@ -1295,7 +1299,22 @@ function drawWorld(){
   $("#wrights").classList.toggle("hide", !imgs);
   $("#castcard").classList.toggle("hide", imgs);
   drawNotes();
-  if (imgs){ drawOrder(); lookWorld(); }
+  if (imgs){ drawOrder(); drawFit(); lookWorld(); }
+}
+// images that aren't the video's shape: cropped around the face (the default), or extended by Qwen-Image 2.1
+function drawFit(){
+  const box = $("#wfit"); if (!box) return;
+  const cur = S.brief.image_fit === "extend" ? "extend" : "crop";
+  box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
+    `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
+  $("#wfitnote").textContent = cur === "extend"
+    ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its licence is reported to be research-only."
+    : "Each image is cropped to the video's shape around the face. Nothing is drawn in.";
+  box.querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
+    const f = el.dataset.f;
+    if (S.brief.image_fit !== f){ S.brief.image_fit = f; saveBrief(); refreshEstimate(); }
+    drawFit(); const b = $(`#wfit [data-f="${f}"]`); if (b) b.focus();
+  });
 }
 function drawOrder(){
   const box = $("#worder"); if (!box) return;

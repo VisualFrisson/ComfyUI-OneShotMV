@@ -294,7 +294,9 @@ def _estimate(b: dict) -> dict:
     total = sum(x["s"] for x in parts)
     return {"total_s": int(total), "parts": parts, "shots": len(p["shots"]), "need": need,
             "world_cached": bool(bible) and have >= need, "window": [round(p["song_t0"], 2), round(p["song_t1"], 2)],
-            "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win)}
+            "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win
+                                # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
+                                + (4 if folder and b.get("image_fit") == "extend" else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -313,7 +315,7 @@ def _form(d: str, p: dict) -> dict:
     if p.get("world_images"):  # a World from images
         wi = p["world_images"]
         form.update(world_mode="images", world_images=wi.get("folder", ""), image_order=wi.get("order", "in order"),
-                    theme="")
+                    image_fit=wi.get("fit", "crop"), theme="")
     if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
         form.update(cast="single artist", artist_description=p.get("artist_description", ""),
                     artist_mode="describe" if p.get("artist_description") else "photo",
@@ -425,7 +427,8 @@ def _director_graph(b: dict) -> dict:
          "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", ""),
          "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
          "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
-         else "in order", "professional": bool(b.get("professional")) and b.get("cast") == "single artist"}
+         else "in order", "image_fit": "extend" if b.get("image_fit") == "extend" else "crop",
+         "professional": bool(b.get("professional")) and b.get("cast") == "single artist"}
     if d["world_images"]:  # the images are the World and the cast
         d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
@@ -485,7 +488,7 @@ def _restart_needed() -> list:
     try:
         import nodes as comfy_nodes  # type: ignore
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
-        if cls is not None and "world_images" not in (cls.INPUT_TYPES().get("required") or {}):
+        if cls is not None and "image_fit" not in (cls.INPUT_TYPES().get("required") or {}):
             return [RESTART]
     except Exception:
         pass
@@ -510,7 +513,8 @@ def _cant_start(b: dict) -> list:
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
                                         b.get("format") or "16:9", artist=artist, images=bool(folder),
-                                        editor="qwen_edit" if b.get("professional") else None)
+                                        editor="qwen_edit" if b.get("professional") else None,
+                                        extend=b.get("image_fit") == "extend")
     except Exception as e:  # never let the check itself stop a run: the Director checks again
         print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
         return []
@@ -1391,7 +1395,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
                                                          q.get("format") or "16:9",
                                                          artist=q.get("cast") == "single artist",
                                                          images=bool(q.get("images")),
-                                                         editor="qwen_edit" if q.get("professional") else None)
+                                                         editor="qwen_edit" if q.get("professional") else None,
+                                                         extend=bool(q.get("extend")))
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
             stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts

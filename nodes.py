@@ -206,11 +206,17 @@ class FVDirector:
                              "tooltip": "Instead of a World line: a folder of your own finished images (a path on "
                                         "this computer, or a folder inside ComfyUI's input or output folder). The "
                                         "image stage is skipped: images with a face sing, the rest become cutaways, "
-                                        "and images that aren't the video's shape are cropped around the face. "
+                                        "and images that aren't the video's shape are cropped around the face "
+                                        "(or extended, see image_fit). "
                                         "The World line and cast are then not used."}),
             "image_order": (["in order", "random order"], {"default": "in order",
                             "tooltip": "World images: by file name, or shuffled. Images repeat when there are more "
                                        "shots than images."}),
+            "image_fit": (list(fv_world_images.FITS), {"default": "crop",
+                          "tooltip": "World images that aren't the video's shape. crop: cut to the shape around the "
+                                     "face, nothing drawn in. extend: the whole image kept; one far off the shape "
+                                     "(a 2:3 photo in 16:9) gets new edges drawn by Qwen-Image 2.1 (its licence is "
+                                     "reported to be research-only), one close to it is cropped a little."}),
             "cast": (["crowd", "single artist"], {"default": "crowd",
                      "tooltip": "crowd: a different invented person sings each line. single artist: one person "
                                 "sings every line, in the World's outfits and places: connect a photo of them to "
@@ -288,7 +294,7 @@ class FVDirector:
         return random.random()
 
     def run(self, audio, world, cast, seconds, start, format, quality, models, preview_only, world_images="",
-            image_order="in order", seed=1, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
+            image_order="in order", image_fit="crop", seed=1, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
             crowd="auto", cast_order="as written", broll_share=0.125, qc_retries=2, run_name="", artist_photo=None,
             artist_description="", professional=False):
         _reload()
@@ -313,7 +319,7 @@ class FVDirector:
                               crowd=crowd or "auto", models=models or "auto",
                               artist_path=artist_path, artist_description=described,
                               world_images=(world_images or "").strip(), image_order=image_order or "in order",
-                              professional=bool(professional))
+                              image_fit=image_fit or "crop", professional=bool(professional))
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
@@ -589,6 +595,26 @@ class FVFitAspect:
         return (x.permute(0, 2, 3, 1),)
 
 
+class FVExtendCanvas:
+    """World images with fit "extend": an image on a canvas of the video's shape. The image is fitted
+    inside width x height and centred, the new edges are plain grey; `fill` marks the new edges (reaching
+    a little into the image) and `keep` is the image with a soft edge, to paste the original pixels back
+    over the redrawn canvas."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"image": ("IMAGE",), "width": ("INT", {"default": 2016, "min": 16, "max": 8192}),
+                             "height": ("INT", {"default": 1152, "min": 16, "max": 8192})}}
+
+    RETURN_TYPES = ("IMAGE", "MASK", "MASK")
+    RETURN_NAMES = ("canvas", "fill", "keep")
+    FUNCTION = "run"
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, image, width, height):
+        return fv_world_images.extend_canvas(image[:1], width, height)
+
+
 class FVOffloadToCPU:
     """Keeps a model's weight backups (made when LoRAs are patched in) in system RAM instead of
     VRAM. With --highvram ComfyUI parks them on the GPU, which doubles a 22B LTX model's
@@ -722,6 +748,7 @@ NODE_CLASS_MAPPINGS = {
     "FVKeep": FVKeep,
     "FVOffloadToCPU": FVOffloadToCPU,
     "FVFitAspect": FVFitAspect,
+    "FVExtendCanvas": FVExtendCanvas,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVRunResult": FVRunResult,
@@ -741,6 +768,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVKeep": "OneShot MV: Keep Models Loaded",
     "FVOffloadToCPU": "OneShot MV: Weight Backups to RAM",
     "FVFitAspect": "OneShot MV: Fit to Shape",
+    "FVExtendCanvas": "OneShot MV: Extend Canvas",
     "FVAssemble": "OneShot MV: Assemble",
     "FVRunResult": "OneShot MV: Run Result",
     "FVFinish": "OneShot MV: Finish",
