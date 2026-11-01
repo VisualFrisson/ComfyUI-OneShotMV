@@ -255,7 +255,8 @@ def _estimate(b: dict) -> dict:
     win = float(p["song_t1"] - p["song_t0"])
     theme = (b.get("theme") or "").strip()
     share = float(b.get("broll", 0.125))
-    need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme else 0
+    artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
+    need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme and not artist else 0
     bible = _bible(theme, int(b.get("seed", 1))) if theme else None
     have = len((bible or {}).get("characters") or [])
     parts = [{"id": "listen", "name": "Listening to the song", "s": T["listen"]}]
@@ -277,7 +278,7 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
-    if theme and b.get("crowd", "auto") != "off":
+    if theme and b.get("crowd", "auto") != "off" and not artist:
         from . import theme as themes
         if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
             parts.append({"id": "crowd", "name": "Dressing the crowd", "s": T["crowd"]})
@@ -301,6 +302,9 @@ def _form(d: str, p: dict) -> dict:
             "broll": p.get("broll_share", 0.125), "fx": p.get("fx_level") or "subtle"}
     form.update({f"cuts_{k}": cuts[k] for k in ("low", "medium", "high") if cuts.get(k)})
     form.update({k: p[k] for k in ("format", "preset", "crowd", "cast_order", "models") if p.get(k)})
+    if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
+        form.update(cast="single artist", artist_description=p.get("artist_description", ""),
+                    artist_mode="describe" if p.get("artist_description") else "photo")
     return form
 
 
@@ -403,10 +407,29 @@ def _director_graph(b: dict) -> dict:
          else "auto", "preview_only": not b.get("render", False), "seed": int(b.get("seed", 1)),
          "audio_fx": b.get("fx", "subtle"), "crowd": b.get("crowd", "auto"),
          "cast_order": b.get("cast_order", "as written"), "broll_share": float(b.get("broll", 0.125)),
-         "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", "")}
+         "qc_retries": int(b.get("qc", 2)), "run_name": b.get("run_name", ""),
+         "cast": "single artist" if b.get("cast") == "single artist" else "crowd"}
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
-    return {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
-            "2": {"class_type": "FVDirector", "inputs": d}}
+    g = {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
+         "2": {"class_type": "FVDirector", "inputs": d}}
+    if d["cast"] == "single artist":  # the artist: a photo in ComfyUI's input folder, or a new person described
+        photo, text = _artist_of(b)
+        if photo:
+            g["3"] = {"class_type": "LoadImage", "inputs": {"image": photo}}
+            d["artist_photo"] = ["3", 0]
+        elif text:
+            d["artist_description"] = text
+    return g
+
+
+def _artist_of(b: dict) -> tuple[str, str]:
+    """(photo, description) of a Single Artist brief: the tab that is showing counts."""
+    photo, text = str(b.get("artist_image") or "").strip(), " ".join(str(b.get("artist_description") or "").split())
+    if b.get("artist_mode") == "describe":
+        return "", text
+    if b.get("artist_mode") == "photo":
+        return photo, ""
+    return (photo, "") if photo else ("", text)
 
 
 RESTART = "OneShot MV was updated: restart ComfyUI once to load its new Director node, then reload this page."
@@ -430,9 +453,12 @@ def _cant_start(b: dict) -> list:
     each: Make the video and Preview refuse at once instead of after minutes of planning."""
     if _restart_needed():
         return _restart_needed()
+    artist = b.get("cast") == "single artist"
+    if artist and not any(_artist_of(b)):
+        return ["Add a photo of the artist, or describe a new one."]
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
-                                        b.get("format") or "16:9")
+                                        b.get("format") or "16:9", artist=artist)
     except Exception as e:  # never let the check itself stop a run: the Director checks again
         print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
         return []
@@ -1309,7 +1335,8 @@ async def _api(request: web.Request, route: str) -> web.Response:
             rep = _fv("graphs").models_report()
             try:
                 rep["setup"] = _fv("setup_check").report(q.get("models") or "auto", q.get("preset") or "quality",
-                                                         q.get("format") or "16:9")
+                                                         q.get("format") or "16:9",
+                                                         artist=q.get("cast") == "single artist")
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
             stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts

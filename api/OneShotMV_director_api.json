@@ -13,6 +13,7 @@
         0
       ],
       "world": "",
+      "cast": "crowd",
       "seconds": 30.0,
       "start": -1.0,
       "format": "16:9",

@@ -84,7 +84,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
            queue: bool = True, do_stems: bool = True, queue_assemble: bool = True, artist_path: str = "",
            qc_retries: int = 2, theme: str = "", broll_share: float = 0.125, staged: bool = True,
            cuts: dict | None = None, audio_fx: str = "", cast_order: str = "as written", crowd: str = "auto",
-           log=print, models: str = "auto", **legacy) -> dict:
+           log=print, models: str = "auto", artist_description: str = "", **legacy) -> dict:
     """staged (runs queued here, with QC): the 4-load order. Krea makes every portrait and the
     b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC re-rolls the
     singer shots while LTX stays loaded; then Klein makes every look keyframe from the final
@@ -92,11 +92,14 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     Grouping by job type instead can spend 65 of 155 minutes on 12 model loads; this order loads
     4 times and never re-makes a look because its singer was re-rolled.
     legacy: settings an older Director node still passes until ComfyUI restarts (mode, pack,
-    framing, ...); motion mode and the style packs were removed on Oct 31, 2026."""
+    framing, ...); motion mode and the style packs were removed on Oct 31, 2026.
+    Single Artist: artist_path (a photo) or artist_description (a new person: the run's first job
+    makes their studio headshot, which every portrait then re-stages like a photo)."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
-    pack = "artist" if artist_path else "crowd"
+    artist_description = " ".join((artist_description or "").split()) if not artist_path else ""
+    pack = "artist" if (artist_path or artist_description) else "crowd"
     # the model set ("24gb" fp8 files, or "full" bf16 files on 48 GB cards): every job this run
     # queues, and every later pass, uses the same one (p["models"])
     model_set = graphs.use_models(models)
@@ -104,7 +107,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # what this ComfyUI is missing, before minutes of planning (the run's own jobs are checked again
     # before they are queued)
     setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue),
-                                        theme=bool(theme and theme.strip())), model_set,
+                                        theme=bool(theme and theme.strip()),
+                                        artist=bool(artist_path or (artist_description or "").strip())), model_set,
                       lead="It can't start yet." if queue else "It can't write the plan yet.")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
@@ -129,6 +133,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     run_dir = os.path.join(out_root, *rel.split("/"))
     os.makedirs(os.path.join(run_dir, "jobs"), exist_ok=True)
     stems.write_wav(os.path.join(run_dir, "song.wav"), audio, sr)
+    ref_job = None
+    if artist_description:  # the described artist's headshot, made first; it stands in for a photo
+        artist_path = os.path.join(run_dir, "artist_ref_00001_.png")
+        ref_job = ("artist_ref", graphs.artist_reference(description=artist_description, seed=seed * 7 + 3,
+                                                         prefix=f"{rel}/artist_ref").nodes)
 
     tl = beat.analyze(audio, sr)
     pk = casting.load_pack(pack)
@@ -143,11 +152,13 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         log("[OneShotMV] " + themes.summary(bible).replace("\n", "\n[OneShotMV] "))
     if cuts:  # the chosen cut per energy level (low / medium / high), over the pack's defaults
         pk["edit"] = dict(pk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items() if m})
-    if pk["casting"].get("artist") and not (artist_path and os.path.exists(artist_path)):
-        raise ValueError("the artist pack needs artist_image_path (one photo of the artist)")
+    if pk["casting"].get("artist") and not (artist_path and (os.path.exists(artist_path) or ref_job)):
+        raise ValueError("Single artist needs a photo of the artist or a description of a new one.")
     p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                            twins=None if twins == "auto" else twins)
     p["artist_path"] = artist_path
+    if artist_description:
+        p["artist_description"] = artist_description
     if cuts:  # a re-applied theme starts from the pack again: keep the chosen cuts
         p["cuts"] = planner.cut_modes(pk["edit"])
     if bible and (pk.get("casting") or {}).get("unique"):
@@ -200,7 +211,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # the Director's cast order and crowd choices (casting._cast_theme)
     pk.setdefault("casting", {})["story"] = (cast_order or "as written") != "mixed"
     pk["casting"]["crowd_mode"] = crowd if crowd in ("on", "off") else "auto"
-    if bible and (bible.get("rules") or {}).get("cast") != "creatures" and pk["casting"]["crowd_mode"] != "off" \
+    # the crowd's dress is for the crowd cast; a single artist's crowd (when on) is a plain soft blur
+    if bible and not pk["casting"].get("artist") and (bible.get("rules") or {}).get("cast") != "creatures" \
+            and pk["casting"]["crowd_mode"] != "off" \
             and (pk["casting"]["crowd_mode"] == "on" or themes.crowd_world(bible.get("theme", ""))):
         try:
             dress = themes.crowd_dress(bible, seed=seed, out_root=out_root, log=log)
@@ -215,6 +228,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # the Director's own language-model work (World, cast, crowd dress) and whatever ran before
     # stay loaded under --highvram: the first portrait then shares the card with them
     jobs.append(("free_before_portraits", graphs.free_memory("before Krea 2 portraits").nodes))
+    if ref_job:
+        jobs.append(ref_job)
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
     for c in cast:
         if c["id"] not in need_portrait:
@@ -222,7 +237,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         name = f"p{c['id']:03d}"
         if c.get("artist_edit"):
             jobs.append((name, graphs.artist_portrait(artist_path=artist_path, prompt=c["portrait"],
-                                                      seed=c["seed"], prefix=f"{rel}/{name}", size2=s2).nodes))
+                                                      seed=c["seed"], prefix=f"{rel}/{name}", size1=s1,
+                                                      size2=s2).nodes))
         else:
             jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
                                                        prefix=f"{rel}/{name}", size1=s1, size2=s2,

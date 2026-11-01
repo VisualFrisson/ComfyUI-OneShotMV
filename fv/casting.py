@@ -87,7 +87,11 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera, creature=creature)
         if creature:
             continue  # no crowd and no period-dressed people behind a creature
-        if (c.get("check") or {}).get("crowd"):
+        if c.get("artist_edit"):  # a Single Artist's crowd only when it's turned on (auto: the singer alone)
+            if (pack.get("casting") or {}).get("crowd_mode") == "on":
+                c["portrait"] = f"{c['portrait'].rstrip()} {CROWD_BEHIND}"
+                c["sing"] = f"{c['sing'].rstrip()} No one else close; the crowd behind stays a soft blur."
+        elif (c.get("check") or {}).get("crowd"):
             dress = ((pack.get("casting") or {}).get("theme") or {}).get("crowd_dress") or ""
             c["portrait"], c["sing"] = crowd_behind(c["portrait"], era, dress), crowd_behind(c["sing"], era, dress)
         if c.get("sing"):

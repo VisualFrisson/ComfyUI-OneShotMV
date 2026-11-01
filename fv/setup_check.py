@@ -149,7 +149,8 @@ def message(p: dict, model_set: str = "", lead: str = "") -> str:
 
 
 # ------------------------------------------------------------------ what a run will use, before it plans
-def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, theme: bool = True) -> list[dict]:
+def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, theme: bool = True,
+          artist: bool = False) -> list[dict]:
     """Sample jobs with the nodes and model files a run uses, built the way the Director builds
     them, so the check can run before the run plans (writing the World takes minutes). The full list
     of the run's own jobs is checked again before they are queued."""
@@ -172,6 +173,14 @@ def probe(*, preset: str = "quality", fmt: str = "16:9", render: bool = True, th
         for g in (graphs.free_memory(), graphs.critic(run_dir="probe"), graphs.qc(run_dir="probe", keep=eff),
                   graphs.assemble(run_dir="probe", prefix="probe")):
             gs.append(g.nodes)
+        if artist:  # Single Artist: the editor's portraits, the looks' keyframes and pose-guided clips
+            gs.append(graphs.artist_portrait(artist_path="probe.png", prompt="x", seed=1, prefix="probe/a",
+                                             size1=s1, size2=s2).nodes)
+            gs.append(graphs.twin_key(video_path="probe.mp4", prefix="probe/k", size=formats.render_size(fmt, eff),
+                                      identity_path="probe.png", prompt="x").nodes)
+            gs.append(graphs.ltx_render(preset=eff, fmt=fmt, key_path="probe.png", prompt="x", negative="x", frames=9,
+                                        seed=1, prefix="probe/t", audio_path="probe.wav",
+                                        guide_video="probe.mp4").nodes)
     return gs
 
 
@@ -185,28 +194,32 @@ def check(job_graphs, model_set: str = "", lead: str = "It can't start yet, so n
 # the model files a default run loads (graphs.RUN_KEYS) and the folder each goes in
 KEY_FOLDERS = {"krea_turbo": "diffusion_models", "krea_raw": "diffusion_models", "krea_turbo_lora": "loras",
                "krea_te": "text_encoders", "krea_vae": "vae", "ltx23_ckpt": "checkpoints",
-               "ltx23_te": "text_encoders", "ltx23_upscaler": "latent_upscale_models", "ltx23_loras": "loras"}
+               "ltx23_te": "text_encoders", "ltx23_upscaler": "latent_upscale_models", "ltx23_loras": "loras",
+               "klein_unet": "diffusion_models", "klein_te": "text_encoders", "klein_vae": "vae",
+               "qwen21_unet": "diffusion_models", "qwen21_te": "text_encoders", "qwen21_vae": "vae",
+               "ltx_union_lora": "loras"}
 
 
-def set_files(name: str) -> dict:
+def set_files(name: str, artist: bool = False) -> dict:
     """{file: folder} of a model set's files that this ComfyUI doesn't list (graphs.missing_files),
-    without switching the set the running jobs use."""
-    m = {k: v for k, v in graphs._set_files(name).items() if k in graphs.RUN_KEYS}
+    without switching the set the running jobs use. artist: with Single Artist's editor and look files."""
+    keys = set(graphs.RUN_KEYS) | (set(graphs.ARTIST_KEYS[graphs.artist_editor()]) if artist else set())
+    m = {k: v for k, v in graphs._set_files(name).items() if k in keys}
     if m.get("krea_raw") == m.get("krea_turbo"):
         m.pop("krea_turbo_lora", None)
     return {f: KEY_FOLDERS.get(k, "") for k, f in graphs._resolve_models(m)[1]}
 
 
-def report(models: str = "auto", preset: str = "quality", fmt: str = "16:9") -> dict:
+def report(models: str = "auto", preset: str = "quality", fmt: str = "16:9", artist: bool = False) -> dict:
     """For the Studio, as soon as the Brief opens: what stops a preview and what stops a render (the
     things to do, one line each), and SageAttention's state. Never switches graphs.M (a run may be
     building jobs with it), so the model files are looked up separately."""
     name = graphs.pick_models(models)
-    files = set_files(name)
+    files = set_files(name, artist)
     sf = graphs._set_files(name)
     llm = {os.path.basename(sf["ltx23_te"]), os.path.basename(sf["ltx23_ckpt"])}  # the World's language model
     plan_p = dict(problems(probe(render=False, theme=True)), files={f: d for f, d in files.items() if f in llm})
-    render_p = dict(problems(probe(preset=preset, fmt=fmt, render=True, theme=True)), files=files)
+    render_p = dict(problems(probe(preset=preset, fmt=fmt, render=True, theme=True, artist=artist)), files=files)
     return {"models": name, "plan": fixes(plan_p, name), "render": fixes(render_p, name),
             "sage": graphs.sage_report()}
 

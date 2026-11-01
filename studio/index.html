@@ -487,6 +487,29 @@ html[data-look="neon"] .label{font-size:20px;line-height:1;letter-spacing:.02em}
 .eta-b{font-family:var(--sans);font-size:15px;font-weight:700;letter-spacing:.02em;opacity:.85;text-transform:none;white-space:nowrap}
 .btn.two .eta-b{font-size:14px;letter-spacing:.02em}
 html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:none}
+/* who sings, after the World: Crowd or Single Artist; the artist as a photo or a description */
+.castpick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.castpick .tier .t{justify-content:flex-start;align-items:center;gap:10px}
+.castpick .tier b{font-size:16px}
+.castpick .tier svg{flex:none;color:var(--muted)}
+.castpick .tier[aria-pressed=true] svg{color:var(--accent)}
+.castpick .tier small{margin-top:6px}
+.artist{margin-top:20px;display:flex;flex-direction:column;gap:14px}
+.artist .seg{gap:10px}
+.aphoto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 14px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
+.aphoto.over{border-color:var(--accent);background:var(--accent-bg)}
+.aphoto img,.aphoto .noimg{width:88px;height:88px;display:flex;align-items:center;justify-content:center;object-fit:cover;border-radius:10px;background:var(--bg);color:var(--dim)}
+.aphoto .tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.aphoto .tx b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:600px){
+  .castpick{grid-template-columns:minmax(0,1fr)}
+  .aphoto{grid-template-columns:auto minmax(0,1fr)}
+  .aphoto img,.aphoto .noimg{grid-row:span 2}
+  .aphoto .tx{align-self:end}.aphoto .btn{justify-self:start;align-self:start}
+}
+html[data-look="neon"] .castpick .tier[aria-pressed=true] svg{color:var(--text)}
+html[data-look="neon"] .aphoto{border-radius:12px}
+html[data-look="neon"] .aphoto.over{border:1px solid transparent;background:linear-gradient(var(--panel2),var(--panel2)) padding-box,var(--grad) border-box}
 </style>
 </head>
 <body>
@@ -522,7 +545,8 @@ const WORLDS = [
 const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (intense)"];
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
-  cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto"};
+  cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto",
+  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:""};
 
 // ---------------------------------------------------------------- state
 const store = {
@@ -530,7 +554,8 @@ const store = {
   set(k, v){ try{ localStorage.setItem("osmv."+k, JSON.stringify(v)); }catch(e){} },
 };
 const S = { brief: Object.assign({}, DEFAULT_BRIEF, store.get("brief", {})), songs: null, analysis: null, sys: null, timer: null,
-            stageOf: {}, showPlan: null, fromRun: null };
+            stageOf: {}, showPlan: null, fromRun: null,
+            crowdTouched: false, artistV: 0 };  // crowd set by hand (Single Artist leaves it alone); the artist photo's upload time
 
 // ---------------------------------------------------------------- helpers
 const $ = (s, el=document) => el.querySelector(s);
@@ -808,7 +833,12 @@ async function viewBrief(){
       <div class="tiles" role="group" aria-label="World examples" id="tiles"></div>
       <label for="world" style="display:block;margin:16px 0 8px;font-size:13px;color:var(--muted)">Describe the world in a line: who they are, what they wear, where they are, the light</label>
       <textarea id="world" rows="6" placeholder="Like “the gladiator games in ancient Rome”. For more control: the people in the order you want them; the places; the light."></textarea>
-      <p class="note">One line is enough. The characters you name are cast first, in the order you name them, and every shot is a different invented person.</p>
+      <p class="note" id="worldnote"></p>
+    </section>
+
+    <section class="card" id="castcard">
+      <div class="castpick" role="group" aria-label="Who sings" id="casts"></div>
+      <div class="artist hide" id="artist"></div>
     </section>
    </div>
 
@@ -844,7 +874,7 @@ async function viewBrief(){
       <p class="center muted" style="margin:0;font-size:13px" id="eta-why">See the World the tool writes and every shot before the long render.</p>
       <button class="btn two" id="go-render" type="button"><span class="lbl">Skip the preview, make the video</span><span class="eta-b" id="eta-all"></span></button>
     </section>
-    <p class="tiny" style="margin:0 4px">Use music you have the rights to. Every face is invented.</p>
+    <p class="tiny" style="margin:0 4px" id="rights">Use music you have the rights to. Every face is invented.</p>
    </aside>
   </div>`;
 
@@ -866,6 +896,10 @@ async function viewBrief(){
   };
   drawTiles();
   ta.oninput = () => { b.theme = ta.value; const w = WORLDS.find(x => x.text && x.text === ta.value); b.world = w ? w.id : "custom"; saveBrief(); drawTiles(); };
+  // who sings: Crowd or Single Artist (the setup check wants more files for one artist)
+  drawCast();
+  let setupCast = b.cast;
+  $("#casts").addEventListener("click", () => { if (b.cast !== setupCast){ setupCast = b.cast; loadSetup(); } });
 
   // format, quality
   const drawFmt = () => {
@@ -915,12 +949,13 @@ async function viewBrief(){
       <ul>${(rend.length ? rend : plan).map(x => `<li>${link(x)}</li>`).join("")}</ul>
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
-  const loadSetup = () => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}`)
+  const loadSetup = () => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}`)
     .then(r => { S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
   // advanced
   for (const k of ["cuts_low","cuts_medium","cuts_high","crowd","cast_order"]) { const el = $("#"+k); el.value = b[k]; el.onchange = () => { b[k] = el.value; saveBrief(); }; }
+  $("#crowd").addEventListener("change", () => { S.crowdTouched = true; });  // from now on Single Artist leaves it as set
   const seed = $("#seed"); seed.value = b.seed; seed.onchange = () => { b.seed = Math.max(0, parseInt(seed.value || "1", 10)); saveBrief(); };
   const br = $("#broll"); br.value = String(b.broll); br.onchange = () => { b.broll = parseFloat(br.value); saveBrief(); };
   const drawFx = () => {
@@ -1032,7 +1067,9 @@ function refreshEstimate(){
     if (!ep) return;
     if (!b.song){ ep.textContent = ""; ea.textContent = ""; why.textContent = "See the World the tool writes and every shot before the long render."; return; }
     const n = ++_estN;
-    const qs = ["song","seconds","start","theme","seed","broll","format","preset","cuts_low","cuts_medium","cuts_high","crowd"].map(k => k + "=" + encodeURIComponent(b[k] ?? "")).join("&");
+    const c = Object.assign({}, b, castOf(b));
+    const qs = ["song","seconds","start","theme","seed","broll","format","preset","cuts_low","cuts_medium","cuts_high","crowd",
+                "cast","artist_mode","artist_image","artist_description"].map(k => k + "=" + encodeURIComponent(c[k] ?? "")).join("&");
     try{
       const e = await api("estimate?" + qs);
       if (n !== _estN) return;
@@ -1042,6 +1079,7 @@ function refreshEstimate(){
       const chars = e.parts.find(x => x.id === "cast");
       why.textContent = !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
         : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analysed.`
+        : c.cast === "single artist" ? `About ${dur(e.total_s)}: Gemma writes the World the artist sings in. A second preview with the same line and seed is quick.`
         : `About ${dur(e.total_s)}: Gemma writes the World and a character for each of the ${e.shots} shots${chars ? ", 8 at a time" : ""}. A second preview with the same line and seed is quick.`;
     }catch(err){ if (n === _estN){ ep.textContent = ""; ea.textContent = ""; } }
   }, 500);
@@ -1059,9 +1097,108 @@ async function upload(file){
   }catch(e){ overlay(); toast("Upload failed: " + e.message); }
 }
 
+// ---------------------------------------------------------------- who sings
+// Crowd: a different invented person sings each line. Single Artist: one person sings every line,
+// from a photo (uploaded to ComfyUI's input folder, in oneshot-mv/) or described and invented.
+const SINGLE = "single artist";
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ICON_CROWD = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M16.6 14.1c2.5.3 4.4 2.6 4.4 5.4"/></svg>`;
+const ICON_ONE = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>`;
+// what a brief sends for who sings: only the tab that is showing counts, and none of it for a Crowd
+function castOf(b){
+  const single = b.cast === SINGLE, mode = b.artist_mode === "describe" ? "describe" : "photo";
+  return {cast: single ? SINGLE : "crowd", artist_mode: mode,
+          artist_image: single && mode === "photo" ? String(b.artist_image || "").trim() : "",
+          artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : ""};
+}
+// a file in ComfyUI's input folder ("oneshot-mv/me.jpg") as a /api/view URL; v busts the cache after an overwrite
+const inputView = (p, v) => { const i = p.lastIndexOf("/");
+  return "/api/view?" + new URLSearchParams({filename: p.slice(i + 1), subfolder: i < 0 ? "" : p.slice(0, i), type: "input"}) + (v ? "&v=" + v : ""); };
+function setCast(c){
+  const b = S.brief;
+  if (b.cast !== c){
+    b.cast = c;
+    // the crowd behind the singer follows (off for one artist, auto again for a Crowd) until it's set by hand
+    if (!S.crowdTouched){
+      if (c === SINGLE) b.crowd = "off"; else if (b.crowd === "off") b.crowd = "auto";
+      const sel = $("#crowd"); if (sel) sel.value = b.crowd;
+    }
+    saveBrief(); refreshEstimate();
+  }
+  drawCast();
+  const el = $(`#casts [data-c="${c}"]`); if (el) el.focus();
+}
+function drawCast(){
+  const b = S.brief, box = $("#casts"); if (!box) return;
+  const single = b.cast === SINGLE, photo = b.artist_mode !== "describe";
+  box.innerHTML = [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line.", ICON_ONE]]
+    .map(([k, n, d, ic]) => `<button type="button" class="tier" data-c="${k}" aria-pressed="${(single ? SINGLE : "crowd") === k}"><span class="t">${ic}<b>${n}</b></span><small>${d}</small></button>`).join("");
+  box.querySelectorAll(".tier").forEach(el => el.onclick = () => setCast(el.dataset.c));
+  $("#worldnote").textContent = single ? "One line is enough. The artist sings every line, in the World's outfits and places."
+    : "One line is enough. The characters you name are cast first, in the order you name them, and every shot is a different invented person.";
+  $("#rights").textContent = "Use music you have the rights to. " + (single && photo ? "Every other face is invented." : "Every face is invented.");
+  const art = $("#artist");
+  art.classList.toggle("hide", !single);
+  if (!single){ art.innerHTML = ""; return; }
+  art.innerHTML = `<div class="seg" role="group" aria-label="The artist" id="amode">${[["photo", "Upload a photo"], ["describe", "Describe a new artist"]].map(([k, n]) =>
+      `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>`;
+  art.querySelectorAll("[data-m]").forEach(el => el.onclick = () => {
+    const m = el.dataset.m;
+    if (b.artist_mode !== m){ b.artist_mode = m; saveBrief(); refreshEstimate(); }
+    drawCast(); const f = $(`#amode [data-m="${m}"]`); if (f) f.focus();
+  });
+  const pane = $("#apane");
+  if (!photo){
+    pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age, their look, their voice</label>
+      <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head, gold hoops and a calm, low voice"></textarea>
+      <p class="note">The tool invents this person and keeps them the same in every shot.</p>`;
+    const ta = $("#adesc"); ta.value = b.artist_description || "";
+    ta.oninput = () => { b.artist_description = ta.value; saveBrief(); refreshEstimate(); };
+    return;
+  }
+  const img = b.artist_image;
+  pane.innerHTML = (img ? `<div class="aphoto" id="azone">
+        <img id="aimg" src="${esc(inputView(img, S.artistV))}" alt="The artist's photo">
+        <div class="tx"><b>${esc(img.split("/").pop())}</b><span class="tiny">In ComfyUI's input folder</span></div>
+        <button class="btn sm" id="areplace" type="button" aria-label="Replace the photo">Replace</button></div>`
+    : `<div class="drop" id="azone" tabindex="0" role="button" aria-label="Upload a photo of the artist">
+        <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="10" r="3.2"/><path d="M6.5 21c.6-3 2.8-5 5.5-5s4.9 2 5.5 5"/></svg>
+        <div style="font-weight:700;font-size:16px">Drop a photo here, or click to upload</div>
+        <div class="muted" style="font-size:13px">JPG, PNG or WebP. It goes into ComfyUI's input folder.</div></div>`)
+    + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
+      <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>`;
+  const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
+  if (img){
+    $("#areplace").onclick = pick;
+    const im = $("#aimg"); im.onerror = () => { im.outerHTML = `<span class="noimg" role="img" aria-label="The photo couldn't be shown">${ICON_ONE}</span>`; };
+  } else {
+    zone.onclick = pick;
+    zone.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } };
+  }
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
+  zone.ondragleave = () => zone.classList.remove("over");
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over"); if (e.dataTransfer.files[0]) uploadArtist(e.dataTransfer.files[0]); };
+  fi.onchange = () => { if (fi.files[0]) uploadArtist(fi.files[0]); };
+}
+async function uploadArtist(file){
+  if (!(file.type ? PHOTO_TYPES.includes(file.type) : /\.(jpe?g|png|webp)$/i.test(file.name))){ toast("Use a JPG, PNG or WebP photo."); return; }
+  overlay("Uploading the photo", file.name);
+  try{
+    const fd = new FormData(); fd.append("image", file, file.name); fd.append("subfolder", "oneshot-mv"); fd.append("type", "input"); fd.append("overwrite", "true");
+    const r = await fetch("/api/upload/image", {method:"POST", body:fd});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    S.brief.artist_image = (j.subfolder ? j.subfolder + "/" : "") + j.name; S.artistV = Date.now(); saveBrief();
+    overlay(); drawCast(); refreshEstimate();
+    const rb = $("#areplace"); if (rb) rb.focus();
+  }catch(e){ overlay(); toast("Upload failed: " + e.message); }
+}
+
 async function start(render, briefOverride){
   const b = Object.assign({}, briefOverride || S.brief);
   if (!b.song){ toast("Pick a song first."); return; }
+  Object.assign(b, castOf(b));  // only the artist tab that is showing goes with the brief
+  if (b.cast === SINGLE && !b.artist_image && !b.artist_description){ toast("Add a photo of the artist, or describe a new one."); return; }
   if (!String(b.name || "").trim()){
     const pn = $("#pname"); if (pn) pn.classList.add("bad");
     const n = await askName(); if (!n) return;
