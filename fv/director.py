@@ -85,11 +85,11 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
            qc_retries: int = 2, theme: str = "", broll_share: float = 0.125, staged: bool = True,
            cuts: dict | None = None, audio_fx: str = "", cast_order: str = "as written", crowd: str = "auto",
            log=print, models: str = "auto", artist_description: str = "", world_images: str = "",
-           image_order: str = "in order", **legacy) -> dict:
+           image_order: str = "in order", professional: bool = False, **legacy) -> dict:
     """staged (runs queued here, with QC): the 4-load order. Krea makes every portrait and the
     b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC re-rolls the
-    singer shots while LTX stays loaded; then Klein makes every look keyframe from the final
-    singer takes and LTX the look clips (QC passes and Klein edits keep LTX loaded, FVKeep).
+    singer shots while LTX stays loaded; then the image editor makes every look keyframe from the
+    final singer takes and LTX the look clips (QC passes and image edits keep LTX loaded, FVKeep).
     Grouping by job type instead can spend 65 of 155 minutes on 12 model loads; this order loads
     4 times and never re-makes a look because its singer was re-rolled.
     legacy: settings an older Director node still passes until ComfyUI restarts (mode, pack,
@@ -97,7 +97,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     Single Artist: artist_path (a photo) or artist_description (a new person: the run's first job
     makes their studio headshot, which every portrait then re-stages like a photo).
     world_images (a folder of the user's own images, fv/world_images.py): the images are the World
-    and the cast; no World line, no Krea 2 portraits, no vision check."""
+    and the cast; no World line, no Krea 2 portraits, no vision check.
+    professional: Single Artist's portraits and looks by Qwen-Image-Edit 2511 (Apache-2.0) instead of
+    the default editor, Qwen-Image 2.1 (reported research-only)."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
@@ -117,14 +119,14 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # the model set ("24gb" fp8 files, or "full" bf16 files on 48 GB cards): every job this run
     # queues, and every later pass, uses the same one (p["models"])
     model_set = graphs.use_models(models)
+    editor = graphs.artist_editor(professional)  # Single Artist's portraits and looks
     log(f"[OneShotMV] models: the {'full' if model_set == 'full' else '24 GB'} set ({graphs.vram_gb():.0f} GB of GPU memory to use)")
     # what this ComfyUI is missing, before minutes of planning (the run's own jobs are checked again
     # before they are queued)
     setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue),
                                         theme=bool(theme and theme.strip()),
                                         artist=bool(artist_path or (artist_description or "").strip()),
-                                        images=imgs is not None,
-                                        extend=any(it["fit"] == "extend" for it in imgs or [])), model_set,
+                                        images=imgs is not None, editor=editor), model_set,
                       lead="It can't start yet." if queue else "It can't write the plan yet.")
     # the language model (world bible, cast, b-roll lines) loads on top of whatever the last job
     # left in memory, and loading it right after an LTX clip can take ComfyUI down without a word
@@ -173,6 +175,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                            twins=None if twins == "auto" else twins)
     p["artist_path"] = artist_path
+    if artist_path or artist_description:
+        p["editor"] = editor
     if artist_description:
         p["artist_description"] = artist_description
     if cuts:  # a re-applied theme starts from the pack again: keep the chosen cuts
@@ -269,8 +273,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         jobs.append(ref_job)
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
     for name, it in staged_img.values():
-        jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size1=s1, size2=s2,
-                                              extend=it["fit"] == "extend", seed=seed * 31 + len(jobs)).nodes))
+        jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size=s2,
+                                              crop=it.get("crop")).nodes))
     for c in cast:
         if imgs is not None:  # the image's own staged copy (the looks too: each its own image)
             port[c["id"]] = os.path.join(run_dir, f"{staged_img[c['image']][0]}_00001_.png")
@@ -281,7 +285,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         if c.get("artist_edit"):
             jobs.append((name, graphs.artist_portrait(artist_path=artist_path, prompt=c["portrait"],
                                                       seed=c["seed"], prefix=f"{rel}/{name}", size1=s1,
-                                                      size2=s2).nodes))
+                                                      size2=s2, editor=editor).nodes))
         else:
             jobs.append((name, graphs.krea2_portrait(prompt=c["portrait"], seed=c["seed"],
                                                        prefix=f"{rel}/{name}", size1=s1, size2=s2,
@@ -331,7 +335,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             video_path=a["path"], portrait_path=port.get(r["performer"]), prefix=f"{rel}/k{r['id']:03d}",
             size=rsize, seed=seed + r["id"], start_s=r.get("guide_start", 0.0),
             identity_path=artist_path if (c.get("artist_edit") and artist_path) else None,
-            editor="qwen_edit" if (c.get("artist_edit") and graphs.artist_editor() == "qwen_edit") else "klein",
+            editor=editor,
             prompt=(cast[look_of].get("twin_prompt") if c.get("artist_edit") else
                     " ".join(graphs.TWIN_TEXT.format(**c["twin"]).split()) + " " +
                     casting.edit_realism(cast[a["performer"]].get("size", "close") == "close")),
@@ -607,7 +611,7 @@ def _take_inputs(run_dir: str, path: str) -> tuple[str | None, str | None]:
 
 
 def _looks_jobs(p: dict, run_dir: str, log=print) -> tuple[list[dict], list[dict]]:
-    """Staged runs, after the last singer QC pass: the look jobs (Klein keyframes, then the LTX
+    """Staged runs, after the last singer QC pass: the look jobs (the editor's keyframes, then the LTX
     look clips), following each lead's final take."""
     by_id = {r["id"]: r for r in p["renders"]}
     orig = {r["id"]: os.path.join(run_dir, f"r{r['id']:03d}A_00001_.mp4") for r in p["renders"] if r["role"] == "A"}
@@ -740,8 +744,10 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
     def checks(r):  # the face checks a render gets: framing for every sung shot, identity for the artist
         if not voice or r["role"] not in ("A", "B") or is_creature(r):
             return {}
-        # a look takes its lead's framing (Face Match), so only leads are judged for "too close"
-        return {"framing": r.get("size", "close") if r["role"] == "A" else "look", "ref": ref,
+        # a look takes its lead's framing (Face Match), so only leads are judged for "too close"; a World
+        # image keeps the framing the user gave it ("image": only a face that goes missing fails)
+        lead = "image" if p.get("world_images") else r.get("size", "close")
+        return {"framing": lead if r["role"] == "A" else "look", "ref": ref,
                 "key_path": r.get("key") if r["role"] == "B" else None}
 
     for r in p["renders"]:
@@ -939,7 +945,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
                       indent=1)
             # renders that wait on a new keyframe run after the keyframe jobs
             (twin_jobs if (r["role"] == "B" or needs_key) else lead_jobs).append(g)
-        # grouped by model: LTX, Klein, LTX (renders after their keys)
+        # grouped by model: LTX, the image editor, LTX (renders after their keys)
         jobs = lead_jobs + key_jobs + twin_jobs
         if portrait_jobs:
             jobs = [graphs.free_memory("before QC portrait re-rolls").nodes] + portrait_jobs + jobs
@@ -1025,7 +1031,7 @@ def qc_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 1, queue: bool
         looks_msg = ""
         if stage == "leads":
             # the singer takes are final: keep the best b-roll candidates, then make the looks from
-            # the final singer takes (Klein keyframes, LTX look clips) and check them
+            # the final singer takes (image-editor keyframes, LTX look clips) and check them
             if p.get("broll_candidates"):
                 try:
                     from . import broll

@@ -31,7 +31,8 @@
       "cast_order": "as written",
       "broll_share": 0.125,
       "qc_retries": 2,
-      "run_name": ""
+      "run_name": "",
+      "professional": false
     }
   }
 }

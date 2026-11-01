@@ -20,10 +20,10 @@ FILES = {
     "latent_upscale_models": ["ltx-2.3-spatial-upscaler-x2-1.1.safetensors"],
 }
 PACKS = ("RES4LYF", "ComfyUI-KJNodes", "ComfyUI-LTXVideo")
-ARTIST_FILES = {"diffusion_models": ["Flux-2 Klein\\flux-2-klein-9b-fp8.safetensors",
+ARTIST_FILES = {"diffusion_models": ["Qwen\\qwen_image_2.1_int8_convrot.safetensors",
                                      "Qwen\\qwen_image_edit_2511_fp8mixed.safetensors"],
-                "text_encoders": ["qwen_3_8b_fp8mixed.safetensors", "Qwen\\qwen_2.5_vl_7b_fp8_scaled.safetensors"],
-                "vae": ["full_encoder_small_decoder.safetensors"],
+                "text_encoders": ["qwen3vl_8b_int8_convrot.safetensors", "Qwen\\qwen_2.5_vl_7b_fp8_scaled.safetensors"],
+                "vae": ["Qwen\\qwen_image_2.1_vae_bf16.safetensors"],
                 "loras": ["ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
                           "Qwen\\Lightning\\Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"]}
 KJ_MODES = ["disabled", "auto", "sageattn_qk_int8_pv_fp16_cuda", "sageattn_qk_int8_pv_fp16_triton",
@@ -46,10 +46,9 @@ def node_classes() -> set:
     try:
         gs = setup_check.probe(render=True, theme=True, artist=True)
         gs.append(graphs.twin_key(video_path="v", prefix="k", size=(1280, 768)).nodes)
-        gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
-                                         size2=(2016, 1152), editor="qwen").nodes)  # Single Artist on Qwen
-        gs.append(graphs.world_image(path="w.png", prefix="w", size1=(1344, 768), size2=(2016, 1152),
-                                     extend=True).nodes)  # World images, extended to fit
+        gs.append(graphs.twin_key(video_path="v", prefix="k", size=(1280, 768), identity_path="a.png", prompt="x",
+                                  editor="qwen_edit").nodes)  # looks for professional use
+        gs.append(graphs.world_image(path="w.png", prefix="w", size=(2016, 1152), crop=(0, 0, 64, 36)).nodes)
         gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
                                          size2=(2016, 1152), editor="qwen_edit").nodes)  # Qwen-Image-Edit 2511
     finally:
@@ -93,7 +92,7 @@ def torch_with(cap, hip=False):
 def install(monkeypatch, *, packs=PACKS, missing=(), drop_files=(), old_comfy=False, kj_modes=KJ_MODES,
             sage=None, cap=(8, 9), hip=False, comfy=True, artist=False):
     """Put a fake ComfyUI in place. Returns the list the fake queue fills with posted jobs.
-    artist: also what Single Artist needs (Klein's files, the union-control LoRA, DWPose's pack)."""
+    artist: also what Single Artist needs (both editors' files, the union-control LoRA, DWPose's pack)."""
     all_files = {k: list(v) + list(ARTIST_FILES.get(k, []) if artist else []) for k, v in FILES.items()}
     if artist:
         packs = tuple(packs) + ("comfyui_controlnet_aux",)

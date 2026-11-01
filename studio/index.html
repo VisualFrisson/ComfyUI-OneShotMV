@@ -496,6 +496,9 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 .castpick .tier small{margin-top:6px}
 .artist{margin-top:20px;display:flex;flex-direction:column;gap:14px}
 .artist .seg{gap:10px}
+.artist .pro{border-top:1px solid var(--line2);padding-top:14px}
+.artist .pro .dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;border:1.5px solid currentColor;vertical-align:0}
+.artist .pro .opt[aria-pressed=true] .dot{background:currentColor}
 .aphoto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 14px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
 .aphoto.over{border-color:var(--accent);background:var(--accent-bg)}
 .aphoto img,.aphoto .noimg{width:88px;height:88px;display:flex;align-items:center;justify-content:center;object-fit:cover;border-radius:10px;background:var(--bg);color:var(--dim)}
@@ -564,7 +567,7 @@ const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
   cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto",
-  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"",
+  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"", professional:false,
   world_mode:"describe", world_images:"", image_order:"in order"};  // the World: described, or a folder of the user's images
 
 // ---------------------------------------------------------------- state
@@ -938,10 +941,11 @@ async function viewBrief(){
   initWorldImages(); drawWorld();
   // who sings: Crowd or Single Artist (the setup check wants more files for one artist, others for images)
   drawCast();
-  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images" : "describe");
+  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images" : "describe") + "|" + castOf(b).professional;
   let setupWas = setupKey();
   const setupAgain = () => { const k = setupKey(); if (k !== setupWas){ setupWas = k; loadSetup(); } };
   $("#casts").addEventListener("click", setupAgain);
+  $("#artist").addEventListener("click", setupAgain);  // For professional use wants the other editor's files
   $("#wmode").addEventListener("click", setupAgain);
 
   // format, quality
@@ -993,7 +997,7 @@ async function viewBrief(){
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
   let setupN = 0;  // the newest check wins when the World or cast is switched quickly
-  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" : ""}`)
+  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" : ""}${castOf(b).professional ? "&professional=1" : ""}`)
     .then(r => { if (n !== setupN) return; S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
@@ -1158,7 +1162,8 @@ function castOf(b){
   const single = b.cast === SINGLE && b.world_mode !== "images", mode = b.artist_mode === "describe" ? "describe" : "photo";
   return {cast: single ? SINGLE : "crowd", artist_mode: mode,
           artist_image: single && mode === "photo" ? String(b.artist_image || "").trim() : "",
-          artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : ""};
+          artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : "",
+          professional: single && !!b.professional};
 }
 // a file in ComfyUI's input folder ("oneshot-mv/me.jpg") as a /api/view URL; v busts the cache after an overwrite
 const inputView = (p, v) => { const i = p.lastIndexOf("/");
@@ -1188,7 +1193,14 @@ function drawCast(){
   art.classList.toggle("hide", !single);
   if (!single){ art.innerHTML = ""; return; }
   art.innerHTML = `<div class="seg" role="group" aria-label="The artist" id="amode">${[["photo", "Upload a photo"], ["describe", "Describe a new artist"]].map(([k, n]) =>
-      `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>`;
+      `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>
+    <div class="pro"><button type="button" class="opt" id="apro" aria-pressed="${!!b.professional}"><span class="dot" aria-hidden="true"></span>For professional use</button>
+      <p class="note" id="apronote"></p></div>`;
+  const pro = $("#apro"), proNote = () => { $("#apronote").textContent = b.professional
+      ? "Qwen-Image-Edit 2511 (Apache-2.0) makes the artist's portraits and looks. The face matches a little less closely than with Qwen-Image 2.1. Check every model's licence before you use the video commercially."
+      : "Qwen-Image 2.1 makes the artist's portraits and looks: the closest likeness, but its licence is reported to be research-only. Turn this on for paid or client work."; };
+  proNote();
+  pro.onclick = () => { b.professional = !b.professional; pro.setAttribute("aria-pressed", String(b.professional)); proNote(); saveBrief(); };
   art.querySelectorAll("[data-m]").forEach(el => el.onclick = () => {
     const m = el.dataset.m;
     if (b.artist_mode !== m){ b.artist_mode = m; saveBrief(); refreshEstimate(); }
@@ -1257,7 +1269,7 @@ function worldOf(b){
 function drawNotes(){
   const b = S.brief, wn = $("#worldnote"), rt = $("#rights"); if (!wn || !rt) return;
   if (b.world_mode === "images"){
-    wn.textContent = "Images with a face sing; the rest become cutaways. Images that aren't the video's shape are cropped or extended to fit.";
+    wn.textContent = "Images with a face sing; the rest become cutaways. Images that aren't the video's shape are cropped to fit, keeping the face in.";
     rt.textContent = "Use music and images you have the rights to.";
     return;
   }
