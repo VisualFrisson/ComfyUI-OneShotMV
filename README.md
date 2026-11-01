@@ -182,8 +182,8 @@ own image stage and animates yours:
   image twice in a row. Images repeat when there are more shots than images.
 - An image that isn't the video's shape is cropped to fit, around the face: the face is centred
   across the frame and sits a little above the middle (with two people, the crop centres between
-  them). Nothing is drawn in. A very tight close-up from a tall image in a 16:9 video can lose some
-  forehead or chin.
+  them). Nothing is drawn in. A close-up too big for the frame (a tall image in a 16:9 video) keeps
+  the eyes, mouth and chin, and loses the forehead first.
 - There is no World line, no cast and no vision check on stills; the take check runs as usual.
 
 In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
