@@ -303,7 +303,9 @@ and `sdk_run.py --models` choose the set. Until you pick one, the full set is us
 when its files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram`
 counts against the card. The Models card lists each model file the video needs with these
 settings (video, images and language, each model with its LoRAs), the folder under
-`ComfyUI/models` it goes in, and a tick or a cross for whether ComfyUI has it.
+`ComfyUI/models` it goes in, and a tick or a cross for whether ComfyUI has it. A missing file's name
+is its download link (from `fv/downloads.json`): save it into that folder, click refresh, and the
+cross turns into a tick. ComfyUI sees new model files without a restart.
 
 OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB) with the full set. Times on that
 card:

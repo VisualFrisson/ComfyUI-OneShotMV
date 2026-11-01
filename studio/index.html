@@ -506,8 +506,11 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 .mlist li .s{font-family:var(--font,inherit);font-weight:700;color:var(--accent)}
 .mlist li.no .s,.mlist li.no{color:var(--warn)}
 .mlist li .d{color:var(--dim)}
+.mlist li a{color:var(--warn);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.mlist li a:hover{color:var(--text)}
 .mlist .sum{margin:8px 0 0;font-size:12px;color:var(--muted)}
 .mlist .sum.warn{color:var(--warn)}
+.mlist .sum .linkbtn{font-size:12px;min-height:0;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .aphoto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 14px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
 .aphoto.over{border-color:var(--accent);background:var(--accent-bg)}
 .aphoto img,.aphoto .noimg{width:88px;height:88px;display:flex;align-items:center;justify-content:center;object-fit:cover;border-radius:10px;background:var(--bg);color:var(--dim)}
@@ -1006,7 +1009,8 @@ async function viewBrief(){
     drawModelList(r.uses);
     drawSetup();
   };
-  // each file the video needs, as the path it goes in under ComfyUI/models, with a tick when ComfyUI has it
+  // each file the video needs, as the path it goes in under ComfyUI/models, with a tick when ComfyUI has it;
+  // a missing file's name downloads it, and Refresh looks again (ComfyUI sees new files without a restart)
   const drawModelList = u => {
     const groups = (u && u.groups) || [], el = $("#mlist");
     if (!groups.length){ el.innerHTML = u && u.error ? `<p class="tiny">The model list couldn't be read (${esc(u.error)}).</p>` : ""; return; }
@@ -1014,8 +1018,14 @@ async function viewBrief(){
     const brk = t => esc(t).replace(/([\/_-])/g, "$1<wbr>").replace(/\.safetensors$/, "<wbr>.safetensors");  // wrap at the joins
     el.innerHTML = groups.map(g => `<h3>${esc(g.name)}</h3><ul>${g.files.map(f =>
         `<li class="${f.have ? "ok" : "no"}"><span class="s" role="img" aria-label="${f.have ? "Installed" : "Not installed"}">${f.have ? "✓" : "✗"}</span>`
-        + `<span>${f.folder ? `<span class="d">${brk(f.folder + "/")}</span>` : ""}${brk(f.name)}</span></li>`).join("")}</ul>`).join("")
-      + `<p class="sum${miss ? " warn" : ""}">${miss ? `${miss} not installed. Put each file in that folder under ComfyUI/models; the README links the downloads.` : "All installed."}</p>`;
+        + `<span>${f.folder ? `<span class="d">${brk(f.folder + "/")}</span>` : ""}${!f.have && f.url
+          ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" title="Download ${esc(f.name)}">${brk(f.name)}</a>` : brk(f.name)}</span></li>`).join("")}</ul>`).join("")
+      + `<p class="sum${miss ? " warn" : ""}" role="status">${miss
+          ? `${miss} not installed. Click a name to download it, put it in the folder shown under ComfyUI/models, then <button type="button" class="linkbtn" id="mrefresh">refresh</button>.`
+          : `All installed. <button type="button" class="linkbtn" id="mrefresh">Refresh</button>`}</p>`;
+    const rb = $("#mrefresh"), was = rb.textContent;
+    rb.onclick = () => { rb.textContent = "checking…"; rb.disabled = true;
+      Promise.resolve(loadSetup()).finally(() => { if (rb.isConnected){ rb.textContent = was; rb.disabled = false; } }); };
   };
   // what this ComfyUI still needs before it can plan or render (fv/setup_check.py), as soon as the page opens
   const drawSetup = () => {

@@ -213,6 +213,12 @@ def test_the_models_card_lists_what_a_video_loads(monkeypatch):
     assert "Images" not in groups(images=True)  # your own images: nothing to make
     assert "qwen_image_2.1_int8_convrot.safetensors" in groups(images=True, extend=True)["Images"]
     assert "Images" not in groups(images=True, extend=True, professional=True)  # professional crops
+    # every file of both sets, the image editors included, links to its download
+    for set_ in ("24gb", "full"):
+        for k in ({}, {"artist": True}, {"artist": True, "professional": True}):
+            for g in setup_check.uses(set_, **k)["groups"]:
+                for f in g["files"]:
+                    assert f["url"].startswith("https://huggingface.co/") and f["url"].endswith("/" + f["name"]), f
 
 
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself
