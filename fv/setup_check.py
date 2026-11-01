@@ -227,9 +227,10 @@ def set_files(name: str, artist: bool = False, images: bool = False, editor: str
 def uses(models: str = "auto", *, artist: bool = False, images: bool = False, extend: bool = False,
          professional: bool = False) -> dict:
     """The model files a video with these settings needs, for the Studio's Models card: {"models": set,
-    "groups": [{"name", "files": [{"name", "folder", "have", "url"}]}]} in three groups, each model with its
-    LoRAs: Video (LTX-2.3), Images (Krea 2 and the image editor: Qwen-Image 2.1 or, for professional use,
+    "groups": [{"name", "files": [{"name", "folder", "have", "url"}]}]} in four groups, each model with its
+    LoRAs: Video (LTX-2.3), Image (Krea 2), Image Edit (Qwen-Image 2.1 or, for professional use,
     Qwen-Image-Edit 2511 for Single Artist; Qwen-Image 2.1 to extend World images) and Language (Gemma 3).
+    A file two groups share (the Qwen-Image VAE) is listed once, in the first.
     folder is the ComfyUI models folder the file goes in; have is whether this ComfyUI lists it (in any
     sub-folder, the way a run finds it); url is its download (fv/downloads.json; "" for a renamed file)."""
     import json
@@ -240,25 +241,26 @@ def uses(models: str = "auto", *, artist: bool = False, images: bool = False, ex
         urls = {}
     name = graphs.pick_models(models)
     sf = graphs._set_files(name)
-    pics = []
+    image, edit = [], []
     if not images:
-        pics += ["krea_turbo"] + (["krea_raw", "krea_turbo_lora"] if sf.get("krea_raw") != sf.get("krea_turbo")
-                                    else []) + ["krea_te", "krea_vae"]
+        image = ["krea_turbo"] + (["krea_raw", "krea_turbo_lora"] if sf.get("krea_raw") != sf.get("krea_turbo")
+                                  else []) + ["krea_te", "krea_vae"]
     elif extend and not professional:
-        pics += list(graphs.EXTEND_KEYS)
+        edit = list(graphs.EXTEND_KEYS)
     if artist:  # each LoRA right after the model it goes with
-        pics += (["qwen_edit_unet", "qwen_edit_lora", "qwen_edit_te", "qwen_edit_vae"] if professional
-                 else ["qwen21_unet", "qwen21_te", "qwen21_vae"])
+        edit = (["qwen_edit_unet", "qwen_edit_lora", "qwen_edit_te", "qwen_edit_vae"] if professional
+                else ["qwen21_unet", "qwen21_te", "qwen21_vae"])
     groups = [("Video", ["ltx23_ckpt", "ltx23_loras"] + (["ltx_union_lora"] if artist else []) + ["ltx23_upscaler"]),
-              ("Images", pics), ("Language", ["ltx23_te"])]
+              ("Image", image), ("Image Edit", edit), ("Language", ["ltx23_te"])]
     idx = graphs._model_index()
-    out = []
+    out, listed = [], set()
     for title, keys in groups:
         pairs = []
         for k in keys:
             v = sf.get(k)
             for f in ([x[0] for x in v] if isinstance(v, list) else [v] if v else []):
-                if f not in (p[1] for p in pairs):
+                if f not in listed:
+                    listed.add(f)
                     pairs.append((k, f))
         missing = {f for _, f in graphs._resolve_models({n: f for n, (_, f) in enumerate(pairs)}, idx)[1]}
         files = []
