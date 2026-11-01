@@ -187,23 +187,32 @@ def test_the_studio_sends_the_artist(monkeypatch):
 
 
 def test_the_models_card_lists_what_a_video_loads(monkeypatch):
+    """The Studio's Models card: each file's name, its ComfyUI folder and whether it's installed, in four
+    groups; the image editor counts as stills."""
     fc.install(monkeypatch)  # the 24 GB set, without either image editor
-    rows = lambda **k: {r["role"]: r for r in setup_check.uses("24gb", **k)["rows"]}
-    crowd = rows()
-    assert crowd["Stills"]["model"] == "Krea 2 Turbo (fp8)" and "The artist" not in crowd
-    assert crowd["Video"]["files"][0] == "ltx-2.3-22b-dev-fp8.safetensors" and not crowd["Video"]["missing"]
-    one = rows(artist=True)
-    assert one["The artist"]["model"] == "Qwen-Image 2.1 (int8)" and "research-only" in one["The artist"]["licence"]
-    assert "qwen_image_2.1_int8_convrot.safetensors" in one["The artist"]["missing"]  # not installed here
-    pro = rows(artist=True, professional=True)
-    assert pro["The artist"]["model"].startswith("Qwen-Image-Edit 2511") and pro["The artist"]["licence"] == "Apache-2.0"
-    full = {r["role"]: r for r in setup_check.uses("full", artist=True)["rows"]}
-    assert full["Stills"]["model"] == "Krea 2 Turbo and Raw (bf16)" and full["The artist"]["model"].endswith("(bf16)")
-    assert full["Video"]["model"] == "LTX-2.3 22B dev (bf16)"
-    imgs = rows(images=True, extend=True)
-    assert "Stills" not in imgs and imgs["Extending"]["model"].startswith("Qwen-Image 2.1")
-    assert "Extending" not in rows(images=True, extend=True, professional=True)  # professional crops
-    assert "Extending" not in rows(images=True)
+    def groups(set_="24gb", **k):
+        return {g["name"]: {f["name"]: (f["folder"], f["have"]) for f in g["files"]}
+                for g in setup_check.uses(set_, **k)["groups"]}
+    crowd = groups()
+    assert list(crowd) == ["Stills", "Video", "Video LoRAs", "Language"]
+    assert crowd["Stills"] == {"krea2_turbo_fp8_scaled.safetensors": ("diffusion_models", True),
+                               "qwen3vl_4b_fp8_scaled.safetensors": ("text_encoders", True),
+                               "qwen_image_vae.safetensors": ("vae", True)}
+    assert crowd["Video"]["ltx-2.3-22b-dev-fp8.safetensors"] == ("checkpoints", True)
+    assert crowd["Video"]["ltx-2.3-spatial-upscaler-x2-1.1.safetensors"][0] == "latent_upscale_models"
+    assert len(crowd["Video LoRAs"]) == 4 and crowd["Language"] == {"gemma_3_12B_it_fp8_scaled.safetensors":
+                                                                    ("text_encoders", True)}
+    one = groups(artist=True)
+    assert one["Stills"]["qwen_image_2.1_int8_convrot.safetensors"] == ("diffusion_models", False)  # not here
+    assert "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors" in one["Video LoRAs"]
+    pro = groups(artist=True, professional=True)
+    assert "qwen_image_edit_2511_fp8mixed.safetensors" in pro["Stills"] and not any("2.1" in f for f in pro["Stills"])
+    assert pro["Stills"]["Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"][0] == "loras"
+    full = groups("full")
+    assert {"krea2_raw_bf16.safetensors", "krea2_turbo_lora_rank_64_bf16.safetensors"} <= set(full["Stills"])
+    assert "Stills" not in groups(images=True)  # your own images: nothing to make
+    assert "qwen_image_2.1_int8_convrot.safetensors" in groups(images=True, extend=True)["Stills"]
+    assert "Stills" not in groups(images=True, extend=True, professional=True)  # professional crops
 
 
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself
