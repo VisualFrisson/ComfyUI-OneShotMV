@@ -18,13 +18,18 @@ import numpy as np
 EXTS = (".png", ".jpg", ".jpeg", ".webp")
 CROP_WITHIN = 0.2   # shape difference up to which an image is centre-cropped (a 2:3 photo in 9:16 loses 16% of its width)
 MIN_FACE_H = 0.1    # face height / frame height: smaller faces don't lip-sync well, so the image is a cutaway
+GROUP_FACE = 0.6    # a second face at least this big against the first: two people, so a cutaway
 SIZES = ((0.3, "close"), (0.16, "medium"))  # face height on the frame -> the shot size QC judges it by
 
 # the person in the image sings; nothing about framing or wardrobe (the image already has them)
 SING = ("The person in the picture sings along to the song the way a real person sings a song they love. The lips "
         "shape each word in time with the voice, a relaxed jaw, small natural head movements on the beat, a blink now "
         "and then, natural breathing. The handheld camera sways gently. They stay where they are, in the same clothes "
-        "and the same light, and nobody else starts singing. No text appears.")
+        "and the same light, holding nothing new: no microphone appears, and nobody else comes into the picture or "
+        "starts singing. No text appears.")
+# the user's own colours: the house grade, glow, halation and contrast push off (the first test, Oct 31,
+# came out orange-red); the Studio's grain and looks still apply on top
+FINISH = {"grade_amount": 0.0, "glow": 0.0, "halation": 0.0, "contrast": 0.0, "saturation": 1.0, "lift": 0.0}
 # a cutaway from an image: the scene comes to life, nobody sings
 MOTION = ("The scene in the picture comes gently to life with natural, unhurried movement, and the camera moves "
           "slowly and smoothly. Anyone in it stays quiet with the mouth closed, not singing or talking. Full frame "
@@ -93,12 +98,15 @@ def inspect(paths: list[str], W: int, H: int, log=print) -> list[dict]:
         w, h = im.size
         fit = fit_of(w, h, W, H)
         s = max(W / w, H / h) if fit == "crop" else min(W / w, H / h)
-        face = None
+        face, group = None, False
         if how:
             small = im.copy()
             small.thumbnail((640, 640))
             fs = faces.detect_all(np.asarray(small), size=640)
             face = fs[0] if fs else None
+            # two people about as big as each other (twins side by side): both mouths would move, and
+            # the take check fails the second face, so the image is a cutaway
+            group = len(fs) > 1 and fs[1][2] >= GROUP_FACE * fs[0][2]
         face_h = round(face[2] * w * s / H, 3) if face else 0.0
         if fit == "crop" and face:  # a face cropped off the side or top can't sing
             cx, cy = face[0] * w * s - (w * s - W) / 2, face[1] * h * s - (h * s - H) / 2
@@ -106,7 +114,7 @@ def inspect(paths: list[str], W: int, H: int, log=print) -> list[dict]:
                 face_h = 0.0
         out.append({"path": path, "name": os.path.basename(path), "w": w, "h": h, "fit": fit,
                     "face": [round(float(v), 3) for v in face] if face else None, "face_h": face_h,
-                    "sings": (face_h >= MIN_FACE_H) if how else True,
+                    "group": group, "sings": (face_h >= MIN_FACE_H and not group) if how else True,
                     "size": size_of(face_h) if how else "medium"})
     return out
 

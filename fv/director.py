@@ -356,6 +356,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     if bible:
         p["theme"] = {k: v for k, v in bible.items() if k != "raw"}
         p["finish"] = pk["finish"]
+    if imgs is not None:  # the images keep their own colours
+        p["finish"] = dict(pk.get("finish") or {}, **wi.FINISH)
     p["run_dir"], p["run_rel"] = run_dir, rel
     deferred = set()
     if staged:

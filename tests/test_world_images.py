@@ -93,7 +93,21 @@ def test_faces_sing_and_the_rest_are_cutaways(monkeypatch, detector):
                                                           for x in g.values()))
     assert cut_keys == {f"{place_job}_00001_.png"}
     assert p["world_images"]["n_cutaway"] == 1
+    assert p["finish"]["grade_amount"] == 0 and p["finish"]["halation"] == 0  # the images keep their colours
     assert posted  # queued
+
+
+def test_two_people_side_by_side_are_a_cutaway(monkeypatch, tmp_path):
+    from PIL import Image
+    Image.new("RGB", (2016, 1152)).save(tmp_path / "pair.png")
+    Image.new("RGB", (2016, 1152)).save(tmp_path / "lead.png")
+    monkeypatch.setattr(faces, "method", lambda: "haar")
+    seen = []
+    monkeypatch.setattr(faces, "detect_all", lambda rgb, size=320: seen.append(1) or (
+        [[0.3, 0.4, 0.2], [0.7, 0.4, 0.18]] if len(seen) == 2 else [[0.5, 0.4, 0.3], [0.9, 0.9, 0.05]]))
+    lead, pair = wi.inspect([str(tmp_path / "lead.png"), str(tmp_path / "pair.png")], 2016, 1152, log=lambda *a: None)
+    assert lead["sings"] and not lead["group"]  # a small face far behind doesn't count
+    assert pair["group"] and not pair["sings"]
 
 
 def test_random_order_repeats_without_twice_in_a_row():
