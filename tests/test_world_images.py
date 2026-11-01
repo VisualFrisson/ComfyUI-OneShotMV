@@ -162,6 +162,16 @@ def test_the_studio_sends_the_folder(monkeypatch):
     assert info["count"] == 1 and info["names"] == ["face_01.png"]
 
 
+def test_a_test_machine_can_skip_the_finish(monkeypatch, tmp_path):
+    """fv/local.json {"finish": "plain"}: no grade, grain or vignette on any cut (test runs)."""
+    from fv import finish
+    assert finish.plain({"plain": True}) and not finish.plain({})
+    local = tmp_path / "local.json"
+    local.write_text('{"finish": "plain"}')
+    monkeypatch.setattr(finish, "local_settings", lambda: json.loads(local.read_text()))
+    assert finish.plain({})
+
+
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself
     sys.exit(pytest.main([__file__, "-q", f"--confcutdir={HERE}", f"--rootdir={HERE}", "--import-mode=importlib",
                           "-p", "no:cacheprovider"]))
