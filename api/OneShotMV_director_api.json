@@ -22,6 +22,7 @@
       "format": "16:9",
       "quality": "quality",
       "models": "auto",
+      "professional": false,
       "preview_only": false,
       "seed": 1,
       "cuts_low": "every 2 bars",
@@ -32,8 +33,7 @@
       "cast_order": "as written",
       "broll_share": 0.125,
       "qc_retries": 2,
-      "run_name": "",
-      "professional": false
+      "run_name": ""
     }
   }
 }

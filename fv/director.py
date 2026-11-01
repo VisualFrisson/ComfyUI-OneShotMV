@@ -101,7 +101,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     and the cast; no World line, no Krea 2 portraits, no vision check. image_fit: "crop" (around the face)
     or "extend" (Qwen-Image 2.1 draws new edges on an image far off the video's shape).
     professional: Single Artist's portraits and looks by Qwen-Image-Edit 2511 (Apache-2.0) instead of
-    the default editor, Qwen-Image 2.1 (reported research-only)."""
+    the default editor, Qwen-Image 2.1 (reported research-only); World images are cropped, never extended."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
@@ -109,6 +109,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     if (world_images or "").strip():
         from . import world_images as wi
         image_fit = image_fit if image_fit in wi.FITS else "crop"
+        if professional and image_fit == "extend":  # Extend draws with Qwen-Image 2.1 (reported research-only)
+            log("[OneShotMV] For professional use: the World images are cropped, not extended (Extend uses "
+                "Qwen-Image 2.1, whose licence is reported to be research-only)")
+            image_fit = "crop"
         imgs = wi.inspect(wi.list_images(world_images), *formats.portrait_size(fmt)[1], log=log, fit=image_fit)
         if not imgs:
             raise ValueError(f"None of the images in {world_images} could be read.")
@@ -179,6 +183,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                            twins=None if twins == "auto" else twins)
     p["artist_path"] = artist_path
+    p["professional"] = bool(professional)
     if artist_path or artist_description:
         p["editor"] = editor
     if artist_description:

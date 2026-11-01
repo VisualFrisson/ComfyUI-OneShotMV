@@ -120,6 +120,10 @@ def test_extend_keeps_the_whole_image(monkeypatch, detector):
     face_h = next(it for it in p["world_images"]["images"] if it["name"] == "face_01.png")["face_h"]
     assert face_h == round(0.3 * 1664 * (1152 / 2496) / 1152, 3)
     assert wi.fit_of(1664, 2496, 1152, 2016, "extend") == "crop"  # 2:3 in 9:16 loses only 16% of its width
+    # For professional use crops: Extend draws with Qwen-Image 2.1 (reported research-only)
+    pro = json.load(open(os.path.join(_direct(folder, image_fit="extend", professional=True)["run_dir"], "plan.json")))
+    assert pro["world_images"]["fit"] == "crop" and pro["professional"] is True
+    assert {it["fit"] for it in pro["world_images"]["images"]} == {"crop"}
     assert wi.fit_of(1664, 2496, 2016, 1152, "crop") == "crop"
 
 

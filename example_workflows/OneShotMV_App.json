@@ -263,6 +263,16 @@
           "link": null
         },
         {
+          "label": "For professional use",
+          "localized_name": "professional",
+          "name": "professional",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "professional"
+          },
+          "link": null
+        },
+        {
           "label": "Preview only",
           "localized_name": "preview_only",
           "name": "preview_only",
@@ -376,16 +386,6 @@
             "name": "artist_description"
           },
           "link": null
-        },
-        {
-          "label": "For professional use",
-          "localized_name": "professional",
-          "name": "professional",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "professional"
-          },
-          "link": null
         }
       ],
       "outputs": [
@@ -419,6 +419,7 @@
         "quality",
         "auto",
         false,
+        false,
         1,
         "fixed",
         "every 2 bars",
@@ -430,8 +431,7 @@
         0.125,
         2,
         "",
-        "",
-        false
+        ""
       ],
       "title": "OneShot MV: Director"
     },

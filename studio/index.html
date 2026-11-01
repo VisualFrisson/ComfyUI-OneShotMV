@@ -431,10 +431,7 @@ html[data-look="neon"] .strip .fixhint{font-stretch:condensed;font-variation-set
 .orow input{width:68px;padding:0 10px;text-align:right;cursor:text}
 .orow select:hover,.orow input:hover{border-color:var(--line3)}
 .seg.mini{flex-wrap:nowrap;gap:4px}
-.modelrow{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
-.modelrow .mlabel{font-size:15px;flex:none;overflow:visible}
-.modelrow .seg.mini .opt{white-space:nowrap;padding:0 9px}
-.modelrow .orow{flex-wrap:wrap;row-gap:6px}
+.opt:disabled{opacity:.45;cursor:not-allowed}
 #mnote.warn{color:var(--warn)}
 .seg.mini .opt{min-height:30px;padding:0 10px;font-size:12px}
 option{background:var(--panel2);color:var(--text)}
@@ -496,9 +493,23 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 .castpick .tier small{margin-top:6px}
 .artist{margin-top:20px;display:flex;flex-direction:column;gap:14px}
 .artist .seg{gap:10px}
-.artist .pro{border-top:1px solid var(--line2);padding-top:14px}
-.artist .pro .dot{display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;border:1.5px solid currentColor;vertical-align:0}
-.artist .pro .opt[aria-pressed=true] .dot{background:currentColor}
+/* the Models card: the model set, For professional use, and what this video would load */
+.mcard .seg{margin-top:12px}
+.mcard .seg .opt{flex:1 1 0;min-height:44px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.2}
+.mcard .seg .opt small{font-size:11px;font-weight:500;color:var(--muted)}
+.mcard .check{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:15px;font-weight:600;cursor:pointer}
+.mcard .check input{width:18px;height:18px;margin:0;accent-color:var(--accent);cursor:pointer;flex:none}
+.mlist{margin-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column}
+.mrow{display:grid;grid-template-columns:76px 1fr;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.mrow .r{font-size:12px;color:var(--dim);padding-top:1px}
+.mrow b{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.mrow .l{grid-column:2;font-size:12px;color:var(--muted)}
+.mrow .x{grid-column:2;font-size:12px;color:var(--warn);overflow-wrap:anywhere}
+.mrow .o{grid-column:2;font-size:12px;color:var(--dim)}
+.mfiles{margin-top:10px;font-size:12px;color:var(--muted)}
+.mfiles summary{cursor:pointer}
+.mfiles ul{margin:6px 0 0;padding-left:16px;font-family:var(--mono);font-size:11px;overflow-wrap:anywhere}
+.mfiles li.miss{color:var(--warn)}
 .aphoto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 14px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
 .aphoto.over{border-color:var(--accent);background:var(--accent-bg)}
 .aphoto img,.aphoto .noimg{width:88px;height:88px;display:flex;align-items:center;justify-content:center;object-fit:cover;border-radius:10px;background:var(--bg);color:var(--dim)}
@@ -567,8 +578,8 @@ const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
 const DEFAULT_BRIEF = {name:"", song:"", theme:"", world:"custom", seconds:30, start:-1, format:"16:9", preset:"quality", fx:"subtle",
   cuts_low:"every 2 bars", cuts_medium:"every bar", cuts_high:"to the music (subtle)", crowd:"auto", cast_order:"as written", seed:1, broll:0.125, qc:2, models:"auto",
-  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"", professional:false,
-  world_mode:"describe", world_images:"", image_order:"in order", image_fit:"crop"};  // the World: described, or a folder of the user's images
+  cast:"crowd", artist_mode:"photo", artist_image:"", artist_description:"",
+  world_mode:"describe", world_images:"", image_order:"in order", image_fit:"crop", professional:false};  // the World: described, or a folder of the user's images
 
 // ---------------------------------------------------------------- state
 const store = {
@@ -894,8 +905,14 @@ async function viewBrief(){
       <h2 class="side-h">Quality</h2>
       <div class="stack" role="group" aria-label="Quality" id="tiers"></div>
       <p class="tiny" style="margin:8px 0 0" id="etanote"></p>
-      <div class="modelrow"><div class="orow"><span class="mlabel">Model Versions</span><div class="seg mini" role="group" aria-label="Model set" id="mset"></div></div>
-        <p class="tiny" id="mnote" style="margin:4px 0 0"></p></div>
+    </section>
+    <section class="card mcard" aria-labelledby="modelsh">
+      <h2 class="side-h" id="modelsh">Models</h2>
+      <div class="seg" role="group" aria-label="Model set" id="mset"></div>
+      <p class="tiny" id="mnote" style="margin:8px 0 0"></p>
+      <label class="check"><input type="checkbox" id="mpro">For professional use</label>
+      <p class="tiny" id="pronote" style="margin:6px 0 0"></p>
+      <div class="mlist" id="mlist" aria-label="The models this video uses"></div>
     </section>
     <section class="card">
       <details class="adv">
@@ -943,11 +960,10 @@ async function viewBrief(){
   initWorldImages(); drawWorld();
   // who sings: Crowd or Single Artist (the setup check wants more files for one artist, others for images)
   drawCast();
-  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images|" + worldOf(b).image_fit : "describe") + "|" + castOf(b).professional;
+  const setupKey = () => castOf(b).cast + "|" + (b.world_mode === "images" ? "images|" + worldOf(b).image_fit : "describe");
   let setupWas = setupKey();
   const setupAgain = () => { const k = setupKey(); if (k !== setupWas){ setupWas = k; loadSetup(); } };
   $("#casts").addEventListener("click", setupAgain);
-  $("#artist").addEventListener("click", setupAgain);  // For professional use wants the other editor's files
   $("#wmode").addEventListener("click", setupAgain);
   $("#wfit").addEventListener("click", setupAgain);  // Extend wants Qwen-Image 2.1's files
 
@@ -971,23 +987,42 @@ async function viewBrief(){
   };
   drawFmt(); drawTiers();
 
-  // model set: Auto picks the full models on a 48 GB+ GPU when they're installed, else the 24 GB set
+  // the Models card. The set: 24 GB (fp8) or Full (bf16); until one is picked, the one that suits this GPU
+  // ("auto": the full set on a 48 GB+ GPU when its files are installed). For professional use: Qwen-Image-Edit
+  // 2511 for the artist and no extending. Then every model this video would load, with its licence.
   const drawModels = () => {
-    const r = S.models, cur = b.models || "auto";
-    $("#mset").innerHTML = [["auto", "Auto"], ["24gb", "24 GB"], ["full", "Full"]].map(([k, n]) => `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
+    const r = S.models, picked = b.models === "24gb" || b.models === "full", cur = picked ? b.models : r ? r.auto : "";
+    $("#mset").innerHTML = [["24gb", "24 GB", "fp8, for 24 GB GPUs"], ["full", "Full", "bf16, 48 GB or more"]].map(([k, n, d]) =>
+      `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}<small>${d}</small></button>`).join("");
     $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); loadSetup(); });
-    if (!r){ $("#mnote").textContent = "Checking your GPU…"; return; }
-    const use = cur === "auto" ? r.auto : cur, name = use === "full" ? "full models (bf16)" : "24 GB models (fp8)";
+    const pro = $("#mpro");
+    pro.checked = !!b.professional;
+    pro.onchange = () => { b.professional = pro.checked; saveBrief(); drawModels(); drawFit(); loadSetup(); refreshEstimate(); };
+    $("#pronote").textContent = b.professional
+      ? "Single Artist's portraits and looks come from Qwen-Image-Edit 2511 (Apache-2.0), and your own images are cropped, never extended. Every other model keeps its own licence, listed below."
+      : "Single Artist's portraits and looks come from Qwen-Image 2.1, the closest likeness. Its licence is reported to be research-only.";
+    if (!r){ $("#mnote").textContent = "Checking your GPU…"; $("#mlist").innerHTML = ""; return; }
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
-    let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}: ` : "";
-    t += cur === "auto" ? `Auto uses the ${name}.` : `Uses the ${name}.`;
-    if (use === "full" && r.vram_gb && r.vram_gb < r.full_min_gb) t += " The full models want 48 GB or more, so this may be slow or run out of memory.";
-    const miss = (r.missing || {})[use] || [];
-    if (miss.length) t += ` Missing ${miss.length === 1 ? "one file" : miss.length + " files"}: ${miss.slice(0, 3).join(", ")}${miss.length > 3 ? ` and ${miss.length - 3} more` : ""}. The README lists the downloads.`;
+    let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}. ` : "";
+    if (!picked) t += `${cur === "full" ? "Full" : "24 GB"} suits this GPU.`;
+    if (cur === "full" && r.vram_gb && r.vram_gb < r.full_min_gb) t += " The full models want 48 GB or more, so this may be slow or run out of memory.";
     const sage = (r.setup || {}).sage;
     if (sage) t += " " + sage;
-    $("#mnote").textContent = t; $("#mnote").classList.toggle("warn", !!miss.length);
+    $("#mnote").textContent = t.trim();
+    drawModelList(r.uses);
     drawSetup();
+  };
+  const drawModelList = u => {
+    const rows = (u && u.rows) || [], el = $("#mlist");
+    if (!rows.length){ el.innerHTML = u && u.error ? `<p class="tiny">The model list couldn't be read (${esc(u.error)}).</p>` : ""; return; }
+    const files = [...new Map(rows.flatMap(x => (x.files || []).map(f => [f, (x.missing || []).includes(f.split(/[\\/]/).pop())]))).entries()];
+    const nmiss = files.filter(([, m]) => m).length;
+    el.innerHTML = rows.map(x => `<div class="mrow"><span class="r">${esc(x.role)}</span><b>${esc(x.model)}</b>
+        <span class="l">${esc(x.licence)}</span>${x.note ? `<span class="o">${esc(x.note)}</span>` : ""}
+        ${(x.missing || []).length ? `<span class="x">Not installed: ${esc(x.missing[0])}${x.missing.length > 1 ? ` and ${x.missing.length - 1} more` : ""}</span>` : ""}
+        ${x.installed === false ? `<span class="o">Optional; not installed, so skipped</span>` : x.installed ? `<span class="o">Optional; installed</span>` : ""}</div>`).join("")
+      + `<details class="mfiles"><summary>${files.length} model files${nmiss ? `, ${nmiss} not installed` : ""}</summary>
+        <ul>${files.map(([f, m]) => `<li${m ? ' class="miss"' : ""}>${esc(f)}${m ? " (not installed)" : ""}</li>`).join("")}</ul></details>`;
   };
   // what this ComfyUI still needs before it can plan or render (fv/setup_check.py), as soon as the page opens
   const drawSetup = () => {
@@ -1000,7 +1035,7 @@ async function viewBrief(){
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
   let setupN = 0;  // the newest check wins when the World or cast is switched quickly
-  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" + (worldOf(b).image_fit === "extend" ? "&extend=1" : "") : ""}${castOf(b).professional ? "&professional=1" : ""}`)
+  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" + (worldOf(b).image_fit === "extend" ? "&extend=1" : "") : ""}${b.professional ? "&professional=1" : ""}`)
     .then(r => { if (n !== setupN) return; S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
@@ -1165,8 +1200,7 @@ function castOf(b){
   const single = b.cast === SINGLE && b.world_mode !== "images", mode = b.artist_mode === "describe" ? "describe" : "photo";
   return {cast: single ? SINGLE : "crowd", artist_mode: mode,
           artist_image: single && mode === "photo" ? String(b.artist_image || "").trim() : "",
-          artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : "",
-          professional: single && !!b.professional};
+          artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : ""};
 }
 // a file in ComfyUI's input folder ("oneshot-mv/me.jpg") as a /api/view URL; v busts the cache after an overwrite
 const inputView = (p, v) => { const i = p.lastIndexOf("/");
@@ -1196,14 +1230,7 @@ function drawCast(){
   art.classList.toggle("hide", !single);
   if (!single){ art.innerHTML = ""; return; }
   art.innerHTML = `<div class="seg" role="group" aria-label="The artist" id="amode">${[["photo", "Upload a photo"], ["describe", "Describe a new artist"]].map(([k, n]) =>
-      `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>
-    <div class="pro"><button type="button" class="opt" id="apro" aria-pressed="${!!b.professional}"><span class="dot" aria-hidden="true"></span>For professional use</button>
-      <p class="note" id="apronote"></p></div>`;
-  const pro = $("#apro"), proNote = () => { $("#apronote").textContent = b.professional
-      ? "Qwen-Image-Edit 2511 (Apache-2.0) makes the artist's portraits and looks. The face matches a little less closely than with Qwen-Image 2.1. Check every model's licence before you use the video commercially."
-      : "Qwen-Image 2.1 makes the artist's portraits and looks: the closest likeness, but its licence is reported to be research-only. Turn this on for paid or client work."; };
-  proNote();
-  pro.onclick = () => { b.professional = !b.professional; pro.setAttribute("aria-pressed", String(b.professional)); proNote(); saveBrief(); };
+      `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>`;
   art.querySelectorAll("[data-m]").forEach(el => el.onclick = () => {
     const m = el.dataset.m;
     if (b.artist_mode !== m){ b.artist_mode = m; saveBrief(); refreshEstimate(); }
@@ -1267,7 +1294,7 @@ const cleanPath = v => String(v || "").trim().replace(/^["']+|["']+$/g, "").trim
 function worldOf(b){
   return {world_mode: b.world_mode === "images" ? "images" : "describe", world_images: cleanPath(b.world_images),
           image_order: b.image_order === "random order" ? "random order" : "in order",
-          image_fit: b.image_fit === "extend" ? "extend" : "crop"};
+          image_fit: b.image_fit === "extend" && !b.professional ? "extend" : "crop"};  // professional crops
 }
 // the World note and the rights line follow both the World and who sings
 function drawNotes(){
@@ -1304,11 +1331,11 @@ function drawWorld(){
 // images that aren't the video's shape: cropped around the face (the default), or extended by Qwen-Image 2.1
 function drawFit(){
   const box = $("#wfit"); if (!box) return;
-  const cur = S.brief.image_fit === "extend" ? "extend" : "crop";
+  const pro = !!S.brief.professional, cur = worldOf(S.brief).image_fit;
   box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
-    `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}">${n}</button>`).join("");
-  $("#wfitnote").textContent = cur === "extend"
-    ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its licence is reported to be research-only."
+    `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}"${k === "extend" && pro ? " disabled" : ""}>${n}</button>`).join("");
+  $("#wfitnote").textContent = pro ? "Cropped around the face: Extend is off for professional use, since it draws with Qwen-Image 2.1."
+    : cur === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its licence is reported to be research-only."
     : "Each image is cropped to the video's shape around the face. Nothing is drawn in.";
   box.querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
     const f = el.dataset.f;
