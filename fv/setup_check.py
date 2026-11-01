@@ -227,22 +227,24 @@ def set_files(name: str, artist: bool = False, images: bool = False, editor: str
 def uses(models: str = "auto", *, artist: bool = False, images: bool = False, extend: bool = False,
          professional: bool = False) -> dict:
     """The model files a video with these settings needs, for the Studio's Models card: {"models": set,
-    "groups": [{"name", "files": [{"name", "folder", "have"}]}]} in four groups (Stills, Video, Video
-    LoRAs, Language). folder is the ComfyUI models folder the file goes in; have is whether this ComfyUI
-    lists it (in any sub-folder, the way a run finds it). Stills holds the image editor too: Qwen-Image 2.1
-    or, for professional use, Qwen-Image-Edit 2511 for Single Artist; Qwen-Image 2.1 to extend World images."""
+    "groups": [{"name", "files": [{"name", "folder", "have"}]}]} in three groups, each model with its
+    LoRAs: Video (LTX-2.3), Images (Krea 2 and the image editor: Qwen-Image 2.1 or, for professional use,
+    Qwen-Image-Edit 2511 for Single Artist; Qwen-Image 2.1 to extend World images) and Language (Gemma 3).
+    folder is the ComfyUI models folder the file goes in; have is whether this ComfyUI lists it (in any
+    sub-folder, the way a run finds it)."""
     name = graphs.pick_models(models)
     sf = graphs._set_files(name)
-    stills = []
+    pics = []
     if not images:
-        stills += ["krea_turbo"] + (["krea_raw", "krea_turbo_lora"] if sf.get("krea_raw") != sf.get("krea_turbo")
+        pics += ["krea_turbo"] + (["krea_raw", "krea_turbo_lora"] if sf.get("krea_raw") != sf.get("krea_turbo")
                                     else []) + ["krea_te", "krea_vae"]
     elif extend and not professional:
-        stills += list(graphs.EXTEND_KEYS)
-    if artist:
-        stills += [k for k in graphs.ARTIST_KEYS["qwen_edit" if professional else "qwen"] if k != "ltx_union_lora"]
-    groups = [("Stills", stills), ("Video", ["ltx23_ckpt", "ltx23_upscaler"]),
-              ("Video LoRAs", ["ltx23_loras"] + (["ltx_union_lora"] if artist else [])), ("Language", ["ltx23_te"])]
+        pics += list(graphs.EXTEND_KEYS)
+    if artist:  # each LoRA right after the model it goes with
+        pics += (["qwen_edit_unet", "qwen_edit_lora", "qwen_edit_te", "qwen_edit_vae"] if professional
+                 else ["qwen21_unet", "qwen21_te", "qwen21_vae"])
+    groups = [("Video", ["ltx23_ckpt", "ltx23_loras"] + (["ltx_union_lora"] if artist else []) + ["ltx23_upscaler"]),
+              ("Images", pics), ("Language", ["ltx23_te"])]
     idx = graphs._model_index()
     out = []
     for title, keys in groups:
