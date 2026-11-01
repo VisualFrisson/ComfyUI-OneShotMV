@@ -124,6 +124,10 @@ def test_the_crop_keeps_the_face():
     assert wi.crop_box(1664, 2496, 2016, 1152, [0.5, 0.25, 0.3]) == [0, 244, 1664, 951]
     assert wi.crop_box(1664, 2496, 2016, 1152, [0.5, 0.05, 0.3]) == [0, 0, 1664, 951]  # kept inside the photo
     assert wi.crop_box(1664, 2496, 2016, 1152, None) == [0, 772, 1664, 951]  # no face: the middle
+    # a close-up too big for that: the crop moves down for the mouth and chin, as far as the eyes allow
+    cy, fh = 0.45 * 2496, 1.25 * 0.7 * 1664
+    x, y, w, h = wi.crop_box(1664, 2496, 2016, 1152, [0.5, 0.45, 0.7])
+    assert y > cy - 0.4 * h and y <= cy - 0.1 * fh <= y + 0.15 * h and cy + 0.3 * fh < y + h
     # in 9:16 the same photo loses width instead, the face kept in
     x, y, w, h = wi.crop_box(1664, 2496, 1152, 2016, [0.8, 0.3, 0.2])
     assert (y, h) == (0, 2496) and x <= 0.8 * 1664 <= x + w

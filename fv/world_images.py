@@ -70,7 +70,9 @@ def list_images(folder: str) -> list[str]:
 def crop_box(w: int, h: int, W: int, H: int, face=None) -> list[int]:
     """[x, y, width, height] of the largest W:H window in a w x h image, placed around the face
     (face = [cx, cy, width] as faces.detect_all gives it, cx and cy as fractions of the image): centred
-    on it across, its centre FACE_AT down; centred when there is no face. Kept inside the image."""
+    on it across, its centre FACE_AT down. A face too big for that keeps its mouth and chin before its
+    forehead (the crop moves down as far as the eyes allow). Centred when there is no face; kept inside
+    the image."""
     if w * H > W * h:  # wider than the video: full height, part of the width
         ch, cw = h, max(1, min(w, round(h * W / H)))
     else:  # taller: full width, part of the height
@@ -78,7 +80,12 @@ def crop_box(w: int, h: int, W: int, H: int, face=None) -> list[int]:
     cx = face[0] * w if face else w / 2
     cy = face[1] * h if face else h / 2
     x = round(min(max(cx - cw / 2, 0), w - cw))
-    y = round(min(max(cy - (FACE_AT * ch if face else ch / 2), 0), h - ch))
+    y = cy - (FACE_AT * ch if face else ch / 2)
+    if face:  # a detector box is about 1.25 times as tall as it is wide; the eyes are 40% down it
+        fh = 1.25 * face[2] * w
+        eyes, chin = cy - 0.1 * fh, cy + 0.5 * fh
+        y = max(y, min(chin + 0.03 * ch - ch, eyes - 0.12 * ch))
+    y = round(min(max(y, 0), h - ch))
     return [int(x), int(y), int(cw), int(ch)]
 
 
