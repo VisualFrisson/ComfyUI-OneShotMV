@@ -255,7 +255,8 @@ def _estimate(b: dict) -> dict:
     win = float(p["song_t1"] - p["song_t0"])
     theme = (b.get("theme") or "").strip()
     share = float(b.get("broll", 0.125))
-    need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme else 0
+    artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
+    need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme and not artist else 0
     bible = _bible(theme, int(b.get("seed", 1))) if theme else None
     have = len((bible or {}).get("characters") or [])
     parts = [{"id": "listen", "name": "Listening to the song", "s": T["listen"]}]
@@ -277,7 +278,7 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
-    if theme and b.get("crowd", "auto") != "off":
+    if theme and b.get("crowd", "auto") != "off" and not artist:
         from . import theme as themes
         if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
             parts.append({"id": "crowd", "name": "Dressing the crowd", "s": T["crowd"]})

@@ -94,6 +94,22 @@ def test_the_crowd_stays_off_unless_turned_on(monkeypatch):
     assert "crowd" in text(_direct(artist_path=photo, crowd="on")).lower()
 
 
+def test_a_crowd_world_doesnt_dress_a_crowd_for_one_singer(monkeypatch):
+    """The crowd's dress is a Gemma call made for the crowd cast; a single artist never uses it."""
+    fc.install(monkeypatch, artist=True)
+    from fv import theme as themes
+    bible = {"theme": "a roller derby bout, a packed arena crowd", "characters": [],
+             "wear": [f"a skater's kit number {i}" for i in range(6)], "light": ["hard white arena light"] * 4,
+             "places": [f"on the rink, spot {i}" for i in range(6)], "actions": ["skating a lap"] * 4}
+    dressed = []
+    monkeypatch.setattr(themes, "expand", lambda theme, **k: dict(bible))
+    monkeypatch.setattr(themes, "crowd_world", lambda theme: True)
+    monkeypatch.setattr(themes, "crowd_dress", lambda b, **k: dressed.append(1) or "a sea of team colours")
+    _direct(artist_path=_photo(), theme=bible["theme"])
+    _direct(artist_path=_photo(), theme=bible["theme"], crowd="on")
+    assert dressed == []
+
+
 def test_the_setup_check_asks_for_the_editors_files(monkeypatch):
     fc.install(monkeypatch)  # the 24 GB set, without Klein or DWPose
     crowd = setup_check.report("24gb", artist=False)

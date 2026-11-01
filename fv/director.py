@@ -211,7 +211,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # the Director's cast order and crowd choices (casting._cast_theme)
     pk.setdefault("casting", {})["story"] = (cast_order or "as written") != "mixed"
     pk["casting"]["crowd_mode"] = crowd if crowd in ("on", "off") else "auto"
-    if bible and (bible.get("rules") or {}).get("cast") != "creatures" and pk["casting"]["crowd_mode"] != "off" \
+    # the crowd's dress is for the crowd cast; a single artist's crowd (when on) is a plain soft blur
+    if bible and not pk["casting"].get("artist") and (bible.get("rules") or {}).get("cast") != "creatures" \
+            and pk["casting"]["crowd_mode"] != "off" \
             and (pk["casting"]["crowd_mode"] == "on" or themes.crowd_world(bible.get("theme", ""))):
         try:
             dress = themes.crowd_dress(bible, seed=seed, out_root=out_root, log=log)
