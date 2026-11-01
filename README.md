@@ -301,9 +301,9 @@ system RAM, because ComfyUI keeps part of LTX-2.3 in RAM while it renders. The f
 GPU with 48 GB or more. The Studio's Models card (24 GB or Full), the Director's `models` setting
 and `sdk_run.py --models` choose the set. Until you pick one, the full set is used on a 48 GB+ GPU
 when its files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram`
-counts against the card. The Models card lists every model the video will use with these settings
-(stills, the artist, video, LoRAs, language, checks), each with its licence and any file that
-isn't installed.
+counts against the card. The Models card lists each model file the video needs with these
+settings (stills, video, video LoRAs, language), the folder under `ComfyUI/models` it goes in, and
+a tick or a cross for whether ComfyUI has it.
 
 OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB) with the full set. Times on that
 card:

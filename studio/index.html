@@ -497,19 +497,17 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 .mcard .seg{margin-top:12px}
 .mcard .seg .opt{flex:1 1 0;min-height:44px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.2}
 .mcard .seg .opt small{font-size:11px;font-weight:500;color:var(--muted)}
-.mcard .check{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:15px;font-weight:600;cursor:pointer}
-.mcard .check input{width:18px;height:18px;margin:0;accent-color:var(--accent);cursor:pointer;flex:none}
-.mlist{margin-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column}
-.mrow{display:grid;grid-template-columns:76px 1fr;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--line)}
-.mrow .r{font-size:12px;color:var(--dim);padding-top:1px}
-.mrow b{font-size:13px;font-weight:600;overflow-wrap:anywhere}
-.mrow .l{grid-column:2;font-size:12px;color:var(--muted)}
-.mrow .x{grid-column:2;font-size:12px;color:var(--warn);overflow-wrap:anywhere}
-.mrow .o{grid-column:2;font-size:12px;color:var(--dim)}
-.mfiles{margin-top:10px;font-size:12px;color:var(--muted)}
-.mfiles summary{cursor:pointer}
-.mfiles ul{margin:6px 0 0;padding-left:16px;font-family:var(--mono);font-size:11px;overflow-wrap:anywhere}
-.mfiles li.miss{color:var(--warn)}
+.mcard .check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;font-weight:600;cursor:pointer}
+.mcard .check input{width:17px;height:17px;margin:0;accent-color:var(--accent);cursor:pointer;flex:none}
+.mlist{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
+.mlist h3{margin:10px 0 3px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.mlist ul{list-style:none;margin:0;padding:0}
+.mlist li{display:grid;grid-template-columns:14px 1fr;gap:6px;padding:2px 0;font-family:var(--mono);font-size:11px;line-height:1.45;color:var(--text);overflow-wrap:break-word}
+.mlist li .s{font-family:var(--font,inherit);font-weight:700;color:var(--accent)}
+.mlist li.no .s,.mlist li.no{color:var(--warn)}
+.mlist li .d{color:var(--dim)}
+.mlist .sum{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.mlist .sum.warn{color:var(--warn)}
 .aphoto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px 14px;padding:12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2)}
 .aphoto.over{border-color:var(--accent);background:var(--accent-bg)}
 .aphoto img,.aphoto .noimg{width:88px;height:88px;display:flex;align-items:center;justify-content:center;object-fit:cover;border-radius:10px;background:var(--bg);color:var(--dim)}
@@ -911,8 +909,7 @@ async function viewBrief(){
       <div class="seg" role="group" aria-label="Model set" id="mset"></div>
       <p class="tiny" id="mnote" style="margin:8px 0 0"></p>
       <label class="check"><input type="checkbox" id="mpro">For professional use</label>
-      <p class="tiny" id="pronote" style="margin:6px 0 0"></p>
-      <div class="mlist" id="mlist" aria-label="The models this video uses"></div>
+      <div class="mlist" id="mlist"></div>
     </section>
     <section class="card">
       <details class="adv">
@@ -998,9 +995,6 @@ async function viewBrief(){
     const pro = $("#mpro");
     pro.checked = !!b.professional;
     pro.onchange = () => { b.professional = pro.checked; saveBrief(); drawModels(); drawFit(); loadSetup(); refreshEstimate(); };
-    $("#pronote").textContent = b.professional
-      ? "Single Artist's portraits and looks come from Qwen-Image-Edit 2511 (Apache-2.0), and your own images are cropped, never extended. Every other model keeps its own licence, listed below."
-      : "Single Artist's portraits and looks come from Qwen-Image 2.1, the closest likeness. Its licence is reported to be research-only.";
     if (!r){ $("#mnote").textContent = "Checking your GPU…"; $("#mlist").innerHTML = ""; return; }
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
     let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}. ` : "";
@@ -1012,17 +1006,16 @@ async function viewBrief(){
     drawModelList(r.uses);
     drawSetup();
   };
+  // each file the video needs, as the path it goes in under ComfyUI/models, with a tick when ComfyUI has it
   const drawModelList = u => {
-    const rows = (u && u.rows) || [], el = $("#mlist");
-    if (!rows.length){ el.innerHTML = u && u.error ? `<p class="tiny">The model list couldn't be read (${esc(u.error)}).</p>` : ""; return; }
-    const files = [...new Map(rows.flatMap(x => (x.files || []).map(f => [f, (x.missing || []).includes(f.split(/[\\/]/).pop())]))).entries()];
-    const nmiss = files.filter(([, m]) => m).length;
-    el.innerHTML = rows.map(x => `<div class="mrow"><span class="r">${esc(x.role)}</span><b>${esc(x.model)}</b>
-        <span class="l">${esc(x.licence)}</span>${x.note ? `<span class="o">${esc(x.note)}</span>` : ""}
-        ${(x.missing || []).length ? `<span class="x">Not installed: ${esc(x.missing[0])}${x.missing.length > 1 ? ` and ${x.missing.length - 1} more` : ""}</span>` : ""}
-        ${x.installed === false ? `<span class="o">Optional; not installed, so skipped</span>` : x.installed ? `<span class="o">Optional; installed</span>` : ""}</div>`).join("")
-      + `<details class="mfiles"><summary>${files.length} model files${nmiss ? `, ${nmiss} not installed` : ""}</summary>
-        <ul>${files.map(([f, m]) => `<li${m ? ' class="miss"' : ""}>${esc(f)}${m ? " (not installed)" : ""}</li>`).join("")}</ul></details>`;
+    const groups = (u && u.groups) || [], el = $("#mlist");
+    if (!groups.length){ el.innerHTML = u && u.error ? `<p class="tiny">The model list couldn't be read (${esc(u.error)}).</p>` : ""; return; }
+    const miss = groups.reduce((n, g) => n + g.files.filter(f => !f.have).length, 0);
+    const brk = t => esc(t).replace(/([\/_-])/g, "$1<wbr>").replace(/\.safetensors$/, "<wbr>.safetensors");  // wrap at the joins
+    el.innerHTML = groups.map(g => `<h3>${esc(g.name)}</h3><ul>${g.files.map(f =>
+        `<li class="${f.have ? "ok" : "no"}"><span class="s" role="img" aria-label="${f.have ? "Installed" : "Not installed"}">${f.have ? "✓" : "✗"}</span>`
+        + `<span>${f.folder ? `<span class="d">${brk(f.folder + "/")}</span>` : ""}${brk(f.name)}</span></li>`).join("")}</ul>`).join("")
+      + `<p class="sum${miss ? " warn" : ""}">${miss ? `${miss} not installed. Put each file in that folder under ComfyUI/models; the README links the downloads.` : "All installed."}</p>`;
   };
   // what this ComfyUI still needs before it can plan or render (fv/setup_check.py), as soon as the page opens
   const drawSetup = () => {
