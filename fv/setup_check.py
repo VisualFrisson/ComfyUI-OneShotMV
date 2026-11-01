@@ -227,11 +227,17 @@ def set_files(name: str, artist: bool = False, images: bool = False, editor: str
 def uses(models: str = "auto", *, artist: bool = False, images: bool = False, extend: bool = False,
          professional: bool = False) -> dict:
     """The model files a video with these settings needs, for the Studio's Models card: {"models": set,
-    "groups": [{"name", "files": [{"name", "folder", "have"}]}]} in three groups, each model with its
+    "groups": [{"name", "files": [{"name", "folder", "have", "url"}]}]} in three groups, each model with its
     LoRAs: Video (LTX-2.3), Images (Krea 2 and the image editor: Qwen-Image 2.1 or, for professional use,
     Qwen-Image-Edit 2511 for Single Artist; Qwen-Image 2.1 to extend World images) and Language (Gemma 3).
     folder is the ComfyUI models folder the file goes in; have is whether this ComfyUI lists it (in any
-    sub-folder, the way a run finds it)."""
+    sub-folder, the way a run finds it); url is its download (fv/downloads.json; "" for a renamed file)."""
+    import json
+    try:
+        urls = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads.json"),
+                              encoding="utf-8"))
+    except (OSError, ValueError):
+        urls = {}
     name = graphs.pick_models(models)
     sf = graphs._set_files(name)
     pics = []
@@ -255,8 +261,11 @@ def uses(models: str = "auto", *, artist: bool = False, images: bool = False, ex
                 if f not in (p[1] for p in pairs):
                     pairs.append((k, f))
         missing = {f for _, f in graphs._resolve_models({n: f for n, (_, f) in enumerate(pairs)}, idx)[1]}
-        files = [{"name": os.path.basename(f.replace("\\", "/")), "folder": KEY_FOLDERS.get(k, ""),
-                  "have": os.path.basename(f.replace("\\", "/")) not in missing} for k, f in pairs]
+        files = []
+        for k, f in pairs:
+            n = os.path.basename(f.replace("\\", "/"))
+            files.append({"name": n, "folder": KEY_FOLDERS.get(k, ""), "have": n not in missing,
+                          "url": urls.get(n, "") if n[:1] != "_" else ""})
         if files:
             out.append({"name": title, "files": files})
     return {"models": name, "groups": out}
