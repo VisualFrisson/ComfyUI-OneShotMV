@@ -188,7 +188,8 @@ own image stage and animates yours:
   - **Extend** keeps the whole image. One far off the shape (a 2:3 portrait in a 16:9 video) goes on
     a wider canvas, Qwen-Image 2.1 draws the missing sides, and your original pixels are pasted back
     over the middle with a soft seam. One close to the shape (within 20%) is cropped a little. It
-    adds a few minutes, and needs the Qwen-Image 2.1 files (see the model tables).
+    adds a few minutes, and needs the Qwen-Image 2.1 files (see the model tables). With For
+    professional use on, images are always cropped.
 - There is no World line, no cast and no vision check on stills; the take check runs as usual.
 
 In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
@@ -215,9 +216,9 @@ to `on`.
 
 Qwen-Image 2.1 makes the artist's portraits and looks. It kept the face best in our tests, but its
 licence is reported to be research-only. For paid or client work, turn on **For professional use**
-(in the Studio, or `professional` on the Director node): Qwen-Image-Edit 2511 (Apache-2.0) makes
-them instead, with its 4-step Lightning LoRA. The face matches a little less closely. To make that
-the default, set `artist_editor` in `fv/models.json` to `qwen_edit`.
+(the Studio's Models card, or `professional` on the Director node): Qwen-Image-Edit 2511
+(Apache-2.0) makes them instead, with its 4-step Lightning LoRA. The face matches a little less
+closely. To make that the default, set `artist_editor` in `fv/models.json` to `qwen_edit`.
 
 Single Artist also needs the LTX union-control LoRA and the comfyui_controlnet_aux node pack (see
 the model tables). The Brief says if anything is missing.
@@ -233,12 +234,12 @@ the model tables). The Brief says if anything is missing.
 | Audio-reactive FX | none, subtle, intense (per energy level in the Studio) | subtle |
 | Cast order | as written, mixed | as written |
 | Crowd behind singers | auto, on, off | auto |
-| For professional use (Single Artist) | off: Qwen-Image 2.1; on: Qwen-Image-Edit 2511 | off |
+| For professional use | off; on: Single Artist uses Qwen-Image-Edit 2511 instead of Qwen-Image 2.1, and World images are cropped, never extended | off |
 | Images not in the video's shape (World images) | crop (around the face), extend (Qwen-Image 2.1 draws the missing sides) | crop |
 | B-roll share | 0 to 0.5 of the shots | 0.125 |
 | Take-check rounds | 0 to 3 | 2 |
 | Seed | any number | 1 |
-| Models | auto, 24gb (fp8), full (bf16, 48 GB+ GPUs) | auto |
+| Models | 24gb (fp8), full (bf16, 48 GB+ GPUs); auto picks one for your GPU | auto |
 
 Both are upscaled to 1080p (1920×1080, 1080×1920 or 1080×1080) and cut at 25 fps. Quality renders
 the clips at 50 fps, which gives the mouths smoother timing; 9:16 and 1:1 use the same sizes turned
@@ -288,8 +289,8 @@ about every beat on intense.
      from a prebuilt wheel or a build (see its page). OneShot MV picks the kernel for your card:
      the one in `fv/models.json` (`ltx23_sage`, made for RTX 40 and 50 cards) when it can run,
      otherwise SageAttention's own choice for the card (`auto`, RTX 30 and newer), otherwise none.
-     Without it the clips render the same, only slower. The line under Model Versions on the
-     Brief says which it uses, and a clip that still fails is re-shot without it.
+     Without it the clips render the same, only slower. The Models card on the Brief says
+     which it uses, and a clip that still fails is re-shot without it.
    - The vocal and drum stems use torchaudio's Hybrid Demucs, which downloads its weights the
      first time it runs.
 
@@ -297,10 +298,12 @@ about every beat on intense.
 
 The default model set is made for 24 GB GPUs (RTX 3090, 4090 or 5090) and wants at least 64 GB of
 system RAM, because ComfyUI keeps part of LTX-2.3 in RAM while it renders. The full set wants a
-GPU with 48 GB or more. Model Versions in the Studio's Quality box, the Director's `models`
-setting and `sdk_run.py --models` choose the set. Auto uses the full set on a 48 GB+ GPU when its
-files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram` counts
-against the card. The Studio also lists any files the chosen set is missing.
+GPU with 48 GB or more. The Studio's Models card (24 GB or Full), the Director's `models` setting
+and `sdk_run.py --models` choose the set. Until you pick one, the full set is used on a 48 GB+ GPU
+when its files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram`
+counts against the card. The Models card lists every model the video will use with these settings
+(stills, the artist, video, LoRAs, language, checks), each with its licence and any file that
+isn't installed.
 
 OneShot MV was built and tested on an NVIDIA RTX PRO 6000 (96 GB) with the full set. Times on that
 card:
@@ -342,7 +345,7 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
   the reasons above. Update the pack, or look in the ComfyUI console after "invalid prompt" or
   "Failed to validate prompt" for the reason.
 - "Model not found" or "Value not in list": a file of the chosen model set is missing. The
-  line under Model Versions in the Studio lists the missing files; download them, or pick the
+  Studio's Models card lists the missing files; download them, or pick the
   other set.
 - The lip-sync or framing checks were skipped: their weights aren't installed (Install, step 4).
   The video is still made.

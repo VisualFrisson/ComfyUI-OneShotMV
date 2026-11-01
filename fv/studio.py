@@ -296,7 +296,7 @@ def _estimate(b: dict) -> dict:
             "world_cached": bool(bible) and have >= need, "window": [round(p["song_t0"], 2), round(p["song_t1"], 2)],
             "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win
                                 # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
-                                + (4 if folder and b.get("image_fit") == "extend" else 0))}
+                                + (4 if folder and _extends(b) else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -318,8 +318,8 @@ def _form(d: str, p: dict) -> dict:
                     image_fit=wi.get("fit", "crop"), theme="")
     if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
         form.update(cast="single artist", artist_description=p.get("artist_description", ""),
-                    artist_mode="describe" if p.get("artist_description") else "photo",
-                    professional=p.get("editor") == "qwen_edit")
+                    artist_mode="describe" if p.get("artist_description") else "photo")
+    form["professional"] = bool(p.get("professional")) or p.get("editor") == "qwen_edit"
     return form
 
 
@@ -428,7 +428,7 @@ def _director_graph(b: dict) -> dict:
          "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
          "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
          else "in order", "image_fit": "extend" if b.get("image_fit") == "extend" else "crop",
-         "professional": bool(b.get("professional")) and b.get("cast") == "single artist"}
+         "professional": bool(b.get("professional"))}
     if d["world_images"]:  # the images are the World and the cast
         d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
@@ -442,6 +442,12 @@ def _director_graph(b: dict) -> dict:
         elif text:
             d["artist_description"] = text
     return g
+
+
+def _extends(b: dict) -> bool:
+    """Whether a brief's World images are extended: Extend chosen, and not For professional use (Extend
+    uses Qwen-Image 2.1, reported to be research-only, so professional runs crop)."""
+    return b.get("image_fit") == "extend" and not b.get("professional")
 
 
 def _images_of(b: dict) -> str:
@@ -488,7 +494,7 @@ def _restart_needed() -> list:
     try:
         import nodes as comfy_nodes  # type: ignore
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
-        if cls is not None and "image_fit" not in (cls.INPUT_TYPES().get("required") or {}):
+        if cls is not None and "professional" not in (cls.INPUT_TYPES().get("required") or {}):
             return [RESTART]
     except Exception:
         pass
@@ -514,7 +520,7 @@ def _cant_start(b: dict) -> list:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
                                         b.get("format") or "16:9", artist=artist, images=bool(folder),
                                         editor="qwen_edit" if b.get("professional") else None,
-                                        extend=b.get("image_fit") == "extend")
+                                        extend=_extends(b))
     except Exception as e:  # never let the check itself stop a run: the Director checks again
         print(f"[OneShotMV] setup check skipped ({type(e).__name__}: {e})")
         return []
@@ -1390,15 +1396,18 @@ async def _api(request: web.Request, route: str) -> web.Response:
         # what this ComfyUI needs before it can plan or render (setup_check), as soon as the Brief opens
         def models():
             rep = _fv("graphs").models_report()
+            sc, pro = _fv("setup_check"), bool(q.get("professional"))
+            how = dict(artist=q.get("cast") == "single artist", images=bool(q.get("images")),
+                       extend=bool(q.get("extend")) and not pro)
             try:
-                rep["setup"] = _fv("setup_check").report(q.get("models") or "auto", q.get("preset") or "quality",
-                                                         q.get("format") or "16:9",
-                                                         artist=q.get("cast") == "single artist",
-                                                         images=bool(q.get("images")),
-                                                         editor="qwen_edit" if q.get("professional") else None,
-                                                         extend=bool(q.get("extend")))
+                rep["setup"] = sc.report(q.get("models") or "auto", q.get("preset") or "quality",
+                                         q.get("format") or "16:9", editor="qwen_edit" if pro else None, **how)
             except Exception as e:  # never let the check stop the page
                 rep["setup"] = {"plan": [], "render": [], "sage": "", "error": f"{type(e).__name__}: {e}"}
+            try:  # the Models card: what this video would load with these settings
+                rep["uses"] = sc.uses(q.get("models") or "auto", professional=pro, **how)
+            except Exception as e:
+                rep["uses"] = {"rows": [], "error": f"{type(e).__name__}: {e}"}
             stale = _restart_needed()  # before anything else: nothing starts until ComfyUI restarts
             rep["setup"]["plan"] = stale + list(rep["setup"].get("plan") or [])
             rep["setup"]["render"] = stale + list(rep["setup"].get("render") or [])

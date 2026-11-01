@@ -181,7 +181,29 @@ def test_the_studio_sends_the_artist(monkeypatch):
     assert studio._director_graph({"song": "a.mp3"})["2"]["inputs"]["cast"] == "crowd"
     assert studio._director_graph(dict(base, artist_mode="describe", artist_description="x",
                                        professional=True))["2"]["inputs"]["professional"] is True
-    assert studio._director_graph({"song": "a.mp3", "professional": True})["2"]["inputs"]["professional"] is False
+    # For professional use is a model setting now (the Models card), sent for any video
+    assert studio._director_graph({"song": "a.mp3", "professional": True})["2"]["inputs"]["professional"] is True
+    assert studio._director_graph({"song": "a.mp3"})["2"]["inputs"]["professional"] is False
+
+
+def test_the_models_card_lists_what_a_video_loads(monkeypatch):
+    fc.install(monkeypatch)  # the 24 GB set, without either image editor
+    rows = lambda **k: {r["role"]: r for r in setup_check.uses("24gb", **k)["rows"]}
+    crowd = rows()
+    assert crowd["Stills"]["model"] == "Krea 2 Turbo (fp8)" and "The artist" not in crowd
+    assert crowd["Video"]["files"][0] == "ltx-2.3-22b-dev-fp8.safetensors" and not crowd["Video"]["missing"]
+    one = rows(artist=True)
+    assert one["The artist"]["model"] == "Qwen-Image 2.1 (int8)" and "research-only" in one["The artist"]["licence"]
+    assert "qwen_image_2.1_int8_convrot.safetensors" in one["The artist"]["missing"]  # not installed here
+    pro = rows(artist=True, professional=True)
+    assert pro["The artist"]["model"].startswith("Qwen-Image-Edit 2511") and pro["The artist"]["licence"] == "Apache-2.0"
+    full = {r["role"]: r for r in setup_check.uses("full", artist=True)["rows"]}
+    assert full["Stills"]["model"] == "Krea 2 Turbo and Raw (bf16)" and full["The artist"]["model"].endswith("(bf16)")
+    assert full["Video"]["model"] == "LTX-2.3 22B dev (bf16)"
+    imgs = rows(images=True, extend=True)
+    assert "Stills" not in imgs and imgs["Extending"]["model"].startswith("Qwen-Image 2.1")
+    assert "Extending" not in rows(images=True, extend=True, professional=True)  # professional crops
+    assert "Extending" not in rows(images=True)
 
 
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself

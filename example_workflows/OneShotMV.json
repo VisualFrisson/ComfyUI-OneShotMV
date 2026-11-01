@@ -157,6 +157,7 @@
         "quality",
         "auto",
         false,
+        false,
         1,
         "fixed",
         "every 2 bars",
@@ -168,8 +169,7 @@
         0.125,
         2,
         "",
-        "",
-        false
+        ""
       ],
       "title": "OneShot MV: Director"
     },

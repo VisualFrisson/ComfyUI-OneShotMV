@@ -223,6 +223,76 @@ def set_files(name: str, artist: bool = False, images: bool = False, editor: str
     return {f: KEY_FOLDERS.get(k, "") for k, f in graphs._resolve_models(m)[1]}
 
 
+# ------------------------------------------------------------------ what a video will load, for the Studio
+KREA = "Krea 2 Community License: free under US$1M revenue (images too)"
+LTX = "LTX-2 Community License: free under US$10M revenue"
+QWEN21 = "Reported research-only (Qwen Research License)"
+
+
+def _precision(f: str) -> str:
+    f = f.lower()
+    return next((t for t in ("fp8", "int8", "bf16") if t in f), "")
+
+
+def uses(models: str = "auto", *, artist: bool = False, images: bool = False, extend: bool = False,
+         professional: bool = False) -> dict:
+    """The models a video with these settings loads, one row per job, for the Studio's Models card:
+    {"models": set, "rows": [{"role", "model", "files", "missing", "licence", "note"}]}. Files are looked up
+    the way a run finds them (any sub-folder); "missing" is what this ComfyUI doesn't list. The optional
+    checks (SyncNet, insightface) are files outside ComfyUI's model lists: "installed" says whether they are."""
+    name = graphs.pick_models(models)
+    sf = graphs._set_files(name)
+    idx = graphs._model_index()
+    rows = []
+
+    def miss(files):
+        return sorted({os.path.basename(f) for _, f in graphs._resolve_models(dict(enumerate(files)), idx)[1]})
+
+    def row(role, model, keys, licence, note="", prec=True):
+        files = list(dict.fromkeys(sf[k] for k in keys if sf.get(k)))
+        prec = (_precision(files[0]) or ("bf16" if name == "full" else "")) if files and prec else ""
+        rows.append({"role": role, "model": model + (f" ({prec})" if prec else ""), "files": files,
+                     "missing": miss(files), "licence": licence, "note": note})
+
+    if not images:
+        two = sf.get("krea_raw") != sf.get("krea_turbo")
+        row("Stills", "Krea 2 Turbo and Raw" if two else "Krea 2 Turbo",
+            ["krea_turbo"] + (["krea_raw", "krea_turbo_lora"] if two else []) + ["krea_te", "krea_vae"], KREA,
+            "Raw redetails with the Turbo LoRA" if two else "")
+    elif extend and not professional:
+        row("Extending", "Qwen-Image 2.1", graphs.EXTEND_KEYS, QWEN21)
+    if artist:
+        if professional:
+            row("The artist", "Qwen-Image-Edit 2511", graphs.ARTIST_KEYS["qwen_edit"][:4], "Apache-2.0",
+                "With the 4-step Lightning LoRA")
+        else:
+            row("The artist", "Qwen-Image 2.1", graphs.ARTIST_KEYS["qwen"][:3], QWEN21)
+        row("Looks", "LTX-2.3 union-control LoRA and DWPose", ["ltx_union_lora"], LTX + "; DWPose Apache-2.0",
+            prec=False)
+    row("Video", "LTX-2.3 22B dev", ["ltx23_ckpt", "ltx23_upscaler"], LTX)
+    loras = [x[0] for x in sf.get("ltx23_loras") or []]
+    official = [f for f in loras if "enhance" not in f.lower()]
+    community = [f for f in loras if "enhance" in f.lower()]
+    if official:
+        rows.append({"role": "Video LoRAs", "model": "Distilled and Detailer (Lightricks)", "files": official,
+                     "missing": miss(official), "licence": LTX, "note": ""})
+    if community:
+        rows.append({"role": "Video LoRAs", "model": "Crisp and Soft Enhance (community)",
+                     "files": community, "missing": miss(community), "licence": "No licence stated",
+                     "note": "To run without them, remove them from ltx23_loras in fv/models.json"})
+    row("Language", "Gemma 3 12B", ["ltx23_te"], "Gemma Terms of Use")
+    rows.append({"role": "Vocals", "model": "Hybrid Demucs", "files": [], "missing": [],
+                 "licence": "Code MIT; no weights licence published", "note": ""})
+    from . import identity, lipsync
+    rows.append({"role": "Checks", "model": "SyncNet and S3FD", "files": [], "missing": [],
+                 "installed": lipsync.weight_paths() is not None,
+                 "licence": "Research use, CC-BY (Oxford VGG)", "note": ""})
+    rows.append({"role": "Checks", "model": "insightface buffalo_l", "files": [], "missing": [],
+                 "installed": identity.model_dir() is not None,
+                 "licence": "Non-commercial research use only", "note": ""})
+    return {"models": name, "rows": rows}
+
+
 def report(models: str = "auto", preset: str = "quality", fmt: str = "16:9", artist: bool = False,
            images: bool = False, editor: str | None = None, extend: bool = False) -> dict:
     """For the Studio, as soon as the Brief opens: what stops a preview and what stops a render (the

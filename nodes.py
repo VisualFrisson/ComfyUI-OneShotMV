@@ -216,7 +216,8 @@ class FVDirector:
                           "tooltip": "World images that aren't the video's shape. crop: cut to the shape around the "
                                      "face, nothing drawn in. extend: the whole image kept; one far off the shape "
                                      "(a 2:3 photo in 16:9) gets new edges drawn by Qwen-Image 2.1 (its licence is "
-                                     "reported to be research-only), one close to it is cropped a little."}),
+                                     "reported to be research-only), one close to it is cropped a little. With "
+                                     "professional on, images are always cropped."}),
             "cast": (["crowd", "single artist"], {"default": "crowd",
                      "tooltip": "crowd: a different invented person sings each line. single artist: one person "
                                 "sings every line, in the World's outfits and places: connect a photo of them to "
@@ -234,6 +235,12 @@ class FVDirector:
                        "tooltip": "Which model files to use. 24gb: the fp8 set (models.json), made for 24 GB GPUs. "
                                   "full: the bf16 set (models_full.json), for 48 GB or more. auto: the full set on "
                                   "a 48 GB+ GPU when its files are installed, otherwise the 24 GB set."}),
+            "professional": ("BOOLEAN", {"default": False,
+                             "tooltip": "For professional use: Single Artist's portraits and looks are made by "
+                                        "Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1, whose licence "
+                                        "is reported to be research-only (faces match a little less closely), and "
+                                        "World images are cropped, never extended. Other models keep their own "
+                                        "licences: check each for your use (README, Models and licences)."}),
             "preview_only": ("BOOLEAN", {"default": False,
                              "tooltip": "On: plan the video and list every shot (time, energy, who, wearing what, "
                                         "where) in the summary, rendering nothing. Check it, edit the World line if "
@@ -276,11 +283,6 @@ class FVDirector:
                                    "tooltip": "Single artist without a photo: describe a new person, e.g. 'a singer "
                                               "in her late twenties with a shaved head and gold hoops'. The tool "
                                               "invents them and keeps them the same in every shot"}),
-            "professional": ("BOOLEAN", {"default": False,
-                             "tooltip": "For professional use: Single Artist's portraits and looks are made by "
-                                        "Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1, whose licence "
-                                        "is reported to be research-only. Faces match a little less closely. Check "
-                                        "every model's licence for your use (README, Models and licences)."}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -294,9 +296,9 @@ class FVDirector:
         return random.random()
 
     def run(self, audio, world, cast, seconds, start, format, quality, models, preview_only, world_images="",
-            image_order="in order", image_fit="crop", seed=1, cuts_low=None, cuts_medium=None, cuts_high=None, audio_fx="subtle",
-            crowd="auto", cast_order="as written", broll_share=0.125, qc_retries=2, run_name="", artist_photo=None,
-            artist_description="", professional=False):
+            image_order="in order", image_fit="crop", professional=False, seed=1, cuts_low=None, cuts_medium=None,
+            cuts_high=None, audio_fx="subtle", crowd="auto", cast_order="as written", broll_share=0.125, qc_retries=2,
+            run_name="", artist_photo=None, artist_description=""):
         _reload()
         artist_path, described = "", ""
         if (world_images or "").strip():
