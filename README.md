@@ -301,9 +301,10 @@ system RAM, because ComfyUI keeps part of LTX-2.3 in RAM while it renders. The f
 GPU with 48 GB or more. The Studio's Models card (24 GB or Full), the Director's `models` setting
 and `sdk_run.py --models` choose the set. Until you pick one, the full set is used on a 48 GB+ GPU
 when its files are installed, and the 24 GB set otherwise; memory set aside with `--reserve-vram`
-counts against the card. The Models card lists each model file the video needs with these
-settings (video, images and language, each model with its LoRAs), the folder under
-`ComfyUI/models` it goes in, and a tick or a cross for whether ComfyUI has it. A missing file's name
+counts against the card. Under the set, **Models needed** (folded until you open it) says how
+many files aren't installed and lists each file the video needs with these settings (video, image,
+image edit and language, each model with its LoRAs), the folder under `ComfyUI/models` it goes in,
+and a tick or a cross for whether ComfyUI has it. A missing file's name
 is its download link (from `fv/downloads.json`): save it into that folder, click refresh, and the
 cross turns into a tick. ComfyUI sees new model files without a restart.
 

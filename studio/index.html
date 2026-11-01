@@ -496,14 +496,20 @@ html[data-look="neon"] .eta-b{font-stretch:condensed;font-variation-settings:'wd
 /* the Models card: the model set, For professional use, and what this video would load */
 .mcard .seg{margin-top:12px}
 .mcard .seg .opt{flex:1 1 0;min-height:44px;padding:4px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.2}
-.mcard .seg .opt small{font-size:11px;font-weight:500;color:var(--muted)}
+.mcard .seg .opt small{font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap}
 .mcard .check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px;font-weight:600;cursor:pointer}
 .mcard .check input{width:17px;height:17px;margin:0;accent-color:var(--accent);cursor:pointer;flex:none}
-.mlist{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}
-.mlist h3{margin:10px 0 3px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.mlist{margin-top:12px;border-top:1px solid var(--line);padding-top:2px}
+.mlist summary{display:flex;align-items:center;gap:8px;min-height:40px;cursor:pointer;list-style:none;font-size:14px;font-weight:600}
+.mlist summary::-webkit-details-marker{display:none}
+.mlist summary .car{color:var(--muted);flex:none;transition:transform .15s}
+.mlist details[open] summary .car{transform:rotate(90deg)}
+.mlist summary .n{margin-left:auto;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.mlist summary .n.warn{color:var(--warn)}
+.mlist h3{margin:6px 0 3px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
 .mlist ul{list-style:none;margin:0;padding:0}
-.mlist li{display:grid;grid-template-columns:14px 1fr;gap:6px;padding:2px 0;font-family:var(--mono);font-size:11px;line-height:1.45;color:var(--text);overflow-wrap:break-word}
-.mlist li .s{font-family:var(--font,inherit);font-weight:700;color:var(--accent)}
+.mlist li{display:grid;grid-template-columns:18px 1fr;gap:6px;padding:2px 0;font-family:var(--mono);font-size:11px;line-height:1.45;color:var(--text);overflow-wrap:break-word}
+.mlist li .s{font-family:var(--font,inherit);font-size:15px;line-height:16px;font-weight:700;color:var(--accent)}
 .mlist li.no .s,.mlist li.no{color:var(--warn)}
 .mlist li .d{color:var(--dim)}
 .mlist li a{color:var(--warn);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
@@ -992,7 +998,7 @@ async function viewBrief(){
   // 2511 for the artist and no extending. Then every model this video would load, with its licence.
   const drawModels = () => {
     const r = S.models, picked = b.models === "24gb" || b.models === "full", cur = picked ? b.models : r ? r.auto : "";
-    $("#mset").innerHTML = [["24gb", "24 GB", "fp8, for 24 GB GPUs"], ["full", "Full", "bf16, 48 GB or more"]].map(([k, n, d]) =>
+    $("#mset").innerHTML = [["24gb", "24 GB", "fp8, 24 GB+ GPU"], ["full", "Full", "bf16, 48 GB+ GPU"]].map(([k, n, d]) =>
       `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}<small>${d}</small></button>`).join("");
     $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); loadSetup(); });
     const pro = $("#mpro");
@@ -1015,14 +1021,17 @@ async function viewBrief(){
     const groups = (u && u.groups) || [], el = $("#mlist");
     if (!groups.length){ el.innerHTML = u && u.error ? `<p class="tiny">The model list couldn't be read (${esc(u.error)}).</p>` : ""; return; }
     const miss = groups.reduce((n, g) => n + g.files.filter(f => !f.have).length, 0);
+    const open = el.querySelector("details") ? el.querySelector("details").open : false;  // collapsed until opened
     const brk = t => esc(t).replace(/([\/_-])/g, "$1<wbr>").replace(/\.safetensors$/, "<wbr>.safetensors");  // wrap at the joins
-    el.innerHTML = groups.map(g => `<h3>${esc(g.name)}</h3><ul>${g.files.map(f =>
+    el.innerHTML = `<details${open ? " open" : ""}><summary><svg class="car" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l4 4-4 4"/></svg>Models needed`
+      + `<span class="n${miss ? " warn" : ""}">${miss ? `${miss} not installed` : "All installed"}</span></summary>`
+      + groups.map(g => `<h3>${esc(g.name)}</h3><ul>${g.files.map(f =>
         `<li class="${f.have ? "ok" : "no"}"><span class="s" role="img" aria-label="${f.have ? "Installed" : "Not installed"}">${f.have ? "✓" : "✗"}</span>`
         + `<span>${f.folder ? `<span class="d">${brk(f.folder + "/")}</span>` : ""}${!f.have && f.url
           ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" title="Download ${esc(f.name)}">${brk(f.name)}</a>` : brk(f.name)}</span></li>`).join("")}</ul>`).join("")
       + `<p class="sum${miss ? " warn" : ""}" role="status">${miss
           ? `${miss} not installed. Click a name to download it, put it in the folder shown under ComfyUI/models, then <button type="button" class="linkbtn" id="mrefresh">refresh</button>.`
-          : `All installed. <button type="button" class="linkbtn" id="mrefresh">Refresh</button>`}</p>`;
+          : `All installed. <button type="button" class="linkbtn" id="mrefresh">Refresh</button>`}</p></details>`;
     const rb = $("#mrefresh"), was = rb.textContent;
     rb.onclick = () => { rb.textContent = "checking…"; rb.disabled = true;
       Promise.resolve(loadSetup()).finally(() => { if (rb.isConnected){ rb.textContent = was; rb.disabled = false; } }); };

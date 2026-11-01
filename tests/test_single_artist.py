@@ -187,15 +187,15 @@ def test_the_studio_sends_the_artist(monkeypatch):
 
 
 def test_the_models_card_lists_what_a_video_loads(monkeypatch):
-    """The Studio's Models card: each file's name, its ComfyUI folder and whether it's installed, in three
-    groups, each model with its LoRAs; the image editor goes with the images."""
+    """The Studio's Models card: each file's name, its ComfyUI folder and whether it's installed, in four
+    groups, each model with its LoRAs."""
     fc.install(monkeypatch)  # the 24 GB set, without either image editor
     def groups(set_="24gb", **k):
         return {g["name"]: {f["name"]: (f["folder"], f["have"]) for f in g["files"]}
                 for g in setup_check.uses(set_, **k)["groups"]}
     crowd = groups()
-    assert list(crowd) == ["Video", "Images", "Language"]
-    assert crowd["Images"] == {"krea2_turbo_fp8_scaled.safetensors": ("diffusion_models", True),
+    assert list(crowd) == ["Video", "Image", "Language"]
+    assert crowd["Image"] == {"krea2_turbo_fp8_scaled.safetensors": ("diffusion_models", True),
                                "qwen3vl_4b_fp8_scaled.safetensors": ("text_encoders", True),
                                "qwen_image_vae.safetensors": ("vae", True)}
     assert crowd["Video"]["ltx-2.3-22b-dev-fp8.safetensors"] == ("checkpoints", True)
@@ -203,16 +203,18 @@ def test_the_models_card_lists_what_a_video_loads(monkeypatch):
     assert len(crowd["Video"]) == 6 and crowd["Language"] == {"gemma_3_12B_it_fp8_scaled.safetensors":
                                                                     ("text_encoders", True)}
     one = groups(artist=True)
-    assert one["Images"]["qwen_image_2.1_int8_convrot.safetensors"] == ("diffusion_models", False)  # not here
+    assert list(one) == ["Video", "Image", "Image Edit", "Language"]
+    assert one["Image Edit"]["qwen_image_2.1_int8_convrot.safetensors"] == ("diffusion_models", False)  # not here
     assert "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors" in one["Video"]
     pro = groups(artist=True, professional=True)
-    assert "qwen_image_edit_2511_fp8mixed.safetensors" in pro["Images"] and not any("2.1" in f for f in pro["Images"])
-    assert pro["Images"]["Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"][0] == "loras"
+    assert "qwen_image_edit_2511_fp8mixed.safetensors" in pro["Image Edit"] and not any("2.1" in f for f in pro["Image Edit"])
+    assert pro["Image Edit"]["Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"][0] == "loras"
+    assert "qwen_image_vae.safetensors" in pro["Image"] and "qwen_image_vae.safetensors" not in pro["Image Edit"]
     full = groups("full")
-    assert {"krea2_raw_bf16.safetensors", "krea2_turbo_lora_rank_64_bf16.safetensors"} <= set(full["Images"])
-    assert "Images" not in groups(images=True)  # your own images: nothing to make
-    assert "qwen_image_2.1_int8_convrot.safetensors" in groups(images=True, extend=True)["Images"]
-    assert "Images" not in groups(images=True, extend=True, professional=True)  # professional crops
+    assert {"krea2_raw_bf16.safetensors", "krea2_turbo_lora_rank_64_bf16.safetensors"} <= set(full["Image"])
+    assert list(groups(images=True)) == ["Video", "Language"]  # your own images: nothing to make
+    assert list(groups(images=True, extend=True)) == ["Video", "Image Edit", "Language"]
+    assert "Image Edit" not in groups(images=True, extend=True, professional=True)  # professional crops
     # every file of both sets, the image editors included, links to its download
     for set_ in ("24gb", "full"):
         for k in ({}, {"artist": True}, {"artist": True, "professional": True}):
