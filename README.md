@@ -2,8 +2,9 @@
 
 Give OneShot MV a song and one line about the world it lives in ("the gladiator games in ancient
 Rome"). It listens to the song, invents a cast for that world, plans every shot around the song's
-energy, and renders a lip-synced music video where a different invented person sings each line.
-Everything runs locally in ComfyUI on open-weights models.
+energy, and renders a lip-synced music video where a different invented person sings each line,
+or one singer sings them all (Single Artist). Everything runs locally in ComfyUI on open-weights
+models.
 
 ![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
 
@@ -47,8 +48,8 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
 
 1. **The Brief.** Name the project, then drop in a song. The waveform shows the low, medium and
    high energy sections and the stretch the video will use; click it to start somewhere else.
-   Pick a length, a World (four examples, or write your own) and a format. The buttons say how
-   long the plan and the video will take.
+   Pick a length, a World (four examples, or write your own), who sings (Crowd or Single Artist)
+   and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
    where), before anything long renders. Change the World and plan again, or make the video.
 3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
@@ -168,6 +169,26 @@ Some things that help:
   the World. The crowd setting turns this on or off.
 - Leave out real people and brands. Brand names are replaced, and signs are kept free of writing.
 
+### Crowd or Single Artist
+
+After the World comes who sings. **Crowd** (the default) casts a different invented person for
+each line. **Single Artist** has one person sing every line, in the World's outfits, places and
+light, with quick costume changes on the drop:
+
+- **From a photo:** upload a photo of the singer in the Studio, or connect a Load Image to the
+  Director's `artist_photo` (the example workflow has one, bypassed). Use only a photo of
+  yourself or of someone who agreed to it. A clear, front-on photo of the face works best.
+- **A new artist:** describe them in a sentence ("a singer in her late twenties with a shaved
+  head and gold hoops"). The tool makes their studio headshot first and keeps them the same in
+  every shot, so no real person's photo is needed.
+
+The portraits come out in the video's shape, so a tall phone photo keeps its head. Cutaways show
+the World's places with nobody in them. The crowd behind the singer is off unless you set crowd
+to `on`. Single Artist needs FLUX.2 Klein and the LTX union-control LoRA (see the model tables)
+and the comfyui_controlnet_aux node pack; the Brief says if anything is missing. The image editor
+is one setting, `artist_editor` in `fv/models.json`: `klein` (the default) or `qwen` (Qwen-Image
+2.1).
+
 ## Settings
 
 | Setting | Choices | Default |
@@ -208,7 +229,8 @@ about every beat on intense.
    [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (the LTX attention tuner and Sage
    attention) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers). OneShot MV
    was built on ComfyUI 0.39; it needs a recent ComfyUI for the core Generate Text node, Krea 2
-   and App mode. The Studio's Brief checks all of this when it opens: if a node pack is missing
+   and App mode. Single Artist also needs
+   [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) (pose guides). The Studio's Brief checks all of this when it opens: if a node pack is missing
    or didn't load, a model file can't be found, or ComfyUI or a pack is too old, it says what to
    do, and nothing starts until it's fixed.
 3. Download a model set (see [Two model sets](#two-model-sets)): the 24 GB set for most cards,
@@ -321,11 +343,11 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 | OneShot MV: Finish | Applies the finish (grade, grain, vignette) to any frames. |
 | OneShot MV: Keep Models Loaded, Weight Backups to RAM, Free Memory | Memory helpers for the Director's jobs. |
 | OneShot MV: Load Image / Video / Audio (path) | Loaders for the Director's jobs. |
-| OneShot MV: Face Match | Puts a look's face where its lead's face is (for one-singer looks). |
+| OneShot MV: Face Match | Puts a look's face where its lead's face is (Single Artist's looks). |
+| OneShot MV: Fit to Shape | Extends an image to another shape without cropping (Single Artist with Qwen-Image). |
 
-`fv/packs/crowd.json` holds the casting rules, the edit and the effects every run uses.
-`fv/packs/artist.json` is the start of Single Artist (one singer from a photo), which is being
-rebuilt and isn't in the Director node yet.
+`fv/packs/crowd.json` holds the casting rules, the edit and the effects of Crowd runs;
+`fv/packs/artist.json` those of Single Artist.
 
 ## Models and licences
 
@@ -370,14 +392,14 @@ The optional checks (Install, step 4):
 | SyncNet v2 and the S3FD face detector | Lip-sync scores and each take's sync offset | Research use under CC-BY (Oxford VGG); no licence stated for S3FD | [VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/) |
 | insightface buffalo_l (`det_10g`, `w600k_r50`) | Framing and identity checks | Non-commercial research use only | [insightface model zoo](https://github.com/deepinsight/insightface/tree/master/model_zoo) |
 
-Not used by any run in this version. Single Artist, which is being rebuilt, will use some of them:
+Single Artist also uses (Crowd runs never load them):
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
-| FLUX.2 [klein] 9B fp8, its Qwen3 8B text encoder and the FLUX.2 small-decoder VAE | One-singer look keyframes | FLUX Non-Commercial License (outputs may be used commercially); the VAE is Apache-2.0 | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8), [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B), [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder) |
+| FLUX.2 [klein] 9B fp8, its Qwen3 8B text encoder and the FLUX.2 small-decoder VAE | The artist's portraits and looks | FLUX Non-Commercial License (outputs may be used commercially); the VAE is Apache-2.0 | [black-forest-labs/FLUX.2-klein-9b-fp8](https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8), [Comfy-Org/flux2-klein-9B](https://huggingface.co/Comfy-Org/flux2-klein-9B), [FLUX.2-small-decoder](https://huggingface.co/black-forest-labs/FLUX.2-small-decoder) |
 | LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
-| DWPose and YOLOX-L (TorchScript) | Pose guides for looks | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), which looks also need |
-| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | One-singer portraits from a photo | Check the licence on the model page before commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+| DWPose and YOLOX-L (TorchScript) | Pose guides for looks | Apache-2.0 | Downloaded by [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) |
+| Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | The artist's portraits, only with `artist_editor` set to `qwen` | Reported as the Qwen Research License (research use); check the model page before any commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 
 File names are set in `fv/models.json` and `fv/models_full.json`.
 

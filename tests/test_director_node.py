@@ -38,7 +38,8 @@ def _inputs(cls):
 
 def test_the_node_shows_song_world_and_settings(node):
     req, opt = _inputs(node)
-    assert req == ["audio", "world", "seconds", "start", "format", "quality", "models", "preview_only"]
+    assert req == ["audio", "world", "cast", "seconds", "start", "format", "quality", "models", "preview_only"]
+    assert {"artist_photo", "artist_description"} <= set(opt)
     gone = {"mode", "pack", "twins", "twin_editor", "guide_strength", "dance_video", "dance_video_path", "framing",
             "artist_image", "artist_image_path", "broll_style", "staged", "look_groups", "queue_assemble",
             "queue_renders", "theme", "preset"}
@@ -113,7 +114,11 @@ def test_the_example_workflows_fit_the_node(node, name):
         if k == "seed":
             assert vals.pop(0) in ("fixed", "increment", "decrement", "randomize")
     assert vals == []
-    assert {n["type"] for n in w["nodes"]} <= {"MarkdownNote", "LoadAudio", "FVDirector", "PreviewAny"}
+    assert {n["type"] for n in w["nodes"]} <= {"MarkdownNote", "LoadAudio", "LoadImage", "FVDirector", "PreviewAny"}
+    photo = next(n for n in w["nodes"] if n["type"] == "LoadImage")
+    assert photo["mode"] == 4  # bypassed: a crowd run until the user picks a photo
+    link = next(l for l in w["links"] if l[1] == photo["id"])
+    assert d["inputs"][link[4]]["name"] == "artist_photo"
 
 
 def test_no_motion_workflow():

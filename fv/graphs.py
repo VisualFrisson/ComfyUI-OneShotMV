@@ -67,7 +67,12 @@ def _resolve_models(m: dict, idx=None) -> tuple[dict, list]:
 MODEL_SETS = ("24gb", "full")
 FULL_MIN_GB = 46          # the full set wants a 48 GB card or bigger
 RUN_KEYS = ("krea_turbo", "krea_raw", "krea_turbo_lora", "krea_te", "krea_vae", "ltx23_ckpt", "ltx23_te",
-            "ltx23_upscaler", "ltx23_loras")  # what a default voice run loads
+            "ltx23_upscaler", "ltx23_loras")  # what a default (crowd) run loads
+# what Single Artist adds: the image editor (fv/models.json's artist_editor) and, for the looks on the
+# drop, the union-control LoRA that keeps each look in its lead's pose
+ARTIST_KEYS = {"klein": ("klein_unet", "klein_te", "klein_vae", "ltx_union_lora"),
+               "qwen": ("qwen21_unet", "qwen21_te", "qwen21_vae", "klein_unet", "klein_te", "klein_vae",
+                        "ltx_union_lora")}
 
 
 def _set_files(name: str) -> dict:
@@ -356,14 +361,44 @@ def krea2_portrait(*, prompt, seed, prefix, size1, size2, denoise=0.25, turbo_on
     return g
 
 
-def artist_portrait(*, artist_path, prompt, seed, prefix, size2, resolution=1024):
-    """One-artist mode: the artist photo re-staged by Qwen-Image 2.1 (identity kept)."""
+def artist_editor() -> str:
+    """The one image editor for Single Artist: "klein" (FLUX.2 Klein) or "qwen" (Qwen-Image 2.1),
+    set as artist_editor in fv/models.json."""
+    return "qwen" if M.get("artist_editor") == "qwen" else "klein"
+
+
+def artist_portrait(*, artist_path, prompt, seed, prefix, size1, size2, resolution=1024, editor=None):
+    """Single Artist: the artist's photo re-staged in a new outfit, place and light, identity kept.
+    The portrait comes out in the video's shape, so a tall phone photo keeps its head: Klein draws
+    at size1 with the photo as a reference; Qwen takes its shape from image 1, so the photo is first
+    padded to size1's shape (FVFitAspect)."""
     g = Graph()
-    ref = g.add("FVLoadImagePath", path=artist_path)
-    out = _qwen21(g, O(ref), prompt, seed=seed, resolution=resolution)
+    ref = O(g.add("FVLoadImagePath", path=artist_path))
+    if (editor or artist_editor()) == "qwen":
+        if _has_node("FVFitAspect"):
+            ref = O(g.add("FVFitAspect", image=ref, width=size1[0], height=size1[1]))
+        out = _qwen21(g, ref, prompt, seed=seed, resolution=resolution)
+    else:
+        out = _klein(g, ref, prompt, seed=seed, size=size1)
     out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size2[0], height=size2[1], crop="center"))
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
+
+
+ARTIST_REF = ("Studio headshot photograph of {who}, facing the camera at eye level, head and shoulders, a calm "
+              "neutral expression with the mouth closed, plain mid-grey backdrop, soft even light, sharp focus on "
+              "the eyes. An invented person, the only person in frame. Natural skin texture, full colour. No text "
+              "or lettering anywhere.")
+
+
+def artist_reference(*, description, seed, prefix):
+    """Single Artist from a description: one studio headshot of the invented person (Krea 2), which
+    every portrait then re-stages like an uploaded photo."""
+    who = " ".join(description.split()).rstrip(".")
+    if who[:1].isupper() and not who[1:2].isupper():  # "A singer ..." reads on inside the sentence; "DJ" stays
+        who = who[0].lower() + who[1:]
+    return krea2_portrait(prompt=ARTIST_REF.format(who=who),
+                          seed=seed, prefix=prefix, size1=(896, 1152), size2=(1344, 1728))
 
 
 # ------------------------------------------------------------------ LTX models
@@ -548,11 +583,17 @@ def ltx_render(*, preset, fmt, key_path, prompt, negative, frames, seed, prefix,
 
 
 # ------------------------------------------------------------------ image edits
-def _klein(g, image_ref, prompt, refs=(), seed=7, steps=4):
+def _klein(g, image_ref, prompt, refs=(), seed=7, steps=4, size=None):
+    """FLUX.2 Klein edit of image_ref (refs: more reference images). The output has image_ref's size,
+    or `size` (w, h): a photo re-staged in the video's shape, with nothing cropped off."""
     unet = g.add("UNETLoader", unet_name=M["klein_unet"], weight_dtype="default")
     clip = g.add("CLIPLoader", clip_name=M["klein_te"], type="flux2", device="default")
     vae = g.add("VAELoader", vae_name=M["klein_vae"])
-    size = g.add("GetImageSize", image=image_ref)
+    if size:
+        W, H = int(size[0]), int(size[1])
+    else:
+        gs = g.add("GetImageSize", image=image_ref)
+        W, H = O(gs, 0), O(gs, 1)
     pos = g.add("CLIPTextEncode", clip=O(clip), text=prompt)
     neg = g.add("ConditioningZeroOut", conditioning=O(pos))
     p_ref, n_ref = O(pos), O(neg)
@@ -561,8 +602,8 @@ def _klein(g, image_ref, prompt, refs=(), seed=7, steps=4):
         p_ref = O(g.add("ReferenceLatent", conditioning=p_ref, latent=O(enc)))
         n_ref = O(g.add("ReferenceLatent", conditioning=n_ref, latent=O(enc)))
     guider = g.add("CFGGuider", model=O(unet), positive=p_ref, negative=n_ref, cfg=1.0)
-    sched = g.add("Flux2Scheduler", steps=steps, width=O(size, 0), height=O(size, 1))
-    lat = g.add("EmptyFlux2LatentImage", width=O(size, 0), height=O(size, 1), batch_size=1)
+    sched = g.add("Flux2Scheduler", steps=steps, width=W, height=H)
+    lat = g.add("EmptyFlux2LatentImage", width=W, height=H, batch_size=1)
     smp = g.add("SamplerCustomAdvanced", noise=O(g.add("RandomNoise", noise_seed=seed)), guider=O(guider),
                 sampler=O(g.add("KSamplerSelect", sampler_name="euler")), sigmas=O(sched), latent_image=O(lat))
     return O(g.add("VAEDecode", samples=O(smp), vae=O(vae)))

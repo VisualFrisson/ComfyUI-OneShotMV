@@ -20,6 +20,9 @@ FILES = {
     "latent_upscale_models": ["ltx-2.3-spatial-upscaler-x2-1.1.safetensors"],
 }
 PACKS = ("RES4LYF", "ComfyUI-KJNodes", "ComfyUI-LTXVideo")
+ARTIST_FILES = {"diffusion_models": ["Flux-2 Klein\\flux-2-klein-9b-fp8.safetensors"],
+                "text_encoders": ["qwen_3_8b_fp8mixed.safetensors"], "vae": ["full_encoder_small_decoder.safetensors"],
+                "loras": ["ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"]}
 KJ_MODES = ["disabled", "auto", "sageattn_qk_int8_pv_fp16_cuda", "sageattn_qk_int8_pv_fp16_triton",
             "sageattn_qk_int8_pv_fp8_cuda", "sageattn_qk_int8_pv_fp8_cuda++", "sageattn3", "sageattn3_per_block_mean"]
 CLIP_TYPES = ["stable_diffusion", "ltxv", "flux2", "qwen_image", "krea2"]
@@ -38,8 +41,10 @@ def node_classes() -> set:
     saved = sys.modules.pop("nodes", None)
     graphs._SAGE[graphs.M.get("ltx23_sage")] = ("sageattn_qk_int8_pv_fp8_cuda++", "")  # include the patch, quietly
     try:
-        gs = setup_check.probe(render=True, theme=True)
+        gs = setup_check.probe(render=True, theme=True, artist=True)
         gs.append(graphs.twin_key(video_path="v", prefix="k", size=(1280, 768)).nodes)
+        gs.append(graphs.artist_portrait(artist_path="a.png", prompt="x", seed=1, prefix="a", size1=(1344, 768),
+                                         size2=(2016, 1152), editor="qwen").nodes)  # Single Artist on Qwen
     finally:
         if saved is not None:
             sys.modules["nodes"] = saved
@@ -79,9 +84,13 @@ def torch_with(cap, hip=False):
 
 
 def install(monkeypatch, *, packs=PACKS, missing=(), drop_files=(), old_comfy=False, kj_modes=KJ_MODES,
-            sage=None, cap=(8, 9), hip=False, comfy=True):
-    """Put a fake ComfyUI in place. Returns the list the fake queue fills with posted jobs."""
-    files = {k: [f for f in v if os.path.basename(f.replace("\\", "/")) not in drop_files] for k, v in FILES.items()}
+            sage=None, cap=(8, 9), hip=False, comfy=True, artist=False):
+    """Put a fake ComfyUI in place. Returns the list the fake queue fills with posted jobs.
+    artist: also what Single Artist needs (Klein's files, the union-control LoRA, DWPose's pack)."""
+    all_files = {k: list(v) + list(ARTIST_FILES.get(k, []) if artist else []) for k, v in FILES.items()}
+    if artist:
+        packs = tuple(packs) + ("comfyui_controlnet_aux",)
+    files = {k: [f for f in v if os.path.basename(f.replace("\\", "/")) not in drop_files] for k, v in all_files.items()}
     out_dir = tempfile.mkdtemp()
     fp = types.ModuleType("folder_paths")
     fp.folder_names_and_paths = {k: ([], set()) for k in graphs.MODEL_FOLDERS}

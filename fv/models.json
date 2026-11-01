@@ -20,6 +20,7 @@
  "ltx25_te": "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
  "ltx25_upscaler": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
  "ltx_union_lora": "ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors",
+ "artist_editor": "klein",
  "klein_unet": "flux-2-klein-9b-fp8.safetensors",
  "klein_te": "qwen_3_8b_fp8mixed.safetensors",
  "klein_vae": "full_encoder_small_decoder.safetensors",

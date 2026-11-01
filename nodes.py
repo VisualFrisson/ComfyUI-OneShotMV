@@ -200,6 +200,11 @@ class FVDirector:
                                  "wear, the places, the light and the grade. Characters you describe keep your "
                                  "words; 'no men', 'present day' or 'no people, all robots' are rules. Empty = "
                                  "invented people in close-ups. Written once by Gemma 3 and cached."}),
+            "cast": (["crowd", "single artist"], {"default": "crowd",
+                     "tooltip": "crowd: a different invented person sings each line. single artist: one person "
+                                "sings every line, in the World's outfits and places: connect a photo of them to "
+                                "artist_photo (only of yourself or someone who agreed), or describe a new one in "
+                                "artist_description"}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
                                   "tooltip": "Length of the video; 0 = the whole song"}),
             "start": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 3600.0, "step": 0.01,
@@ -248,6 +253,12 @@ class FVDirector:
                                       "re-roll bad ones, up to this many rounds and at most doubling the render time; "
                                       "0 = off"}),
             "run_name": ("STRING", {"default": "", "tooltip": "Folder name for the run; empty = made from the settings"}),
+            "artist_photo": ("IMAGE", {"tooltip": "Single artist: a photo of the singer (a Load Image node). Use "
+                                                  "only a photo of yourself or of someone who agreed to it."}),
+            "artist_description": ("STRING", {"default": "", "multiline": True,
+                                   "tooltip": "Single artist without a photo: describe a new person, e.g. 'a singer "
+                                              "in her late twenties with a shaved head and gold hoops'. The tool "
+                                              "invents them and keeps them the same in every shot"}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -260,10 +271,19 @@ class FVDirector:
     def IS_CHANGED(cls, **kw):
         return random.random()
 
-    def run(self, audio, world, seconds, start, format, quality, models, preview_only, seed=1, cuts_low=None,
+    def run(self, audio, world, cast, seconds, start, format, quality, models, preview_only, seed=1, cuts_low=None,
             cuts_medium=None, cuts_high=None, audio_fx="subtle", crowd="auto", cast_order="as written",
-            broll_share=0.125, qc_retries=2, run_name=""):
+            broll_share=0.125, qc_retries=2, run_name="", artist_photo=None, artist_description=""):
         _reload()
+        artist_path, described = "", ""
+        if cast == "single artist":
+            if artist_photo is not None:
+                artist_path = _save_image_input(artist_photo)
+            elif (artist_description or "").strip():
+                described = artist_description.strip()
+            else:
+                raise ValueError("Single artist needs a photo of the artist (connect a Load Image to artist_photo) "
+                                 "or a description of a new one in artist_description.")
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
                               theme=world or "", fmt=format, preset=quality, seconds=seconds, start=start,
@@ -271,7 +291,8 @@ class FVDirector:
                               broll_share=broll_share,
                               cuts={"low": cuts_low, "medium": cuts_medium, "high": cuts_high},
                               audio_fx=audio_fx or "", cast_order=cast_order or "as written",
-                              crowd=crowd or "auto", models=models or "auto")
+                              crowd=crowd or "auto", models=models or "auto",
+                              artist_path=artist_path, artist_description=described)
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
@@ -518,6 +539,35 @@ class FVFinish:
         return (torch.stack(out),)
 
 
+class FVFitAspect:
+    """An image brought to another shape without cropping: the short side is extended with its own
+    edge pixels (Single Artist with Qwen-Image 2.1, whose output takes image 1's shape: a tall phone
+    photo would otherwise be centre-cropped to 16:9 and lose the head)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"image": ("IMAGE",), "width": ("INT", {"default": 1344, "min": 16, "max": 8192}),
+                             "height": ("INT", {"default": 768, "min": 16, "max": 8192})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY + "/io"
+
+    def run(self, image, width, height):
+        _, h, w, _ = image.shape
+        want = width / height
+        if abs(w / h - want) < 0.01:
+            return (image,)
+        if w / h < want:  # too tall: extend left and right
+            add = int(round(h * want)) - w
+            pad = (add // 2, add - add // 2, 0, 0)
+        else:  # too wide: extend top and bottom
+            add = int(round(w / want)) - h
+            pad = (0, 0, add // 2, add - add // 2)
+        x = torch.nn.functional.pad(image.permute(0, 3, 1, 2), pad, mode="replicate")
+        return (x.permute(0, 2, 3, 1),)
+
+
 class FVOffloadToCPU:
     """Keeps a model's weight backups (made when LoRAs are patched in) in system RAM instead of
     VRAM. With --highvram ComfyUI parks them on the GPU, which doubles a 22B LTX model's
@@ -650,6 +700,7 @@ NODE_CLASS_MAPPINGS = {
     "FVFreeMemory": FVFreeMemory,
     "FVKeep": FVKeep,
     "FVOffloadToCPU": FVOffloadToCPU,
+    "FVFitAspect": FVFitAspect,
     "FVDirector": FVDirector,
     "FVAssemble": FVAssemble,
     "FVRunResult": FVRunResult,
@@ -668,6 +719,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVFreeMemory": "OneShot MV: Free Memory",
     "FVKeep": "OneShot MV: Keep Models Loaded",
     "FVOffloadToCPU": "OneShot MV: Weight Backups to RAM",
+    "FVFitAspect": "OneShot MV: Fit to Shape",
     "FVAssemble": "OneShot MV: Assemble",
     "FVRunResult": "OneShot MV: Run Result",
     "FVFinish": "OneShot MV: Finish",
