@@ -1629,7 +1629,7 @@ async function viewPlan(run){
     ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>Shuffle the cast</button>`
       : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>`}
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    <button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>
+    ${im ? "" : `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>`}
     <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
@@ -1680,8 +1680,10 @@ function restartRender(r){
   const brief = store.get("briefs", {})[r.run] || (r.form && r.form.song ? r.form : null);
   if (!brief){ toast("This video's brief isn't recorded, so start it again from The Brief."); return; }
   const b = $("#restart"); if (!b) return;
-  b.outerHTML = `<button class="btn" id="rrreview" type="button">Generate images and review</button><button class="btn primary" id="rrmake" type="button">Make the video</button>`;
-  $("#rrreview").onclick = () => start(true, brief, true);
+  // your own images are the stills: nothing to generate, so straight to the video
+  b.outerHTML = (imagesOf(r) ? "" : `<button class="btn" id="rrreview" type="button">Generate images and review</button>`)
+    + `<button class="btn primary" id="rrmake" type="button">Make the video</button>`;
+  if ($("#rrreview")) $("#rrreview").onclick = () => start(true, brief, true);
   $("#rrmake").onclick = () => start(true, brief);
 }
 // images first, the stills made: pick any to make again, each with a note on what to change, then
