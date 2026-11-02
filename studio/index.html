@@ -1721,6 +1721,14 @@ function reviewView(r, fresh){
   const swapped = () => Object.keys(R.img).map(Number).filter(n => sw.has(n));
   const picked = () => Object.keys(R.sel).map(Number).filter(n => can.has(n) && !R.img[n]);
   const save = () => store.set(reviewKey(run), R);
+  const makeLabel = (n, m) => n && m ? `Make ${n + m} images` : m ? (m === 1 ? "Make the new image" : `Make ${m} new images`) : n ? `Make ${n} again` : "";
+  // a picked image isn't made until the bar's button is pressed: the card says so, and how it fits
+  const notYet = im => {
+    const fit = im.fit === "extend" ? "the striped sides get drawn in"
+      : im.face === false ? "it's cropped from the middle (no face found)"
+      : im.asked === "extend" ? "it's cropped around the face (it's already close to the video's shape)" : "it's cropped around the face";
+    return `Not made yet: ${fit} when you press ${makeLabel(picked().length, swapped().length)} below.`;
+  };
   const hint = s => own ? "Like “keep the wall plain, no new people”"
     : s.kind === "broll" ? "Like “at dusk, wider, warmer light”" : "Like “older, in a raincoat, harder light”";
   const spares = r.shots.some(s => s.kind === "broll") ? " Some cutaways are spares: the take check keeps the ones it needs." : "";
@@ -1741,10 +1749,10 @@ function reviewView(r, fresh){
       const acts = busy ? "" : (can.has(s.n) && !nw ? `<button type="button" class="btn sm ${on ? "" : "ghost"}" data-pick="${s.n}" aria-pressed="${on}">${on ? "Picked" : "Make again"}</button>` : "")
         + (sw.has(s.n) ? (nw ? `<button type="button" class="btn sm" data-undo="${s.n}">Undo</button>` : `<button type="button" class="btn sm ghost" data-swap="${s.n}" data-kind="${s.kind}">New image</button>`) : "");
       return `<div class="shot rvcard ${cls} ${on || nw ? "on" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}">
-        <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : nw ? '<span class="tag r">new image</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
+        <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : nw ? '<span class="tag r">new, not made yet</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
         <div class="ft"><span class="who" title="${esc(nw ? R.img[s.n].name : s.role)}">${esc(nw ? R.img[s.n].name : s.kind === "broll" ? "cutaway" : (s.role || s.size))}</span>${acts ? `<span class="acts">${acts}</span>` : ""}</div>
         ${on ? `<label class="rvnote"><span class="tiny">What to change (optional)</span><textarea rows="2" data-note="${s.n}" placeholder="${esc(hint(s))}" ${busy ? "disabled" : ""}></textarea></label>` : ""}
-        ${nw && R.img[s.n].how ? `<div class="rvnew">${esc(R.img[s.n].how)}</div>` : ""}
+        ${nw && !busy ? `<div class="rvnew">${esc(notYet(R.img[s.n]))}</div>` : ""}
       </div>`; }).join("")}</div>
   </section>
   <div class="bar">
@@ -1760,12 +1768,13 @@ function reviewView(r, fresh){
     delete R.img[n]; save(); reviewView(r, true); const f = app.querySelector(`[data-swap="${n}"]`); if (f) f.focus(); });
   app.querySelectorAll("[data-swap]").forEach(b => b.onclick = () => { const n = b.dataset.swap;
     imageChooser(run, Number(n), b.dataset.kind === "sing", b, im => { R.img[n] = im; delete R.sel[n]; save(); reviewView(r, true);
+      toast(`Press ${makeLabel(picked().length, swapped().length)} below to make it.`);
       const u = app.querySelector(`[data-undo="${n}"]`); if (u) u.focus(); }); });
   const draw = () => { const n = picked().length, m = swapped().length;
     const say = [n ? `${n} to make again` : "", m ? `${m} new image${m > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ");
     $("#rvcount").textContent = busy ? "Wait for the images being made." : say ? say + "." : "Nothing picked: the video uses these images.";
     const rm = $("#rvremake");
-    rm.textContent = n && m ? `Change ${n + m} images` : m ? `Use ${m === 1 ? "the new image" : `${m} new images`}` : n ? `Make ${n} again` : can.size ? "Make again" : "Use new images";
+    rm.textContent = makeLabel(n, m) || (can.size ? "Make again" : "Make new images");
     rm.disabled = busy || !(n + m); rm.classList.toggle("primary", !!(n + m) && !busy);
     $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !(n + m)); };
   draw();
@@ -1830,9 +1839,7 @@ function imageChooser(run, shot, sung, back, done){
         msg(`${im.name} has no face big enough to sing${f.fit === "extend" ? " with the whole image in the frame. Try Crop, or" : ":"} pick another image.`);
         return;
       }
-      const how = f.fit === "extend" ? "Extend: the striped sides are drawn in when it's made."
-        : (fit === "extend" ? "Close to the video's shape, so cropped" : "Cropped") + (f.face ? " around the face." : ": no face found, so from the middle.");
-      close(); done({name: im.name, src: im.src, fit: f.fit, url: f.preview, how});
+      close(); done({name: im.name, src: im.src, fit: f.fit, asked: fit, face: f.face, url: f.preview});
     }catch(e){ msg(e.message); }
     finally{ busy = false; if (el && el.isConnected) el.classList.remove("busy"); }
   };
