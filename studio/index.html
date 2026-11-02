@@ -174,7 +174,9 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .pickbox .row{display:flex;align-items:center;gap:10px}
 .pkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;overflow:auto;padding:2px}
 .pkim{display:flex;flex-direction:column;gap:5px;padding:6px;border-radius:10px;background:var(--panel2);border:1px solid var(--line2);color:var(--text);cursor:pointer;text-align:left;font:inherit;font-size:12px}
-.pkim img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;display:block;background:#1A1A1A}
+.pkim img{width:100%;aspect-ratio:1/1;object-fit:contain;border-radius:6px;display:block;background:#0E0E0E}
+.pkim.busy{opacity:.6;cursor:progress}
+.rvnew{padding:0 9px 9px;font-size:12px;color:var(--muted)}
 .pkim span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pkim em{font-style:normal;color:var(--warn)}
 .pkim:hover:not(:disabled),.pkim:focus-visible{border-color:var(--accent)}
@@ -1742,6 +1744,7 @@ function reviewView(r, fresh){
         <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : nw ? '<span class="tag r">new image</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
         <div class="ft"><span class="who" title="${esc(nw ? R.img[s.n].name : s.role)}">${esc(nw ? R.img[s.n].name : s.kind === "broll" ? "cutaway" : (s.role || s.size))}</span>${acts ? `<span class="acts">${acts}</span>` : ""}</div>
         ${on ? `<label class="rvnote"><span class="tiny">What to change (optional)</span><textarea rows="2" data-note="${s.n}" placeholder="${esc(hint(s))}" ${busy ? "disabled" : ""}></textarea></label>` : ""}
+        ${nw && R.img[s.n].how ? `<div class="rvnew">${esc(R.img[s.n].how)}</div>` : ""}
       </div>`; }).join("")}</div>
   </section>
   <div class="bar">
@@ -1767,7 +1770,7 @@ function reviewView(r, fresh){
     $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !(n + m)); };
   draw();
   $("#rvremake").onclick = async () => {
-    const items = picked().map(n => ({n, note: R.sel[n] || ""})).concat(swapped().map(n => ({n, image: R.img[n].name, src: R.img[n].src})));
+    const items = picked().map(n => ({n, note: R.sel[n] || ""})).concat(swapped().map(n => ({n, image: R.img[n].name, src: R.img[n].src, fit: R.img[n].fit})));
     if (!items.length) return;
     try{ overlay("Changing the images", `${items.length} image${items.length > 1 ? "s" : ""}.`);
       const j = await api("review_remake", {run, items}); overlay(); store.set(reviewKey(run), {sel: {}, img: {}});
@@ -1788,51 +1791,77 @@ function reviewView(r, fresh){
   };
 }
 // Another of the user's own images for one shot: from the World's folder, or one uploaded here
-// (into ComfyUI's input folder, oneshot-mv/added/<run>). A sung shot needs a face big enough to sing.
+// (into ComfyUI's input folder, oneshot-mv/added/<run>). Cropped around the face or extended, as the
+// run's images are unless changed here; a sung shot needs a face big enough to sing.
 function imageChooser(run, shot, sung, back, done){
   const ov = document.createElement("div");
   ov.className = "pickov";
   ov.innerHTML = `<div class="pickbox" role="dialog" aria-modal="true" aria-labelledby="pkh">
     <div class="row"><h2 class="label" id="pkh" style="flex:1">A new image for shot ${shot}</h2><button class="btn sm ghost" id="pkx" type="button">Cancel</button></div>
-    <p class="tiny" style="margin:0">${sung ? "A sung shot needs a face big enough to sing. " : ""}It's brought to the video's shape like the others.</p>
+    <div class="row" style="flex-wrap:wrap"><div class="seg mini" role="group" aria-label="How it fits the video" id="pkfit"></div><span class="tiny" id="pkfitnote" style="flex:1;min-width:220px"></span></div>
     <div class="pkgrid" id="pkg"><p class="muted">Loading your images…</p></div>
-    <div class="row"><button class="btn sm" id="pkup" type="button">Upload an image</button><input type="file" id="pkf" accept=".png,.jpg,.jpeg,.webp" hidden><span class="tiny" id="pkmsg" role="status"></span></div>
+    <div class="row"><button class="btn sm" id="pkup" type="button">Upload an image</button><input type="file" id="pkf" accept=".png,.jpg,.jpeg,.webp" hidden><span class="tiny" id="pkmsg" role="status" style="flex:1"></span></div>
   </div>`;
   document.body.appendChild(ov);
-  let list = null;
+  let list = null, fit = "crop", busy = false;
+  const msg = t => { ov.querySelector("#pkmsg").textContent = t; };
   const close = () => { ov.remove(); document.removeEventListener("keydown", key, true); if (back && back.isConnected) back.focus(); };
   const key = e => { if (e.key === "Escape"){ e.preventDefault(); close(); } };
   document.addEventListener("keydown", key, true);
   ov.onclick = e => { if (e.target === ov) close(); };
   ov.querySelector("#pkx").onclick = close;
-  const choose = im => { close(); done({name: im.name, src: im.src, url: im.url}); };
+  const drawFit = () => {
+    const box = ov.querySelector("#pkfit");
+    box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
+      `<button type="button" class="opt" data-f="${k}" aria-pressed="${fit === k}"${k === "extend" && !list.extend ? " disabled" : ""}>${n}</button>`).join("");
+    ov.querySelector("#pkfitnote").textContent = !list.extend ? "Cropped around the face: Extend is off for professional use."
+      : fit === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides. An image already close to the video's shape is cropped."
+      : "Cropped to the video's shape around the face. Nothing is drawn in.";
+    box.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { fit = b.dataset.f; drawFit(); const f = box.querySelector(`[data-f="${fit}"]`); if (f) f.focus(); });
+  };
+  // what the job will make of it: the crop around the face, or the whole image with the sides to draw
+  const choose = async (im, el) => {
+    if (busy) return;
+    busy = true; if (el) el.classList.add("busy"); msg(`Looking at ${im.name}…`);
+    try{
+      const q = `src=${encodeURIComponent(im.src)}&name=${encodeURIComponent(im.name)}&fit=${fit}`;
+      const f = await api(`review_fit/${encodeURIComponent(run)}?${q}`);
+      if (sung && !f.sings){
+        msg(`${im.name} has no face big enough to sing${f.fit === "extend" ? " with the whole image in the frame. Try Crop, or" : ":"} pick another image.`);
+        return;
+      }
+      const how = f.fit === "extend" ? "Extend: the striped sides are drawn in when it's made."
+        : (fit === "extend" ? "Close to the video's shape, so cropped" : "Cropped") + (f.face ? " around the face." : ": no face found, so from the middle.");
+      close(); done({name: im.name, src: im.src, fit: f.fit, url: f.preview, how});
+    }catch(e){ msg(e.message); }
+    finally{ busy = false; if (el && el.isConnected) el.classList.remove("busy"); }
+  };
   const draw = () => {
     const g = ov.querySelector("#pkg");
-    g.innerHTML = list.images.length ? list.images.map((im, i) => `<button type="button" class="pkim" data-i="${i}" ${sung && !im.sings ? "disabled" : ""}>
-      <img src="${esc(im.url)}" alt="" loading="lazy"><span title="${esc(im.name)}">${esc(im.name)}</span>${sung && !im.sings ? "<em>no face to sing</em>" : im.src === "added" ? "<em style=\"color:var(--muted)\">uploaded</em>" : ""}</button>`).join("")
+    g.innerHTML = list.images.length ? list.images.map((im, i) => `<button type="button" class="pkim" data-i="${i}">
+      <img src="${esc(im.url)}" alt="" loading="lazy"><span title="${esc(im.name)}">${esc(im.name)}</span>${sung && !im.sings ? `<em>face may be too small to sing</em>` : im.src === "added" ? "<em style=\"color:var(--muted)\">uploaded</em>" : ""}</button>`).join("")
       : `<p class="muted">No images found.</p>`;
-    g.querySelectorAll(".pkim").forEach(b => b.onclick = () => choose(list.images[+b.dataset.i]));
-    const first = g.querySelector(".pkim:not(:disabled)"); if (first) first.focus();
+    g.querySelectorAll(".pkim").forEach(b => b.onclick = () => choose(list.images[+b.dataset.i], b));
+    const first = g.querySelector(".pkim"); if (first) first.focus();
   };
-  const load = async () => { list = await api("review_images/" + encodeURIComponent(run)); draw(); };
+  const load = async () => { list = await api("review_images/" + encodeURIComponent(run)); fit = list.fit || "crop"; drawFit(); draw(); };
   load().catch(e => { ov.querySelector("#pkg").innerHTML = `<p class="banner">${esc(e.message)}</p>`; });
   const fi = ov.querySelector("#pkf");
   ov.querySelector("#pkup").onclick = () => fi.click();
   fi.onchange = async () => {
     const f = fi.files[0]; fi.value = "";
     if (!f || !list) return;
-    if (!WORLD_EXT.test(f.name)){ ov.querySelector("#pkmsg").textContent = "Pick a JPG, PNG or WebP image."; return; }
-    ov.querySelector("#pkmsg").textContent = "Uploading…";
+    if (!WORLD_EXT.test(f.name)){ msg("Pick a JPG, PNG or WebP image."); return; }
+    msg("Uploading…");
     try{
       const fd = new FormData(); fd.append("image", f, f.name); fd.append("subfolder", list.added); fd.append("type", "input");
       const up = await fetch("/api/upload/image", {method:"POST", body:fd});
       if (!up.ok) throw new Error("HTTP " + up.status);
       const got = await up.json();
-      await load();
+      const keep = fit; await load(); fit = keep; drawFit();
       const im = list.images.find(x => x.src === "added" && x.name === got.name);
-      if (im && (!sung || im.sings)) choose(im);
-      else ov.querySelector("#pkmsg").textContent = im ? `${im.name} has no face big enough to sing, so it can only go in a cutaway.` : "";
-    }catch(e){ ov.querySelector("#pkmsg").textContent = "Upload failed: " + e.message; }
+      if (im) await choose(im, null); else msg("");
+    }catch(e){ msg("Upload failed: " + e.message); }
   };
 }
 function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : ""); }
