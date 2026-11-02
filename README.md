@@ -52,8 +52,8 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    sings (Crowd or Single Artist) and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
    where), before anything long renders. Change the World and plan again, then **Make the video**,
-   or **Generate images and review** to see every still before any clip is made (not for a World
-   from your own images: they are the stills).
+   or **Generate images and review** to see every still before any clip is made. A World from your
+   own images has it only with Extend, to check the drawn-in edges; cropped, they are the stills.
 3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
    storyboard that fills in as stills and clips arrive, notes from the checks, and the time left.
    You can close the tab and come back. With Generate images and review, it stops once the stills
