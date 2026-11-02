@@ -669,11 +669,25 @@ def _cancel_job(pid: str) -> dict:
 
 
 # ------------------------------------------------------------------ images first: review, re-make, release
-def _held_job(d: str, held: list, rid: int) -> str | None:
+def _held_clips(d: str, held: list) -> dict:
+    """{"r005A": the held job file that renders it}: by the file name (005_r005A.json), else by the
+    clip's save prefix (a cutaway's job is named by its place in the b-roll, 031_brollr02.json)."""
+    out = {}
     for f in held:
-        if f.endswith(f"_r{rid:03d}A.json") and os.path.exists(os.path.join(d, "jobs", f)):
-            return os.path.join(d, "jobs", f)
-    return None
+        path = os.path.join(d, "jobs", f)
+        if not os.path.exists(path):
+            continue
+        m = re.search(r"_(r\d{3}[AR])\.json$", f)
+        if m:
+            out.setdefault(m.group(1), path)
+            continue
+        g = _load(path, {}) or {}
+        for n in g.values() if isinstance(g, dict) else []:
+            if isinstance(n, dict) and n.get("class_type") == "SaveVideo":
+                m = re.search(r"/(r\d{3}[AR])$", str((n.get("inputs") or {}).get("filename_prefix", "")))
+                if m:
+                    out.setdefault(m.group(1), path)
+    return out
 
 
 def _job_image(g: dict) -> str:
@@ -685,19 +699,123 @@ def _makes_image(g: dict) -> bool:
     return any("Sampler" in str(n.get("class_type", "")) for n in g.values())
 
 
-def _remakable(d: str, p: dict) -> dict:
-    """{shot number: the still its held clip job reads} for every sung shot whose still can be made again."""
-    rv = p.get("review") or {}
-    out = {}
+def _shot_images(d: str, p: dict) -> dict:
+    """{shot number: {render, image, clip, makes}} for every shot the review board shows: its render
+    (a cutaway over the sung take, as the board shows it), the image its held clip job reads, that
+    job's file, and whether the image was drawn (so it can be made again) or only cropped."""
+    shown = {}
     for r in p.get("renders", []):
-        if r.get("role") != "A" or r.get("unused"):
+        if r.get("unused") or r.get("role") not in ("A", "R"):
             continue
-        jf = _held_job(d, rv.get("held") or [], r["id"])
+        cur = shown.get(r.get("shot"))
+        if cur is None or (r["role"] == "R" and cur["role"] != "R"):
+            shown[r.get("shot")] = r
+    from . import director
+    clips = _held_clips(d, (p.get("review") or {}).get("held") or [])
+    saved = None  # {save prefix's last part: job file}, read once if a still's job isn't named after it
+
+    def still_job(stem):
+        nonlocal saved
+        jf = director._job_file(d, stem)
+        if jf or saved is not None:
+            return jf or saved.get(stem)
+        saved = {}
+        jd = os.path.join(d, "jobs")
+        for f in sorted(os.listdir(jd)) if os.path.isdir(jd) else []:
+            g = _load(os.path.join(jd, f), {}) or {}
+            for n in g.values() if isinstance(g, dict) else []:
+                if isinstance(n, dict) and n.get("class_type") == "SaveImage":
+                    saved.setdefault(str((n.get("inputs") or {}).get("filename_prefix", "")).rsplit("/", 1)[-1],
+                                     os.path.join(jd, f))
+        return saved.get(stem)
+    out = {}
+    for sh, r in shown.items():
+        jf = clips.get(f"r{r['id']:03d}{r['role']}")
         cur = _job_image(_load(jf, {}) or {}) if jf else ""
-        sj = _find_job(d, _stem(cur)) if cur else None
-        if sj and _makes_image(_load(sj, {}) or {}):
-            out[int(r["shot"]) + 1] = cur
+        if not cur:
+            continue
+        sj = still_job(_stem(cur))
+        out[int(sh) + 1] = {"render": r, "image": cur, "clip": jf,
+                            "makes": bool(sj and _makes_image(_load(sj, {}) or {}))}
     return out
+
+
+def _remakable(d: str, p: dict) -> dict:
+    """{shot number: the still its held clip job reads} for every shot whose still can be made again,
+    sung or cutaway."""
+    return {n: v["image"] for n, v in _shot_images(d, p).items() if v["makes"]}
+
+
+ADDED = "oneshot-mv/added"  # under ComfyUI's input folder: images added during a review, one folder per run
+
+
+def _pick_folders(p: dict, run: str) -> dict:
+    """Where a review's new images can come from: the World's own folder, and the images added for this run."""
+    wi = _fv("world_images")
+    return {"world": wi.resolve((p.get("world_images") or {}).get("folder", "")),
+            "added": os.path.join(folder_paths.get_input_directory(), *ADDED.split("/"), run)}
+
+
+def _pick_path(p: dict, run: str, name: str, src: str) -> str:
+    """A new image by its file name, only from the World's folder or this run's added images."""
+    wi = _fv("world_images")
+    folder = _pick_folders(p, run).get(src)
+    name = str(name or "")
+    if not folder or not name or name != os.path.basename(name) or not name.lower().endswith(wi.EXTS):
+        raise ValueError(f"no image '{name}' to use")
+    path = os.path.join(folder, name)
+    if not os.path.isfile(path):
+        raise ValueError(f"{name} isn't in that folder any more")
+    return path
+
+
+def _review_images(name: str) -> dict:
+    """The images a review can swap in: the World's folder, then the ones added for this run, each
+    with whether it can sing (a face big enough) and a thumbnail."""
+    from . import formats
+    wi = _fv("world_images")
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    w = p.get("world_images")
+    if not w:
+        raise ValueError("this video's World isn't made from your images")
+    run = os.path.basename(d)
+    known = {it.get("name"): it for it in w.get("images") or []}
+    out = []
+    for src, folder in _pick_folders(p, run).items():
+        try:
+            paths = wi.list_images(folder) if os.path.isdir(folder) else []
+        except ValueError:
+            paths = []
+        new = [x for x in paths if src == "added" or os.path.basename(x) not in known]
+        seen = {it["path"]: it for it in (wi.inspect(new, *formats.portrait_size(p.get("format") or "16:9")[1],
+                                                     log=lambda *a: None, fit=w.get("fit") or "crop") if new else [])}
+        for x in paths:
+            it = seen.get(x) or known.get(os.path.basename(x)) or {}
+            q = urllib.parse.urlencode({"src": src, "name": os.path.basename(x), "v": int(os.path.getmtime(x))})
+            out.append({"name": os.path.basename(x), "src": src, "sings": bool(it.get("sings", True)),
+                        "url": f"/oneshot-mv/api/review_thumb/{urllib.parse.quote(run)}?{q}"})
+    return {"images": out, "added": f"{ADDED}/{run}"}
+
+
+def _review_thumb(name: str, src: str, image: str) -> bytes:
+    from PIL import Image, ImageOps
+    import io
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    im = ImageOps.exif_transpose(Image.open(_pick_path(p, os.path.basename(d), image, src))).convert("RGB")
+    im.thumbnail((360, 360))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=82)
+    return buf.getvalue()
+
+
+def _review_lists(d: str, p: dict) -> dict:
+    """For the review board: the shots whose image can be made again, and (a World from the user's
+    images) the shots that can take another image."""
+    shown = _shot_images(d, p)
+    return {"remake": sorted(n for n, v in shown.items() if v["makes"]),
+            "swap": sorted(shown) if p.get("world_images") else []}
 
 
 def _review_state(d: str, p: dict, queued: int) -> str:
@@ -711,9 +829,11 @@ def _review_state(d: str, p: dict, queued: int) -> str:
 
 def _remake(name: str, items: list) -> dict:
     """Images first: make the picked stills again (a new seed, the user's note in the prompt), and point
-    the held clip jobs at the new pictures. Queued at the back in order (one still model load)."""
+    the held clip jobs at the new pictures. Queued at the back in order (one still model load).
+    With a World from the user's images an item can instead bring in another image of theirs
+    ({"n", "image", "src"}): cropped or extended like the rest, for that shot only."""
     import time
-    from . import director, graphs
+    from . import director, formats, graphs
     d = _run_dir(name)
     pj = os.path.join(d, "plan.json")
     p = _load(pj, {}) or {}
@@ -726,12 +846,39 @@ def _remake(name: str, items: list) -> dict:
         raise ValueError("wait until the images being made are done")
     if not items:
         raise ValueError("pick at least one image")
-    can = _remakable(d, p)
+    shown = _shot_images(d, p)
+    can = {n: v["image"] for n, v in shown.items() if v["makes"]}
     rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
     k = len(rv.get("rounds") or []) + 1
-    stills, swaps, done = [], {}, []
+    stills, swaps, done, picks, seen = [], {}, [], [], set()
+    w = p.get("world_images") or {}
     for i, it in enumerate(items):
         n = int(it.get("n", 0))
+        if n in seen:
+            continue
+        seen.add(n)
+        if it.get("image"):  # another of the user's own images, for this shot
+            if not w:
+                raise ValueError("only a World made from your images can take another image")
+            v = shown.get(n)
+            if not v:
+                raise ValueError(f"shot {n} has no image to change")
+            src = _pick_path(p, os.path.basename(d), str(it["image"]), str(it.get("src") or "world"))
+            W, H = formats.portrait_size(p.get("format") or "16:9")[1]
+            info = (_fv("world_images").inspect([src], W, H, log=lambda *a: None, fit=w.get("fit") or "crop") or [None])[0]
+            if not info:
+                raise ValueError(f"{os.path.basename(src)} couldn't be read")
+            if v["render"]["role"] == "A" and not info["sings"]:
+                raise ValueError(f"shot {n} is sung, and {info['name']} has no face big enough to sing: "
+                                 "pick it for a cutaway, or another image")
+            stag = f"pick{k}s{n:03d}"
+            g = graphs.world_image(path=src, prefix=f"{rel}/{stag}", size=(W, H), crop=info["crop"],
+                                   extend=info["fit"] == "extend", seed=701 + 17 * k + i).nodes
+            new = os.path.join(d, f"{stag}_00001_.png")
+            picks.append((stag, g, v, new, info))
+            done.append({"shot": n, "image": info["name"], "src": str(it.get("src") or "world"),
+                         "before": v["image"], "still": new})
+            continue
         note = str(it.get("note") or "")[:400]
         cur = can.get(n)
         if not cur:
@@ -746,12 +893,25 @@ def _remake(name: str, items: list) -> dict:
         swaps[cur] = new
         stills.append((stag, gs))
         done.append({"shot": n, "note": note, "before": cur, "still": new})
-    chain = [graphs.free_memory("before re-made stills").nodes] + [g for _, g in stills] + \
-        [graphs.free_memory("after re-made stills").nodes]
+    # the cropped ones first (no model), then the drawn ones (one model load)
+    made = [g for _, g, _, _, x in picks if x["fit"] != "extend"] + [g for _, g, _, _, x in picks if x["fit"] == "extend"] + \
+        [g for _, g in stills]
+    chain = [graphs.free_memory("before re-made stills").nodes] + made + [graphs.free_memory("after re-made stills").nodes]
     director.check_jobs(chain, p.get("models") or "")
-    for stag, gs in stills:
+    for stag, gs in stills + [(x[0], x[1]) for x in picks]:
         json.dump(gs, open(os.path.join(d, "jobs", f"review{k}_{stag}.json"), "w", encoding="utf-8"), indent=1)
-    # the held clips, and the looks waiting on the singer takes, read the new pictures
+    # a new image goes into its own shot's clip only (another shot can show the same image)
+    for stag, g, v, new, info in picks:
+        txt = open(v["clip"], encoding="utf-8").read()
+        open(v["clip"], "w", encoding="utf-8").write(txt.replace(json.dumps(v["image"])[1:-1], json.dumps(new)[1:-1]))
+        r = v["render"]
+        r["portrait" if r["role"] == "A" else "key"] = new
+        if r["role"] == "A":  # the take check judges the framing the new image has
+            r["size"] = info["size"]
+            for s in p.get("shots", []):
+                if s.get("index") == r.get("shot"):
+                    s["size"] = info["size"]
+    # the held clips, and the looks waiting on the singer takes, read the re-made pictures
     for fn in list(rv.get("held") or []) + list(p.get("deferred_jobs") or []):
         path = os.path.join(d, "jobs", fn)
         if not os.path.exists(path):
@@ -772,7 +932,7 @@ def _remake(name: str, items: list) -> dict:
     rv["state"] = "stills"
     json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
     ids = [director.queue_prompt(g) for g in chain]
-    return {"round": k, "stills": len(stills), "jobs": len(ids)}
+    return {"round": k, "stills": len(stills), "picked": len(picks), "jobs": len(ids)}
 
 
 def _release(name: str) -> dict:
@@ -1001,8 +1161,7 @@ def _run(name: str) -> dict:
         "review": ({"state": review, "rounds": len((p.get("review") or {}).get("rounds") or []),
                     "redo": [it.get("shot") for it in (((p.get("review") or {}).get("rounds") or [{}])[-1].get("items") or [])]
                     if review == "making" else [],
-                    "remake": sorted(n for n in _remakable(d, p) if any(x["n"] == n and x["kind"] == "sing"
-                                                                        for x in shots)) if review == "ready" else []}
+                    **(_review_lists(d, p) if review == "ready" else {"remake": [], "swap": []})}
                    if review else {}),
         "errors": [] if done else errors[:3], "failed_jobs": 0 if done else len(errors),
         "brief": {"format": p.get("format"), "preset": p.get("preset"), "seconds": round(float(p.get("duration") or 0), 1),
@@ -1607,6 +1766,17 @@ async def _api(request: web.Request, route: str) -> web.Response:
         return web.json_response(await _blocking(models))
     if route == "runs":
         return web.json_response(await _blocking(_runs))
+    if route.startswith("review_images/"):  # the images a review can swap in
+        try:
+            return web.json_response(await _blocking(_review_images, route[len("review_images/"):]))
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+    if route.startswith("review_thumb/"):
+        try:
+            body = await _blocking(_review_thumb, route[len("review_thumb/"):], q.get("src", "world"), q.get("name", ""))
+        except (ValueError, OSError) as e:
+            return web.json_response({"error": str(e)}, status=404)
+        return web.Response(body=body, content_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
     if route == "images":  # a World images folder: the count and the first few images
         return web.json_response(await _blocking(_images, q.get("folder", "")))
     if route.startswith("xml/"):

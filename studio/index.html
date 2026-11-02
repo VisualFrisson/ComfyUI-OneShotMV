@@ -164,8 +164,21 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .rvcard{display:flex;flex-direction:column}
 .rvcard.on{box-shadow:0 0 0 2px var(--accent)}
 .rvcard .ft .btn{min-height:30px;padding:0 10px;font-size:12px}
+.rvcard .ft{flex-wrap:wrap}.rvcard .ft .acts{display:flex;gap:6px;margin-left:auto}
 .rvnote{display:flex;flex-direction:column;gap:4px;padding:0 9px 9px}
-.rvnote textarea{width:100%;box-sizing:border-box;min-height:52px;resize:vertical;font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;background:var(--panel);color:var(--text);border:1px solid var(--line2)}
+.rvnote .tiny{color:var(--muted)}
+.rvnote textarea{width:100%;box-sizing:border-box;min-height:52px;resize:vertical;font:inherit;font-size:14px;line-height:1.4;padding:7px 9px;border-radius:8px;background:var(--bg);color:#fff;-webkit-text-fill-color:#fff;border:1px solid var(--line3)}
+.rvnote textarea::placeholder{color:var(--muted);-webkit-text-fill-color:var(--muted);opacity:1}
+.pickov{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+.pickbox{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:min(920px,100%);max-height:88vh;display:flex;flex-direction:column;gap:12px;padding:18px 20px}
+.pickbox .row{display:flex;align-items:center;gap:10px}
+.pkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;overflow:auto;padding:2px}
+.pkim{display:flex;flex-direction:column;gap:5px;padding:6px;border-radius:10px;background:var(--panel2);border:1px solid var(--line2);color:var(--text);cursor:pointer;text-align:left;font:inherit;font-size:12px}
+.pkim img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;display:block;background:#1A1A1A}
+.pkim span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkim em{font-style:normal;color:var(--warn)}
+.pkim:hover:not(:disabled),.pkim:focus-visible{border-color:var(--accent)}
+.pkim:disabled{opacity:.45;cursor:not-allowed}
 .shot.still img{opacity:.75;filter:grayscale(.4)}
 .notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
 .notes li{display:flex;gap:10px}.notes li i{font-style:normal;font-weight:800}
@@ -1690,36 +1703,45 @@ function restartRender(r){
   $("#rrmake").onclick = () => start(true, brief);
 }
 // images first, the stills made: pick any to make again, each with a note on what to change, then
-// Make the video. The picks and notes are kept in this browser until they're sent.
+// Make the video. The picks, notes and new images are kept in this browser until they're sent.
 const reviewKey = run => "review." + run;
 function reviewView(r, fresh){
   const run = r.run, rv = r.review || {}, busy = r.stage !== "review";
-  const R = Object.assign({sel: {}}, store.get(reviewKey(run), {}));
-  const can = new Set(rv.remake || []), redo = new Set(busy ? rv.redo || [] : []);
+  const R = Object.assign({sel: {}, img: {}}, store.get(reviewKey(run), {}));
+  R.img = R.img || {};
+  const can = new Set(rv.remake || []), sw = new Set(rv.swap || []), redo = new Set(busy ? rv.redo || [] : []);
   const sig = JSON.stringify([r.stage, rv.rounds, r.shots.map(s => s.still), r.pct]);
   const app = $("#app");
   if (!fresh && app.dataset.sig === sig) return;  // nothing new: leave notes being typed alone
   if (!fresh && document.activeElement && document.activeElement.closest && document.activeElement.closest("#rvboard") && !busy && app.dataset.busy === "0") return;
   app.dataset.sig = sig; app.dataset.busy = busy ? "1" : "0";
-  const cls = shotClass(r.brief.format), picked = () => Object.keys(R.sel).map(Number).filter(n => can.has(n));
+  const cls = shotClass(r.brief.format), own = !!imagesOf(r) || sw.size > 0;
+  const swapped = () => Object.keys(R.img).map(Number).filter(n => sw.has(n));
+  const picked = () => Object.keys(R.sel).map(Number).filter(n => can.has(n) && !R.img[n]);
   const save = () => store.set(reviewKey(run), R);
+  const hint = s => own ? "Like “keep the wall plain, no new people”"
+    : s.kind === "broll" ? "Like “at dusk, wider, warmer light”" : "Like “older, in a raincoat, harder light”";
+  const spares = r.shots.some(s => s.kind === "broll") ? " Some cutaways are spares: the take check keeps the ones it needs." : "";
+  const how = can.size && sw.size ? "Make any again with a note or swap in another of your images"
+    : sw.size ? "Swap any for another of your images" : "Click any you want made again and say what to change";
   app.innerHTML = `
   <div class="head"><div><h1>Review the images</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600">${mins(r.elapsed_min)} in</div><div class="muted" style="font-size:14px">${busy ? "making images again" : "waiting for you"}</div></div></div>
   ${busy ? `<div class="banner info" role="status"><b>Making ${rv.rounds ? "the picked images again" : "the images"}…</b> The board updates as each one lands. <div class="acts"><button class="btn danger sm" id="rvstop" type="button">Stop</button></div></div>`
-    : !can.size && imagesOf(r) ? `<div class="banner info" role="status">Your images, cropped to the video's shape. They're your own pictures, so none can be made again here: to change one, change it in the folder and plan again. Make the video when they look right.</div>`
-    : `<div class="banner info" role="status">Every still is made${rv.rounds ? `, with ${rv.rounds} round${rv.rounds > 1 ? "s" : ""} of re-makes` : ""}. Click any you want made again and say what to change, or make the video as it is.</div>`}
+    : `<div class="banner info" role="status">${own && !can.size ? "Your images, brought to the video's shape" : "Every image is made"}${rv.rounds ? `, with ${rv.rounds} round${rv.rounds > 1 ? "s" : ""} of changes` : ""}. ${how}, or make the video as it is.${spares}</div>`}
   <section class="card" style="padding:20px 22px" aria-labelledby="rvh">
-    <div class="row" style="margin-bottom:14px"><h2 class="label" id="rvh">Images</h2>${can.size ? `<span class="tiny">${can.size} of ${r.shots.filter(s => s.kind === "sing").length} sung shots can be made again${r.shots.some(s => s.kind === "broll") ? "; cutaways are picked after the take check" : ""}</span>` : ""}</div>
+    <div class="row" style="margin-bottom:14px"><h2 class="label" id="rvh">Images</h2>${can.size ? `<span class="tiny">${can.size} of ${r.shots.length} can be made again</span>` : ""}</div>
     <div class="board rvboard" id="rvboard">${r.shots.map(s => {
-      const on = R.sel[s.n] != null && can.has(s.n), ok = can.has(s.n) && !busy, again = redo.has(s.n);
-      const img = s.still && !again ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">`
-        : `<div class="ph">${s.kind === "broll" ? "Cutaway, chosen after the take check" : again || busy ? "Making…" : "No still"}</div>`;
-      return `<div class="shot rvcard ${cls} ${on ? "on" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}">
-        <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
-        <div class="ft"><span class="who" title="${esc(s.role)}">${esc(s.role || s.size)}</span>
-          ${ok ? `<button type="button" class="btn sm ${on ? "" : "ghost"}" data-pick="${s.n}" aria-pressed="${on}">${on ? "Picked" : "Make again"}</button>` : `<span class="tiny">${s.kind === "broll" ? "cutaway" : busy || can.has(s.n) ? "" : "your image"}</span>`}</div>
-        ${on ? `<label class="rvnote"><span class="tiny">What to change (optional)</span><textarea rows="2" data-note="${s.n}" placeholder="Like “older, in a raincoat, harder light”" ${busy ? "disabled" : ""}></textarea></label>` : ""}
+      const nw = sw.has(s.n) && R.img[s.n], on = !nw && R.sel[s.n] != null && can.has(s.n), again = redo.has(s.n);
+      const src = nw ? R.img[s.n].url : s.still;
+      const img = src && !again ? `<img src="${esc(src)}" alt="${esc(nw ? R.img[s.n].name : s.role)}" loading="lazy">`
+        : `<div class="ph">${again || busy ? "Making…" : s.kind === "broll" ? "Cutaway" : "No still"}</div>`;
+      const acts = busy ? "" : (can.has(s.n) && !nw ? `<button type="button" class="btn sm ${on ? "" : "ghost"}" data-pick="${s.n}" aria-pressed="${on}">${on ? "Picked" : "Make again"}</button>` : "")
+        + (sw.has(s.n) ? (nw ? `<button type="button" class="btn sm" data-undo="${s.n}">Undo</button>` : `<button type="button" class="btn sm ghost" data-swap="${s.n}" data-kind="${s.kind}">New image</button>`) : "");
+      return `<div class="shot rvcard ${cls} ${on || nw ? "on" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}">
+        <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : nw ? '<span class="tag r">new image</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
+        <div class="ft"><span class="who" title="${esc(nw ? R.img[s.n].name : s.role)}">${esc(nw ? R.img[s.n].name : s.kind === "broll" ? "cutaway" : (s.role || s.size))}</span>${acts ? `<span class="acts">${acts}</span>` : ""}</div>
+        ${on ? `<label class="rvnote"><span class="tiny">What to change (optional)</span><textarea rows="2" data-note="${s.n}" placeholder="${esc(hint(s))}" ${busy ? "disabled" : ""}></textarea></label>` : ""}
       </div>`; }).join("")}</div>
   </section>
   <div class="bar">
@@ -1731,29 +1753,86 @@ function reviewView(r, fresh){
   app.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const n = b.dataset.pick;
     if (R.sel[n] != null) delete R.sel[n]; else R.sel[n] = ""; save(); reviewView(r, true);
     const t = app.querySelector(`textarea[data-note="${n}"]`); if (t) t.focus(); });
-  const draw = () => { const n = picked().length;
-    $("#rvcount").textContent = busy ? "Wait for the images being made." : n ? `${n} picked to make again.` : "Nothing picked: the video uses these images.";
-    const rm = $("#rvremake"); rm.textContent = n ? `Make ${n} again` : "Make again"; rm.disabled = busy || !n; rm.classList.toggle("primary", !!n && !busy);
-    $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !n); };
+  app.querySelectorAll("[data-undo]").forEach(b => b.onclick = () => { const n = b.dataset.undo;
+    delete R.img[n]; save(); reviewView(r, true); const f = app.querySelector(`[data-swap="${n}"]`); if (f) f.focus(); });
+  app.querySelectorAll("[data-swap]").forEach(b => b.onclick = () => { const n = b.dataset.swap;
+    imageChooser(run, Number(n), b.dataset.kind === "sing", b, im => { R.img[n] = im; delete R.sel[n]; save(); reviewView(r, true);
+      const u = app.querySelector(`[data-undo="${n}"]`); if (u) u.focus(); }); });
+  const draw = () => { const n = picked().length, m = swapped().length;
+    const say = [n ? `${n} to make again` : "", m ? `${m} new image${m > 1 ? "s" : ""}` : ""].filter(Boolean).join(", ");
+    $("#rvcount").textContent = busy ? "Wait for the images being made." : say ? say + "." : "Nothing picked: the video uses these images.";
+    const rm = $("#rvremake");
+    rm.textContent = n && m ? `Change ${n + m} images` : m ? `Use ${m === 1 ? "the new image" : `${m} new images`}` : n ? `Make ${n} again` : can.size ? "Make again" : "Use new images";
+    rm.disabled = busy || !(n + m); rm.classList.toggle("primary", !!(n + m) && !busy);
+    $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !(n + m)); };
   draw();
   $("#rvremake").onclick = async () => {
-    const items = picked().map(n => ({n, note: R.sel[n] || ""}));
+    const items = picked().map(n => ({n, note: R.sel[n] || ""})).concat(swapped().map(n => ({n, image: R.img[n].name, src: R.img[n].src})));
     if (!items.length) return;
-    try{ overlay("Making the images again", `${items.length} image${items.length > 1 ? "s" : ""}, each with its note.`);
-      const j = await api("review_remake", {run, items}); overlay(); store.set(reviewKey(run), {sel: {}});
-      toast(`Making ${j.stills} image${j.stills === 1 ? "" : "s"} again.`); viewRender(run); }
+    try{ overlay("Changing the images", `${items.length} image${items.length > 1 ? "s" : ""}.`);
+      const j = await api("review_remake", {run, items}); overlay(); store.set(reviewKey(run), {sel: {}, img: {}});
+      const k = (j.stills || 0) + (j.picked || 0);
+      toast(`Making ${k} image${k === 1 ? "" : "s"}.`); viewRender(run); }
     catch(e){ overlay(); toast("It didn't start: " + e.message, 9000); }
   };
   $("#rvgo").onclick = async () => {
-    const n = picked().length;
-    if (n && !confirm(`Make the video now? The ${n} picked image${n > 1 ? "s aren't" : " isn't"} made again.`)) return;
+    const n = picked().length + swapped().length;
+    if (n && !confirm(`Make the video now? The ${n} picked image${n > 1 ? "s aren't" : " isn't"} changed.`)) return;
     try{ overlay("Starting the video", "Queueing every clip with these images."); await api("review_go", {run}); overlay();
-      store.set(reviewKey(run), {sel: {}}); toast("The video is being made."); viewRender(run); }
+      store.set(reviewKey(run), {sel: {}, img: {}}); toast("The video is being made."); viewRender(run); }
     catch(e){ overlay(); toast("It didn't start: " + e.message, 9000); }
   };
   if ($("#rvstop")) $("#rvstop").onclick = async () => {
     if (!confirm("Stop making these images? The ones already made are kept.")) return;
     try{ const j = await api("cancel", {run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
+  };
+}
+// Another of the user's own images for one shot: from the World's folder, or one uploaded here
+// (into ComfyUI's input folder, oneshot-mv/added/<run>). A sung shot needs a face big enough to sing.
+function imageChooser(run, shot, sung, back, done){
+  const ov = document.createElement("div");
+  ov.className = "pickov";
+  ov.innerHTML = `<div class="pickbox" role="dialog" aria-modal="true" aria-labelledby="pkh">
+    <div class="row"><h2 class="label" id="pkh" style="flex:1">A new image for shot ${shot}</h2><button class="btn sm ghost" id="pkx" type="button">Cancel</button></div>
+    <p class="tiny" style="margin:0">${sung ? "A sung shot needs a face big enough to sing. " : ""}It's brought to the video's shape like the others.</p>
+    <div class="pkgrid" id="pkg"><p class="muted">Loading your images…</p></div>
+    <div class="row"><button class="btn sm" id="pkup" type="button">Upload an image</button><input type="file" id="pkf" accept=".png,.jpg,.jpeg,.webp" hidden><span class="tiny" id="pkmsg" role="status"></span></div>
+  </div>`;
+  document.body.appendChild(ov);
+  let list = null;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key, true); if (back && back.isConnected) back.focus(); };
+  const key = e => { if (e.key === "Escape"){ e.preventDefault(); close(); } };
+  document.addEventListener("keydown", key, true);
+  ov.onclick = e => { if (e.target === ov) close(); };
+  ov.querySelector("#pkx").onclick = close;
+  const choose = im => { close(); done({name: im.name, src: im.src, url: im.url}); };
+  const draw = () => {
+    const g = ov.querySelector("#pkg");
+    g.innerHTML = list.images.length ? list.images.map((im, i) => `<button type="button" class="pkim" data-i="${i}" ${sung && !im.sings ? "disabled" : ""}>
+      <img src="${esc(im.url)}" alt="" loading="lazy"><span title="${esc(im.name)}">${esc(im.name)}</span>${sung && !im.sings ? "<em>no face to sing</em>" : im.src === "added" ? "<em style=\"color:var(--muted)\">uploaded</em>" : ""}</button>`).join("")
+      : `<p class="muted">No images found.</p>`;
+    g.querySelectorAll(".pkim").forEach(b => b.onclick = () => choose(list.images[+b.dataset.i]));
+    const first = g.querySelector(".pkim:not(:disabled)"); if (first) first.focus();
+  };
+  const load = async () => { list = await api("review_images/" + encodeURIComponent(run)); draw(); };
+  load().catch(e => { ov.querySelector("#pkg").innerHTML = `<p class="banner">${esc(e.message)}</p>`; });
+  const fi = ov.querySelector("#pkf");
+  ov.querySelector("#pkup").onclick = () => fi.click();
+  fi.onchange = async () => {
+    const f = fi.files[0]; fi.value = "";
+    if (!f || !list) return;
+    if (!WORLD_EXT.test(f.name)){ ov.querySelector("#pkmsg").textContent = "Pick a JPG, PNG or WebP image."; return; }
+    ov.querySelector("#pkmsg").textContent = "Uploading…";
+    try{
+      const fd = new FormData(); fd.append("image", f, f.name); fd.append("subfolder", list.added); fd.append("type", "input");
+      const up = await fetch("/api/upload/image", {method:"POST", body:fd});
+      if (!up.ok) throw new Error("HTTP " + up.status);
+      const got = await up.json();
+      await load();
+      const im = list.images.find(x => x.src === "added" && x.name === got.name);
+      if (im && (!sung || im.sings)) choose(im);
+      else ov.querySelector("#pkmsg").textContent = im ? `${im.name} has no face big enough to sing, so it can only go in a cutaway.` : "";
+    }catch(e){ ov.querySelector("#pkmsg").textContent = "Upload failed: " + e.message; }
   };
 }
 function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : ""); }
