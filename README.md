@@ -60,8 +60,9 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    are made: pick any to make again, cutaways too, each with a note on what to change ("older, in
    a raincoat, harder light"), as many rounds as you like, then press Make the video. With your own
    images, **New image** swaps a shot's picture for another from your folder or one you upload
-   (it goes to `input/oneshot-mv/added/<video>`); a sung shot takes only an image with a face big
-   enough to sing.
+   (it goes to `input/oneshot-mv/added/<video>`), cropped around the face or extended (the video's
+   choice unless you change it there), with a preview of the frame it makes; a sung shot takes only
+   an image with a face big enough to sing.
 4. **Result.** The video, Download MP4, and Export XML for Premiere Pro or DaVinci Resolve (every
    clip with its in and out points). From here you can:
    - Re-shoot any shot. Click it and choose a new take of the same person or a new person, with

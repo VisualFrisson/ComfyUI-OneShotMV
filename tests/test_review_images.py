@@ -238,6 +238,45 @@ def test_an_added_image_for_a_cutaway(studio, monkeypatch):
     assert r["key"].endswith(f"pick1s{cut:03d}_00001_.png")
 
 
+def test_a_new_image_crops_around_the_face_or_extends(studio, monkeypatch):
+    st, q, posted = studio
+    import io
+    import folder_paths
+    from PIL import Image
+    folder, res = _own_images(monkeypatch, fit="extend")
+    d, name = res["run_dir"], os.path.basename(res["run_dir"])
+    run = st._run(name)
+    sung = next(s["n"] for s in run["shots"] if s["kind"] == "sing")
+    _faces(monkeypatch)
+    added = os.path.join(folder_paths.get_input_directory(), "oneshot-mv", "added", name)
+    os.makedirs(added)
+    Image.new("RGB", (800, 1200), (130, 120, 110)).save(os.path.join(added, "tall.png"))
+    assert st._review_images(name)["fit"] == "extend"
+    # crop: the video's window placed by the face (40% down), not in the middle
+    got = st._review_fit(name, "added", "tall.png", "crop")
+    qs = dict(x.split("=") for x in got["preview"].split("?")[1].split("&"))
+    x, y, w, h = [int(v) for v in qs["box"].split("%2C")]
+    assert got["fit"] == "crop" and got["face"] and (x, w) == (0, 800) and y < (1200 - h) / 2 - 50
+    jpg = Image.open(io.BytesIO(st._review_thumb(name, "added", "tall.png", "crop", qs["box"].replace("%2C", ","))))
+    assert jpg.width == 480 and abs(jpg.width / jpg.height - w / h) < 0.02
+    # extend: the whole image, the sides to be drawn
+    got = st._review_fit(name, "added", "tall.png", "extend")
+    assert got["fit"] == "extend" and "box" not in got["preview"]
+    jpg = Image.open(io.BytesIO(st._review_thumb(name, "added", "tall.png", "extend")))
+    assert jpg.width == 480 and abs(jpg.width / jpg.height - w / h) < 0.02
+    assert jpg.getpixel((5, jpg.height // 2))[0] < 110 and jpg.getpixel((240, jpg.height // 2))[0] > 115
+    posted.clear()
+    assert st._remake(name, [{"n": sung, "image": "tall.png", "src": "added", "fit": "extend"}])["picked"] == 1
+    assert any("FVExtendCanvas" in _types(g) for g in posted)
+    p = json.load(open(os.path.join(d, "plan.json")))
+    assert p["review"]["rounds"][0]["items"][0]["fit"] == "extend"
+    # For professional use only crops
+    p["professional"] = True
+    json.dump(p, open(os.path.join(d, "plan.json"), "w"))
+    assert st._review_fit(name, "added", "tall.png", "extend")["fit"] == "crop"
+    assert st._review_images(name)["extend"] is False
+
+
 def test_cancel_a_director_still_planning(studio, monkeypatch):
     st, q, posted = studio
     import nodes

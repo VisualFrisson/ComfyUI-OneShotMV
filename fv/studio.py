@@ -795,18 +795,66 @@ def _review_images(name: str) -> dict:
             q = urllib.parse.urlencode({"src": src, "name": os.path.basename(x), "v": int(os.path.getmtime(x))})
             out.append({"name": os.path.basename(x), "src": src, "sings": bool(it.get("sings", True)),
                         "url": f"/oneshot-mv/api/review_thumb/{urllib.parse.quote(run)}?{q}"})
-    return {"images": out, "added": f"{ADDED}/{run}"}
+    return {"images": out, "added": f"{ADDED}/{run}", "fit": _fit_for(p, w.get("fit")),
+            "extend": not p.get("professional")}
 
 
-def _review_thumb(name: str, src: str, image: str) -> bytes:
-    from PIL import Image, ImageOps
+def _fit_for(p: dict, fit) -> str:
+    """Crop or extend for a new image: as asked, but For professional use only crops (Qwen-Image 2.1)."""
+    return "extend" if fit == "extend" and not p.get("professional") else "crop"
+
+
+def _review_fit(name: str, src: str, image: str, fit: str) -> dict:
+    """How a new image will be brought to the video's shape, as the job will do it: the crop around
+    its face (or, with Extend, the whole image with the sides to draw in), whether it can sing, and a
+    preview of exactly that."""
+    from . import formats
+    d = _run_dir(name)
+    p = _load(os.path.join(d, "plan.json"), {}) or {}
+    if not p.get("world_images"):
+        raise ValueError("this video's World isn't made from your images")
+    path = _pick_path(p, os.path.basename(d), image, src)
+    W, H = formats.portrait_size(p.get("format") or "16:9")[1]
+    fit = _fit_for(p, fit)
+    info = (_fv("world_images").inspect([path], W, H, log=lambda *a: None, fit=fit) or [None])[0]
+    if not info:
+        raise ValueError(f"{image} couldn't be read")
+    q = {"src": src, "name": image, "fit": info["fit"], "v": int(os.path.getmtime(path))}
+    if info["crop"]:
+        q["box"] = ",".join(str(int(v)) for v in info["crop"])
+    return {"asked": fit, "fit": info["fit"], "face": bool(info["face"]), "sings": bool(info["sings"]),
+            "preview": f"/oneshot-mv/api/review_thumb/{urllib.parse.quote(os.path.basename(d))}?{urllib.parse.urlencode(q)}"}
+
+
+def _review_thumb(name: str, src: str, image: str, fit: str = "", box: str = "") -> bytes:
+    """A small JPEG of an image a review can swap in: the whole image, or with fit the video's frame
+    as the job makes it (the crop box, or the image on the canvas with the sides still to draw)."""
+    from PIL import Image, ImageDraw, ImageOps
+    from . import formats
     import io
     d = _run_dir(name)
     p = _load(os.path.join(d, "plan.json"), {}) or {}
     im = ImageOps.exif_transpose(Image.open(_pick_path(p, os.path.basename(d), image, src))).convert("RGB")
-    im.thumbnail((360, 360))
+    W, H = formats.portrait_size(p.get("format") or "16:9")[1]
+    side = 480
+    cw, ch = (side, max(1, round(side * H / W))) if W >= H else (max(1, round(side * W / H)), side)
+    if fit == "crop" and box:
+        x, y, w, h = [int(v) for v in box.split(",")[:4]]
+        x, y = max(0, min(x, im.width - 1)), max(0, min(y, im.height - 1))
+        im = im.crop((x, y, min(im.width, x + max(1, w)), min(im.height, y + max(1, h)))).resize((cw, ch), Image.LANCZOS)
+    elif fit == "extend":
+        s = min(cw / im.width, ch / im.height)
+        small = im.resize((max(1, round(im.width * s)), max(1, round(im.height * s))), Image.LANCZOS)
+        canvas = Image.new("RGB", (cw, ch), (72, 72, 72))
+        dr = ImageDraw.Draw(canvas)
+        for k in range(-ch, cw, 14):  # stripes where the editor will draw
+            dr.line([(k, ch), (k + ch, 0)], fill=(92, 92, 92), width=4)
+        canvas.paste(small, ((cw - small.width) // 2, (ch - small.height) // 2))
+        im = canvas
+    else:
+        im.thumbnail((360, 360))
     buf = io.BytesIO()
-    im.save(buf, "JPEG", quality=82)
+    im.save(buf, "JPEG", quality=84)
     return buf.getvalue()
 
 
@@ -865,7 +913,8 @@ def _remake(name: str, items: list) -> dict:
                 raise ValueError(f"shot {n} has no image to change")
             src = _pick_path(p, os.path.basename(d), str(it["image"]), str(it.get("src") or "world"))
             W, H = formats.portrait_size(p.get("format") or "16:9")[1]
-            info = (_fv("world_images").inspect([src], W, H, log=lambda *a: None, fit=w.get("fit") or "crop") or [None])[0]
+            fit = _fit_for(p, it.get("fit") or w.get("fit"))
+            info = (_fv("world_images").inspect([src], W, H, log=lambda *a: None, fit=fit) or [None])[0]
             if not info:
                 raise ValueError(f"{os.path.basename(src)} couldn't be read")
             if v["render"]["role"] == "A" and not info["sings"]:
@@ -876,7 +925,7 @@ def _remake(name: str, items: list) -> dict:
                                    extend=info["fit"] == "extend", seed=701 + 17 * k + i).nodes
             new = os.path.join(d, f"{stag}_00001_.png")
             picks.append((stag, g, v, new, info))
-            done.append({"shot": n, "image": info["name"], "src": str(it.get("src") or "world"),
+            done.append({"shot": n, "image": info["name"], "src": str(it.get("src") or "world"), "fit": info["fit"],
                          "before": v["image"], "still": new})
             continue
         note = str(it.get("note") or "")[:400]
@@ -1771,9 +1820,16 @@ async def _api(request: web.Request, route: str) -> web.Response:
             return web.json_response(await _blocking(_review_images, route[len("review_images/"):]))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
+    if route.startswith("review_fit/"):  # how a new image will look in the video's frame
+        try:
+            return web.json_response(await _blocking(_review_fit, route[len("review_fit/"):], q.get("src", "world"),
+                                                     q.get("name", ""), q.get("fit", "")))
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
     if route.startswith("review_thumb/"):
         try:
-            body = await _blocking(_review_thumb, route[len("review_thumb/"):], q.get("src", "world"), q.get("name", ""))
+            body = await _blocking(_review_thumb, route[len("review_thumb/"):], q.get("src", "world"), q.get("name", ""),
+                                   q.get("fit", ""), q.get("box", ""))
         except (ValueError, OSError) as e:
             return web.json_response({"error": str(e)}, status=404)
         return web.Response(body=body, content_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
