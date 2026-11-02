@@ -159,12 +159,22 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .shot .ft{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 9px;font-size:12px}
 .shot .ft .who{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .shot .ft b{font-weight:600;white-space:nowrap}
+/* images first: the review board */
+.rvboard{align-items:start}
+.rvcard{display:flex;flex-direction:column}
+.rvcard.on{box-shadow:0 0 0 2px var(--accent)}
+.rvcard .ft .btn{min-height:30px;padding:0 10px;font-size:12px}
+.rvnote{display:flex;flex-direction:column;gap:4px;padding:0 9px 9px}
+.rvnote textarea{width:100%;box-sizing:border-box;min-height:52px;resize:vertical;font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;background:var(--panel);color:var(--text);border:1px solid var(--line2)}
 .shot.still img{opacity:.75;filter:grayscale(.4)}
 .notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
 .notes li{display:flex;gap:10px}.notes li i{font-style:normal;font-weight:800}
 .banner{padding:14px 16px;border-radius:12px;background:#2A1A10;border:1px solid #6A4520;color:#FFD9A8;margin-bottom:18px}
 .banner ul{margin:8px 0 6px;padding-left:20px}.banner li{margin:5px 0;line-height:1.4}.banner a{color:inherit}
 .banner .err{font-family:var(--mono,ui-monospace,monospace);font-size:13px;overflow-wrap:anywhere}
+.banner.info{background:var(--panel2);border-color:var(--line2);color:var(--text)}
+.banner .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.locked{opacity:.5;filter:saturate(.6)}
 /* result */
 .player{background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .player video{width:100%;display:block;max-height:72vh;background:#000}
@@ -325,6 +335,7 @@ html[data-look="neon"] .badge.ok{background:var(--ok);color:#0a0c10}
 html[data-look="neon"] .badge.run{background:#a37dff;color:#0a0c10}
 html[data-look="neon"] .badge.pre{background:var(--idle);color:#0a0c10}
 html[data-look="neon"] .banner{border-radius:12px;background:color-mix(in srgb,var(--warn) 9%,transparent);border-color:color-mix(in srgb,var(--warn) 40%,transparent);color:#f6d6a3}
+html[data-look="neon"] .banner.info{background:var(--panel2);border-color:color-mix(in srgb,var(--g3) 45%,transparent);color:var(--text)}
 html[data-look="neon"] .toast{border-radius:12px;background:var(--panel2);border-color:var(--line2);box-shadow:0 18px 50px rgba(0,0,0,.6)}
 html[data-look="neon"] .shotlist tr:hover td{background:var(--panel2)}
 html[data-look="neon"] .emap{border-radius:3px;height:12px;gap:3px}
@@ -564,7 +575,8 @@ html[data-look="neon"] .wthumbs img,html[data-look="neon"] .wthumbs .noimg,html[
 </header>
 <main id="app" aria-live="polite"></main>
 <div class="overlay hide" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovt"><div class="box"><div class="spin" aria-hidden="true"></div><h2 id="ovt" style="margin:0 0 8px;font-size:22px"></h2><p class="muted" id="ovs" style="margin:0"></p>
-  <div class="ovbar hide" id="ovbar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100"><div id="ovfill"></div></div><p class="mono hide" id="ovt2" style="margin:0;font-size:13px"></p></div></div>
+  <div class="ovbar hide" id="ovbar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100"><div id="ovfill"></div></div><p class="mono hide" id="ovt2" style="margin:0;font-size:13px"></p>
+  <button class="btn hide" id="ovcancel" type="button" style="margin-top:18px;min-width:140px">Cancel</button></div></div>
 <div class="toast hide" id="toast" role="status"></div>
 
 <script>
@@ -594,7 +606,7 @@ const store = {
   set(k, v){ try{ localStorage.setItem("osmv."+k, JSON.stringify(v)); }catch(e){} },
 };
 const S = { brief: Object.assign({}, DEFAULT_BRIEF, store.get("brief", {})), songs: null, analysis: null, sys: null, timer: null,
-            stageOf: {}, showPlan: null, fromRun: null,
+            stageOf: {}, showPlan: null, showRender: null, showBrief: null, unlocked: {}, fromRun: null,
             crowdTouched: false, artistV: 0,  // crowd set by hand (Single Artist leaves it alone); the artist photo's upload time
             worldInfo: null };  // the World images folder as api/images last saw it
 
@@ -740,7 +752,11 @@ function demoBar(){
   });
 }
 function toast(msg, ms=4200){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(t._h); t._h = setTimeout(()=>t.classList.add("hide"), ms); }
-function overlay(title, sub){ const o = $("#overlay"); if (!title){ o.classList.add("hide"); return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide"); o.classList.remove("hide"); }
+// a full-screen "working" box; onCancel adds a Cancel button (the work it stops is the caller's)
+function overlay(title, sub, onCancel){ const o = $("#overlay"), c = $("#ovcancel"); if (!title){ o.classList.add("hide"); c.onclick = null; return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide");
+  c.classList.toggle("hide", !onCancel); c.disabled = false; c.textContent = "Cancel";
+  c.onclick = onCancel ? () => { c.disabled = true; c.textContent = "Cancelling…"; onCancel(); } : null;
+  o.classList.remove("hide"); if (onCancel) c.focus(); }
 function overlayProgress(elapsed, left){
   const tot = Math.max(1, elapsed + left), pct = Math.min(98, Math.round(100 * elapsed / tot));
   $("#ovbar").classList.remove("hide"); $("#ovt2").classList.remove("hide");
@@ -778,8 +794,9 @@ function askName(){
 }
 function stopTimer(){ if (S.timer){ clearInterval(S.timer); S.timer = null; } }
 // run, stage: the video on screen (and how far it is), so its other steps are links: the Brief it was
-// made from, its plan, its render while it runs, its result once it's made. Going back never changes
-// a video: a new World or cast from the Brief or the Plan makes a new one, and this one stays.
+// made from, its plan, its render (while it runs and after), its result once it's made. Going back only
+// shows what was picked: changes are greyed out until "Restart from this stage", and a restart makes a
+// new video (this one stays in Your videos).
 function setSteps(cur, run, stage){
   const names = ["The Brief","The Plan","Rendering","Result"];
   if (run && stage) S.stageOf[run] = stage;
@@ -790,7 +807,7 @@ function setSteps(cur, run, stage){
     if (i === 0) return run ? "#/brief/" + enc : "#/";
     if (!run) return "";
     if (i === 1) return "#/plan/" + enc;
-    if (i === 2) return stage && stage !== "preview" && stage !== "done" ? "#/render/" + enc : "";
+    if (i === 2) return stage && stage !== "preview" ? "#/render/" + enc : "";
     return stage === "done" ? "#/result/" + enc : "";
   };
   $("#steps").innerHTML = names.map((n,i)=>{
@@ -802,13 +819,18 @@ function setSteps(cur, run, stage){
   }).join("");
 }
 // the Plan step of a video that is rendering or made shows its plan, instead of sending you on
-document.addEventListener("click", e => { const a = e.target.closest && e.target.closest('#steps a[data-step="1"]'); if (a) S.showPlan = a.dataset.run; });
+document.addEventListener("click", e => { const a = e.target.closest && e.target.closest('#steps a[data-step]');
+  if (!a) return;
+  if (a.dataset.step === "1") S.showPlan = a.dataset.run;
+  if (a.dataset.step === "2") S.showRender = a.dataset.run;
+  if (a.dataset.step === "0") S.showBrief = a.dataset.run; });
 function lvlBadge(l){ return `<span class="lvl"><i style="background:${LEVEL_COL[l]||'var(--mid)'}"></i>${esc(l||"")}</span>`; }
 
 // ---------------------------------------------------------------- router
 window.addEventListener("hashchange", route);
 function route(){
   stopTimer();
+  S.nav = (S.nav || 0) + 1;  // a screen's polling that comes back after you've moved on draws nothing
   const h = location.hash.replace(/^#\/?/, "").split("/");
   const [page, run] = [h[0] || "", decodeURIComponent(h.slice(1).join("/") || "")];
   if (page === "brief" && run) return openBrief(run);  // the Brief this video was made from, to change it and make another
@@ -822,8 +844,11 @@ function route(){
 
 async function openBrief(run){
   // saved in this browser when it started the run; else the one the run keeps (any browser)
-  let b = store.get("briefs", {})[run];
-  if (!b){ try{ b = (await api("run/" + encodeURIComponent(run))).form; }catch(e){} }
+  let b = store.get("briefs", {})[run], st = null;
+  try{ st = await api("run/" + encodeURIComponent(run)); }catch(e){}
+  if (!b && st) b = st.form;
+  // a video already being made (or made) shows its brief greyed out until Restart from this stage
+  S.lockedRun = st && st.stage !== "preview" && !S.unlocked[run] ? st : null;
   if (b && (b.theme || b.song || b.world_images)){
     S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; S.worldInfo = null; S.fromRun = run;
     // a folder with no mode is a World from images, as the server reads it
@@ -1075,6 +1100,18 @@ async function viewBrief(){
   drawSong();
   if (!b.song) refreshEstimate();  // the line under Preview follows the World even before a song
   if (!S.sys) loadSystem().then(drawTiers);
+  // the brief of a video being made, or made: what was picked, greyed out, with Restart from this stage
+  const L = S.lockedRun;
+  if (L && L.run === S.fromRun && !S.unlocked[L.run]){
+    setSteps(0, L.run, L.stage);
+    const cols = app.querySelector(".cols"); cols.inert = true; cols.classList.add("locked");
+    const ban = document.createElement("div"); ban.className = "banner info"; ban.setAttribute("role", "status");
+    ban.innerHTML = `This is the brief ${esc(projectOf(L) || "this video")} ${L.stage === "done" ? "was" : "is being"} made from, so changes are greyed out. <b>Restart from this stage</b> to change it and make a new video; this one stays in <a href="#/videos">Your videos</a>.
+      <div class="acts"><button class="btn" id="restartb" type="button">Restart from this stage</button>
+      <a class="btn primary" href="${L.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(L.run)}">${L.stage === "done" ? "Back to the video" : L.stage === "review" ? "Back to the images" : "Back to the render"}</a></div>`;
+    $("#setup").before(ban);
+    $("#restartb").onclick = () => restartFrom(L, () => { S.lockedRun = null; viewBrief(); }, "brief");
+  }
 }
 
 async function drawSong(){
@@ -1470,7 +1507,8 @@ async function uploadWorld(items){
   }catch(e){ overlay(); toast("Upload failed: " + e.message); }
 }
 
-async function start(render, briefOverride){
+// render: queue the video (false: only the plan); review: images first (the run stops after the stills)
+async function start(render, briefOverride, review){
   const b = Object.assign({}, briefOverride || S.brief);
   if (!b.song){ toast("Pick a song first."); return; }
   Object.assign(b, castOf(b), worldOf(b));  // only the artist tab that is showing goes with the brief; none with images
@@ -1484,16 +1522,26 @@ async function start(render, briefOverride){
     if (pn){ pn.value = S.brief.name; pn.classList.remove("bad"); }
   }
   b.name = String(b.name).trim();
-  b.render = !!render;
+  b.render = !!render; b.review = !!(render && review);
+  let cancelled = false;
   try{
     const what = imgs ? "looking at your images" : "writing the World";
-    overlay(render ? "Starting the video" : "Writing the plan", render ? `Analysing the song, ${what} and queueing every shot. This takes a minute or two.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
+    overlay(b.review ? "Making the images" : render ? "Starting the video" : "Writing the plan",
+      b.review ? `Analysing the song, ${what} and queueing the stills. The video waits until you've checked them.`
+      : render ? `Analysing the song, ${what} and queueing every shot. This takes a minute or two.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
     const {prompt_id} = await api("start", b);
-    const brief = Object.assign({}, b); delete brief.render;
+    overlay($("#ovt").textContent, $("#ovs").textContent, async () => {
+      cancelled = true;
+      try{ await api("cancel_job", {prompt_id}); }catch(e){}
+      overlay(); toast(render ? "Cancelled. Nothing of this video was queued." : "Cancelled. No plan was written.");
+    });
+    const brief = Object.assign({}, b); delete brief.render; delete brief.review;
     const t0 = Date.now();
     for (;;){
       await new Promise(r => setTimeout(r, 2000));
+      if (cancelled) return;
       const j = await api("job/" + prompt_id);
+      if (cancelled) return;
       const el = Math.round((Date.now() - t0) / 1000);
       if (j.state === "queued") $("#ovs").textContent = `Waiting in ComfyUI's queue (${j.ahead} ahead) · ${el} s`;
       else if (j.state === "running"){
@@ -1507,7 +1555,19 @@ async function start(render, briefOverride){
         overlay(); location.hash = (render ? "#/render/" : "#/plan/") + encodeURIComponent(j.run); return;
       }
     }
-  }catch(e){ overlay(); const m = e.message || ""; toast(/^(It can't|ComfyUI refused)/.test(m) ? m : "It didn't start: " + m, Math.max(9000, 70 * m.length)); }
+  }catch(e){ if (cancelled) return; overlay(); const m = e.message || ""; toast(/^(It can't|ComfyUI refused)/.test(m) ? m : "It didn't start: " + m, Math.max(9000, 70 * m.length)); }
+}
+
+// Restart from this stage: a video still being made is stopped first (what it made stays in Your videos);
+// then that stage opens for changes, and starting from it makes a new video
+async function restartFrom(r, then, where){
+  const working = r.stage !== "done" && r.stage !== "preview" && r.stage !== "review" && !r.stalled;
+  if (working){
+    if (!confirm(`Stop this video and start again from the ${where}? What it made so far stays in Your videos.`)) return;
+    try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }
+    catch(e){ toast("It didn't stop: " + e.message); return; }
+  }
+  S.unlocked[r.run] = true; then();
 }
 
 // ---------------------------------------------------------------- 2. The Plan
@@ -1521,19 +1581,22 @@ async function viewPlan(run){
   // a video already rendering or made: its plan only when asked for from the steps, else go on to it
   if (r.stage !== "preview" && !asked){ location.hash = (r.stage === "done" ? "#/result/" : "#/render/") + encodeURIComponent(run); return; }
   setSteps(1, run, r.stage);
-  const made = r.stage !== "preview";
+  const made = r.stage !== "preview", locked = made && !S.unlocked[run];
   const w = r.world, b = r.brief, im = imagesOf(r);
-  const brief = store.get("briefs", {})[run];
+  const brief = store.get("briefs", {})[run] || (r.form && r.form.song ? r.form : null);
+  // images first: nothing to check for a World from your own images unless they're extended
+  const canReview = !im || (brief && brief.image_fit === "extend" && !brief.professional);
   const sing = r.shots.filter(s => s.kind === "sing").length, cut = r.shots.length - sing;
   const est = brief ? estimate(Object.assign({}, brief)) : r.estimate_min;
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
   <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
-    <span class="mono muted" style="font-size:12px">${made ? (r.stage === "done" ? "This video is made" : "This video is rendering") : "Nothing is rendered yet"}</span></div>
-  ${made ? `<p class="note" style="margin:0 0 16px">This is the plan this video was made from. A new World, or Shuffle the cast, makes a new video; this one stays in <a href="#/videos">Your videos</a>.</p>` : ""}
+    <span class="mono muted" style="font-size:12px">${made && !locked ? "Restarted from here" : made ? (r.stage === "done" ? "This video is made" : r.stage === "review" ? "Its images are waiting for you" : "This video is rendering") : "Nothing is rendered yet"}</span></div>
+  ${locked ? `<div class="banner info" role="status" style="margin:0 0 16px">This is the plan this video ${r.stage === "done" ? "was" : "is being"} made from, so changes are greyed out. <b>Restart from this stage</b> to change it or make it again: that makes a new video, and this one stays in <a href="#/videos">Your videos</a>.</div>`
+    : made ? `<p class="note" style="margin:0 0 16px">Restarted from the plan: Make the video, or Generate images and review, makes a new video from it. The one before stays in <a href="#/videos">Your videos</a>.</p>` : ""}
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
-     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2><a href="#/brief/${encodeURIComponent(run)}" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a></div>
+     <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2>${locked ? `<span class="muted" style="font-size:13px;font-weight:600;opacity:.5">Edit</span>` : `<a href="#/brief/${encodeURIComponent(run)}" id="editw" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a>`}</div>
      <p style="margin:0;font-size:18px;line-height:1.35;font-weight:600">${esc(w.headline || (im ? "Your images" : "The house look: no World line"))}</p>
      ${im ? `<div><div class="kv">Images</div><div style="font-size:14px;color:#D4D4D4;overflow-wrap:anywhere">${esc(im.folder)} · ${esc(im.order)}</div></div>` : ""}
      ${w.camera ? `<div><div class="kv">Camera</div><div style="font-size:14px;color:#D4D4D4">${esc(w.camera)}</div></div>` : ""}
@@ -1554,15 +1617,21 @@ async function viewPlan(run){
    </section>
   </div>
   <div class="bar">
-    <a class="btn" href="#/brief/${encodeURIComponent(run)}">Change the World</a>
-    <button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>
+    ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>Shuffle the cast</button>`
+      : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>`}
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    ${made ? `<a class="btn primary big" href="${r.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(run)}">${r.stage === "done" ? "Back to the video" : "Back to the render"}</a>`
-           : `<button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>`}
+    ${locked ? `<button class="btn" id="restart" type="button">Restart from this stage</button>
+      <a class="btn primary big" href="${r.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(run)}">${r.stage === "done" ? "Back to the video" : r.stage === "review" ? "Back to the images" : "Back to the render"}</a>`
+      : `${canReview ? `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>` : ""}
+      <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>`}
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
-  if (brief){
+  if ($("#restart")) $("#restart").onclick = () => restartFrom(r, () => { S.showPlan = run; viewPlan(run); }, "plan");
+  // a made video's Brief opens to change it (its own screen asks to restart first otherwise)
+  for (const id of ["#changew", "#editw"]) if ($(id) && made) $(id).addEventListener("click", () => { S.unlocked[run] = true; });
+  if (brief && !locked){
     if ($("#make")) $("#make").onclick = () => start(true, brief);
+    if ($("#review")) $("#review").onclick = () => start(true, brief, true);
     $("#shuffle").onclick = () => { const nb = Object.assign({}, brief, {seed: (+brief.seed || 1) + 1}); S.brief = Object.assign({}, S.brief, {seed: nb.seed}); saveBrief(); start(false, nb); };
   }
 }
@@ -1572,25 +1641,102 @@ async function viewRender(run){
   setSteps(2, run);
   const app = $("#app");
   app.innerHTML = `<p class="muted">Loading…</p>`;
-  let first = true;
+  const asked = S.showRender === run; S.showRender = null;  // from the steps: a made video's render too
+  let mode = "";
+  const nav = S.nav;
   const tick = async () => {
     let r;
-    try{ r = await api("run/" + encodeURIComponent(run)); }catch(e){ if (first) app.innerHTML = `<p class="banner">${esc(e.message)}</p>`; return; }
-    if (r.stage === "done"){ stopTimer(); location.hash = "#/result/" + encodeURIComponent(run); return; }
+    try{ r = await api("run/" + encodeURIComponent(run)); }catch(e){ if (!mode && nav === S.nav) app.innerHTML = `<p class="banner">${esc(e.message)}</p>`; return; }
+    if (nav !== S.nav) return;
+    if (r.stage === "done" && !asked && mode !== "made"){ stopTimer(); location.hash = "#/result/" + encodeURIComponent(run); return; }
     if (r.stage === "preview"){ stopTimer(); location.hash = "#/plan/" + encodeURIComponent(run); return; }
-    if (first){ renderSkeleton(r); first = false; setSteps(2, run, r.stage); }
+    setSteps(2, run, r.stage);
+    const rv = r.review || {};
+    // images first: the review screen once the stills are made, and while picked ones are made again
+    if (r.stage === "review" || (rv.state === "making" && rv.rounds > 0)){
+      if (mode !== "review"){ mode = "review"; reviewView(r, true); } else reviewView(r, false);
+      return;
+    }
+    if (mode !== "render" && mode !== "made"){ renderSkeleton(r); mode = r.stage === "done" ? "made" : "render"; }
     renderUpdate(r);
+    if (r.stage === "done") stopTimer();
   };
   await tick();
-  S.timer = setInterval(tick, DEMO ? 1000 : 5000);
+  if (mode !== "made") S.timer = setInterval(tick, DEMO ? 1000 : 5000);
+}
+// images first, the stills made: pick any to make again, each with a note on what to change, then
+// Make the video. The picks and notes are kept in this browser until they're sent.
+const reviewKey = run => "review." + run;
+function reviewView(r, fresh){
+  const run = r.run, rv = r.review || {}, busy = r.stage !== "review";
+  const R = Object.assign({sel: {}}, store.get(reviewKey(run), {}));
+  const can = new Set(rv.remake || []), redo = new Set(busy ? rv.redo || [] : []);
+  const sig = JSON.stringify([r.stage, rv.rounds, r.shots.map(s => s.still), r.pct]);
+  const app = $("#app");
+  if (!fresh && app.dataset.sig === sig) return;  // nothing new: leave notes being typed alone
+  if (!fresh && document.activeElement && document.activeElement.closest && document.activeElement.closest("#rvboard") && !busy && app.dataset.busy === "0") return;
+  app.dataset.sig = sig; app.dataset.busy = busy ? "1" : "0";
+  const cls = shotClass(r.brief.format), picked = () => Object.keys(R.sel).map(Number).filter(n => can.has(n));
+  const save = () => store.set(reviewKey(run), R);
+  app.innerHTML = `
+  <div class="head"><div><h1>Review the images</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
+    <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600">${mins(r.elapsed_min)} in</div><div class="muted" style="font-size:14px">${busy ? "making images again" : "waiting for you"}</div></div></div>
+  ${busy ? `<div class="banner info" role="status"><b>Making ${rv.rounds ? "the picked images again" : "the images"}…</b> The board updates as each one lands. <div class="acts"><button class="btn danger sm" id="rvstop" type="button">Stop</button></div></div>`
+    : `<div class="banner info" role="status">Every still is made${rv.rounds ? `, with ${rv.rounds} round${rv.rounds > 1 ? "s" : ""} of re-makes` : ""}. Click any you want made again and say what to change, or make the video as it is.</div>`}
+  <section class="card" style="padding:20px 22px" aria-labelledby="rvh">
+    <div class="row" style="margin-bottom:14px"><h2 class="label" id="rvh">Images</h2><span class="tiny">${can.size} of ${r.shots.filter(s => s.kind === "sing").length} sung shots can be made again${r.shots.some(s => s.kind === "broll") ? "; cutaways are picked after the take check" : ""}</span></div>
+    <div class="board rvboard" id="rvboard">${r.shots.map(s => {
+      const on = R.sel[s.n] != null && can.has(s.n), ok = can.has(s.n) && !busy, again = redo.has(s.n);
+      const img = s.still && !again ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">`
+        : `<div class="ph">${s.kind === "broll" ? "Cutaway, chosen after the take check" : again || busy ? "Making…" : "No still"}</div>`;
+      return `<div class="shot rvcard ${cls} ${on ? "on" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}">
+        <div class="im">${img}<span class="tag">${s.n} · ${esc(s.time)}</span>${on ? '<span class="tag r">make again</span>' : again ? '<span class="tag r">making again</span>' : ""}</div>
+        <div class="ft"><span class="who" title="${esc(s.role)}">${esc(s.role || s.size)}</span>
+          ${ok ? `<button type="button" class="btn sm ${on ? "" : "ghost"}" data-pick="${s.n}" aria-pressed="${on}">${on ? "Picked" : "Make again"}</button>` : `<span class="tiny">${s.kind === "broll" ? "cutaway" : busy || can.has(s.n) ? "" : "your image"}</span>`}</div>
+        ${on ? `<label class="rvnote"><span class="tiny">What to change (optional)</span><textarea rows="2" data-note="${s.n}" placeholder="Like “older, in a raincoat, harder light”" ${busy ? "disabled" : ""}></textarea></label>` : ""}
+      </div>`; }).join("")}</div>
+  </section>
+  <div class="bar">
+    <span class="grow" id="rvcount" style="text-align:left"></span>
+    <button class="btn" id="rvremake" type="button"></button>
+    <button class="btn primary big" id="rvgo" type="button">Make the video</button>
+  </div>`;
+  app.querySelectorAll("textarea[data-note]").forEach(t => { t.value = R.sel[t.dataset.note] || ""; t.oninput = () => { R.sel[t.dataset.note] = t.value; save(); }; });
+  app.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { const n = b.dataset.pick;
+    if (R.sel[n] != null) delete R.sel[n]; else R.sel[n] = ""; save(); reviewView(r, true);
+    const t = app.querySelector(`textarea[data-note="${n}"]`); if (t) t.focus(); });
+  const draw = () => { const n = picked().length;
+    $("#rvcount").textContent = busy ? "Wait for the images being made." : n ? `${n} picked to make again.` : "Nothing picked: the video uses these images.";
+    const rm = $("#rvremake"); rm.textContent = n ? `Make ${n} again` : "Make again"; rm.disabled = busy || !n; rm.classList.toggle("primary", !!n && !busy);
+    $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !n); };
+  draw();
+  $("#rvremake").onclick = async () => {
+    const items = picked().map(n => ({n, note: R.sel[n] || ""}));
+    if (!items.length) return;
+    try{ overlay("Making the images again", `${items.length} image${items.length > 1 ? "s" : ""}, each with its note.`);
+      const j = await api("review_remake", {run, items}); overlay(); store.set(reviewKey(run), {sel: {}});
+      toast(`Making ${j.stills} image${j.stills === 1 ? "" : "s"} again.`); viewRender(run); }
+    catch(e){ overlay(); toast("It didn't start: " + e.message, 9000); }
+  };
+  $("#rvgo").onclick = async () => {
+    const n = picked().length;
+    if (n && !confirm(`Make the video now? The ${n} picked image${n > 1 ? "s aren't" : " isn't"} made again.`)) return;
+    try{ overlay("Starting the video", "Queueing every clip with these images."); await api("review_go", {run}); overlay();
+      store.set(reviewKey(run), {sel: {}}); toast("The video is being made."); viewRender(run); }
+    catch(e){ overlay(); toast("It didn't start: " + e.message, 9000); }
+  };
+  if ($("#rvstop")) $("#rvstop").onclick = async () => {
+    if (!confirm("Stop making these images? The ones already made are kept.")) return;
+    try{ const j = await api("cancel", {run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
+  };
 }
 function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : ""); }
 function renderSkeleton(r){
   const app = $("#app");
   app.innerHTML = `
-  <div class="head"><div><h1>Making your video</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
+  <div class="head"><div><h1>${r.stage === "done" ? "How it was made" : "Making your video"}</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600" id="elapsed"></div><div class="muted" style="font-size:14px" id="left"></div></div></div>
-  <div id="stall"></div>
+  <div id="stall"></div><div id="rvfirst"></div>
   <div class="progress" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="pbar"><div id="pfill" style="width:0"></div></div>
   <ol class="rail" aria-label="Stages" id="rail"></ol>
   <div class="cols">
@@ -1603,10 +1749,11 @@ function renderSkeleton(r){
       <section class="card" aria-labelledby="lth"><h2 class="label" id="lth" style="margin-bottom:12px">Latest take</h2><div id="latest" class="muted" style="font-size:14px">No clips yet. Stills come first.</div></section>
       <section class="card" aria-labelledby="qch"><h2 class="label" id="qch" style="margin-bottom:12px">Checks</h2><ul class="notes" id="notes"></ul></section>
       <p class="muted" style="margin:0;font-size:13px;padding:0 4px">You can close this tab. The render keeps going in ComfyUI, and this page picks up where it is when you come back.</p>
-      <div class="row"><a class="btn" href="/" target="_blank" rel="noopener" style="flex:1">Open ComfyUI</a><button class="btn danger" id="cancel" type="button" style="flex:1">Stop this video</button></div>
+      <div class="row">${r.stage === "done" ? `<a class="btn primary" href="#/result/${encodeURIComponent(r.run)}" style="flex:1">Back to the video</a>`
+        : `<a class="btn" href="/" target="_blank" rel="noopener" style="flex:1">Open ComfyUI</a><button class="btn danger" id="cancel" type="button" style="flex:1">Stop this video</button>`}</div>
     </aside>
   </div>`;
-  $("#cancel").onclick = async () => {
+  if ($("#cancel")) $("#cancel").onclick = async () => {
     if (!confirm("Stop this video? Its queued shots are removed and the one rendering stops.")) return;
     try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed===1?"":"s"} removed.`); }catch(e){ toast(e.message); }
   };
@@ -1622,6 +1769,8 @@ function renderUpdate(r){
     ? (last ? `<div class="banner"><b>This video stopped: a step failed.</b> The last error:${lastHtml}Fix that, then start it again from <a href="#/">The Brief</a>; the ComfyUI console has the full error.</div>`
             : `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>`)
     : (last ? `<div class="banner">${r.failed_jobs} job${r.failed_jobs === 1 ? "" : "s"} of this video failed so far; the take check re-shoots clips that didn't render${sageNote}. The last error:${lastHtml}</div>` : "");
+  const rvf = r.review && r.review.state && r.review.state !== "released";
+  $("#rvfirst").innerHTML = rvf ? `<div class="banner info" role="status">Images first: this video stops once every still is made, so you can check them and make any again before the clips.</div>` : "";
   const im = imagesOf(r);  // a World from images has no vision check: the images are the stills
   $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(im && s.id === "check" ? "none for your images" : s.meta)}</div></li>`).join("");
   const cls = shotClass(r.brief.format);
@@ -1818,8 +1967,12 @@ async function viewResult(run){
     try{
       overlay("Making the new cut", "The same shots with the new FX, grade, grain and vignette. Nothing re-renders.");
       const {prompt_id} = await api("recut", {run: r.run, fx: E.fx, look: E.look, grain: E.grain, grain_size: E.grain_size, vignette: E.vignette});
+      let cancelled = false;
+      overlay($("#ovt").textContent, $("#ovs").textContent, async () => { cancelled = true;
+        let j = {}; try{ j = await api("cancel_job", {prompt_id}); }catch(e){}
+        overlay(); toast(j.removed ? "Cancelled. The cut you have stays." : "Cancelled. If it was already cutting, the new cut may still appear.", 7000); });
       const t0 = Date.now();
-      for (;;){ await new Promise(res => setTimeout(res, 2000)); const j = await api("job/" + prompt_id); if (j.state === "error") throw new Error(j.error); if (j.state === "done") break;
+      for (;;){ await new Promise(res => setTimeout(res, 2000)); if (cancelled) return; const j = await api("job/" + prompt_id); if (cancelled) return; if (j.state === "error") throw new Error(j.error); if (j.state === "done") break;
         $("#ovs").textContent = `${j.state === "queued" ? "Waiting in the queue" : "Cutting"} · ${clock((Date.now() - t0) / 1000)}`; }
       overlay(); viewResult(r.run); toast("New cut ready.");
     }catch(e){ overlay(); toast("The new cut failed: " + e.message, 8000); }
@@ -1842,16 +1995,21 @@ async function viewResult(run){
       if (st.state === "running"){
         const done = Math.max(0, st.jobs - st.jobs_left), pct = Math.round(100 * done / Math.max(1, st.jobs));
         const what = st.kind === "sharpen" ? `Re-decoding ${st.items.length} clips` : `Shooting pickups: ${st.items.map(x => "shot " + x.shot).join(", ")}`;
-        pb.innerHTML = `<section class="card" style="margin-bottom:20px"><div class="row" style="justify-content:space-between"><b>${what}</b><span class="mono tiny">${done} of ${st.jobs} jobs · about ${mins(st.left_min)} left</span></div>
+        pb.innerHTML = `<section class="card" style="margin-bottom:20px"><div class="row" style="justify-content:space-between"><b>${what}</b><span class="row"><span class="mono tiny">${done} of ${st.jobs} jobs · about ${mins(st.left_min)} left</span><button class="btn sm danger" id="pkstop" type="button">Stop</button></span></div>
           <div class="progress" style="margin:12px 0 0"><div style="width:${pct}%"></div></div><p class="tiny" style="margin:10px 0 0">The video below is the cut before. It's kept as a version when the new cut is ready.</p></section>`;
+        $("#pkstop").onclick = async () => {
+          if (!confirm(`Stop the ${st.kind === "sharpen" ? "re-decode" : "pickups"}? What isn't shot yet is dropped; the cut you have stays.`)) return;
+          try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
+        };
       } else if (st.state === "stopped"){
         pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "pickups"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;
       } else pb.innerHTML = "";
     };
     drawBanner(r.pickup);
+    const nav0 = S.nav;
     if (r.pickup.state === "running"){
       S.timer = setInterval(async () => {
-        try{ const r2 = await api("run/" + encodeURIComponent(run)); if (r2.pickup.state !== "running"){ stopTimer(); viewResult(run); if (r2.pickup.state === "done") toast("New cut ready, with the pickups."); } else drawBanner(r2.pickup); }catch(e){}
+        try{ const r2 = await api("run/" + encodeURIComponent(run)); if (nav0 !== S.nav) return; if (r2.pickup.state !== "running"){ stopTimer(); viewResult(run); if (r2.pickup.state === "done") toast("New cut ready, with the pickups."); } else drawBanner(r2.pickup); }catch(e){}
       }, DEMO ? 1000 : 5000);
     }
   }

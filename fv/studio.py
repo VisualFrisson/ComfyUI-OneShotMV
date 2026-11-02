@@ -428,6 +428,7 @@ def _director_graph(b: dict) -> dict:
          "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
          "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
          else "in order", "image_fit": "extend" if b.get("image_fit") == "extend" else "crop",
+         "review_images": bool(b.get("review")) and bool(b.get("render")),
          "professional": bool(b.get("professional"))}
     if d["world_images"]:  # the images are the World and the cast
         d["world"], d["cast"] = "", "crowd"
@@ -494,7 +495,9 @@ def _restart_needed() -> list:
     try:
         import nodes as comfy_nodes  # type: ignore
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
-        if cls is not None and "professional" not in (cls.INPUT_TYPES().get("required") or {}):
+        it = cls.INPUT_TYPES() if cls is not None else {}
+        if cls is not None and ("professional" not in (it.get("required") or {})
+                                or "review_images" not in (it.get("optional") or {})):
             return [RESTART]
     except Exception:
         pass
@@ -630,6 +633,175 @@ def _cancel(name: str) -> dict:
     return {"removed": len(ids), "stopped": len(running)}
 
 
+def _cancel_job(pid: str) -> dict:
+    """The Studio's Cancel while the Director plans: a queued Director leaves the queue, a running one
+    is interrupted (only when it is the job running now), and anything its run already queued goes."""
+    from server import PromptServer
+    q = PromptServer.instance.prompt_queue
+    running, pending = q.get_current_queue()
+    out = {"removed": 0, "stopped": 0}
+    if any(x[1] == pid for x in pending):
+        q.delete_queue_item(lambda a: a[1] == pid)
+        out["removed"] = 1
+    elif any(x[1] == pid for x in running):
+        try:
+            import nodes as comfy_nodes
+            comfy_nodes.interrupt_processing()
+        except Exception:
+            import comfy.model_management as mm
+            mm.interrupt_current_processing()
+        out["stopped"] = 1
+    rec = _load(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), {}) or {}
+    rec["cancelled"] = True
+    try:
+        with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
+            json.dump(rec, f)
+    except OSError:
+        pass
+    run = str(rec.get("run_name") or "")
+    if run:  # the Director may have queued the run's first jobs just before it stopped
+        try:
+            got = _cancel(run)
+            out["removed"] += got["removed"]
+        except Exception:
+            pass
+    return out
+
+
+# ------------------------------------------------------------------ images first: review, re-make, release
+def _held_job(d: str, held: list, rid: int) -> str | None:
+    for f in held:
+        if f.endswith(f"_r{rid:03d}A.json") and os.path.exists(os.path.join(d, "jobs", f)):
+            return os.path.join(d, "jobs", f)
+    return None
+
+
+def _job_image(g: dict) -> str:
+    return next((str(n["inputs"].get("path", "")) for n in g.values() if n.get("class_type") == "FVLoadImagePath"), "")
+
+
+def _makes_image(g: dict) -> bool:
+    """A still job that draws (a sampler), unlike a World image that is only cropped."""
+    return any("Sampler" in str(n.get("class_type", "")) for n in g.values())
+
+
+def _remakable(d: str, p: dict) -> dict:
+    """{shot number: the still its held clip job reads} for every sung shot whose still can be made again."""
+    rv = p.get("review") or {}
+    out = {}
+    for r in p.get("renders", []):
+        if r.get("role") != "A" or r.get("unused"):
+            continue
+        jf = _held_job(d, rv.get("held") or [], r["id"])
+        cur = _job_image(_load(jf, {}) or {}) if jf else ""
+        sj = _find_job(d, _stem(cur)) if cur else None
+        if sj and _makes_image(_load(sj, {}) or {}):
+            out[int(r["shot"]) + 1] = cur
+    return out
+
+
+def _review_state(d: str, p: dict, queued: int) -> str:
+    rv = p.get("review")
+    if not rv:
+        return ""
+    if rv.get("state") == "released":
+        return "released"
+    return "making" if queued else "ready"
+
+
+def _remake(name: str, items: list) -> dict:
+    """Images first: make the picked stills again (a new seed, the user's note in the prompt), and point
+    the held clip jobs at the new pictures. Queued at the back in order (one still model load)."""
+    import time
+    from . import director, graphs
+    d = _run_dir(name)
+    pj = os.path.join(d, "plan.json")
+    p = _load(pj, {}) or {}
+    rv = p.get("review")
+    if not rv:
+        raise ValueError("this video wasn't made images-first")
+    if rv.get("state") == "released":
+        raise ValueError("the videos are already being made: re-shoot shots from the Result screen")
+    if any(_run_jobs(os.path.basename(d))):
+        raise ValueError("wait until the images being made are done")
+    if not items:
+        raise ValueError("pick at least one image")
+    can = _remakable(d, p)
+    rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
+    k = len(rv.get("rounds") or []) + 1
+    stills, swaps, done = [], {}, []
+    for i, it in enumerate(items):
+        n = int(it.get("n", 0))
+        note = str(it.get("note") or "")[:400]
+        cur = can.get(n)
+        if not cur:
+            raise ValueError(f"shot {n}'s image can't be made again (your own images are only cropped)")
+        if cur in swaps:
+            continue
+        gs = director._bump(_load(_find_job(d, _stem(cur)), {}), 401 + 17 * k + i)
+        stag = f"{_stem(cur).split('_')[0]}_v{k}"
+        _set_prefix(gs, "SaveImage", f"{rel}/{stag}")
+        _with_note(gs, note)
+        new = os.path.join(d, f"{stag}_00001_.png")
+        swaps[cur] = new
+        stills.append((stag, gs))
+        done.append({"shot": n, "note": note, "before": cur, "still": new})
+    chain = [graphs.free_memory("before re-made stills").nodes] + [g for _, g in stills] + \
+        [graphs.free_memory("after re-made stills").nodes]
+    director.check_jobs(chain, p.get("models") or "")
+    for stag, gs in stills:
+        json.dump(gs, open(os.path.join(d, "jobs", f"review{k}_{stag}.json"), "w", encoding="utf-8"), indent=1)
+    # the held clips, and the looks waiting on the singer takes, read the new pictures
+    for fn in list(rv.get("held") or []) + list(p.get("deferred_jobs") or []):
+        path = os.path.join(d, "jobs", fn)
+        if not os.path.exists(path):
+            continue
+        txt = open(path, encoding="utf-8").read()
+        for a, b in swaps.items():
+            txt = txt.replace(json.dumps(a)[1:-1], json.dumps(b)[1:-1])
+        open(path, "w", encoding="utf-8").write(txt)
+    for r in p.get("renders", []):
+        for key in ("portrait", "key"):
+            if r.get(key) in swaps:
+                r[key] = swaps[r[key]]
+    for c in p.get("cast") or []:
+        if c.get("image") in swaps:
+            c["image"] = swaps[c["image"]]
+    rv.setdefault("rounds", []).append({"n": k, "at": _dt.datetime.now().isoformat(timespec="seconds"),
+                                        "t": time.time(), "items": done})
+    rv["state"] = "stills"
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    ids = [director.queue_prompt(g) for g in chain]
+    return {"round": k, "stills": len(stills), "jobs": len(ids)}
+
+
+def _release(name: str) -> dict:
+    """Images first: Make the video. Queues the held clip jobs and what follows them (the take check
+    queues the looks and the cut), at the back in order."""
+    from . import director, graphs
+    d = _run_dir(name)
+    pj = os.path.join(d, "plan.json")
+    p = _load(pj, {}) or {}
+    rv = p.get("review")
+    if not rv:
+        raise ValueError("this video wasn't made images-first")
+    if rv.get("state") == "released":
+        raise ValueError("the videos are already being made")
+    if any(_run_jobs(os.path.basename(d))):
+        raise ValueError("wait until the images being made are done")
+    gs = [_load(os.path.join(d, "jobs", f), None) for f in rv.get("held") or []]
+    gs = [g for g in gs if g]
+    if not gs:
+        raise ValueError("nothing is waiting to be made")
+    chain = [graphs.free_memory("before the videos").nodes] + gs
+    director.check_jobs(chain, p.get("models") or "")
+    rv["state"] = "released"
+    rv["released_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+    json.dump(p, open(pj, "w", encoding="utf-8"), indent=1)
+    ids = [director.queue_prompt(g) for g in chain]
+    return {"jobs": len(ids)}
+
+
 # ------------------------------------------------------------------ a run, for the page
 def _who(p: dict, s: dict, cast: dict) -> dict:
     rs = [r for r in p.get("renders", []) if r.get("shot") == s["index"] and not r.get("unused")]
@@ -762,10 +934,13 @@ def _run(name: str) -> dict:
     started = tm.get("queued")
     errors = _run_errors(os.path.basename(d)) if started and not done else []
     keys = " ".join(tm.keys())
+    review = _review_state(d, p, queued_jobs) if not done else ""
     if done:
         stage = "done"
     elif not started:
         stage = "preview"
+    elif review == "ready":
+        stage = "review"
     elif "qc_looks" in keys or (n_clips >= n_sing and "qc_leads" in keys and queued_jobs <= 3):
         stage = "broll" if queued_jobs > 1 else "edit"
     elif "qc_leads" in keys:
@@ -777,12 +952,17 @@ def _run(name: str) -> dict:
     else:
         stage = "stills"
     order = [k for k, _, _ in STAGES]
-    cur = order.index(stage) if stage in order else (len(order) if stage == "done" else 0)
+    cur = order.index("clips") if stage == "review" else \
+        (order.index(stage) if stage in order else (len(order) if stage == "done" else 0))
     stages = [{"id": k, "name": nm, "meta": meta,
                "state": "done" if (stage == "done" or i < cur) else ("now" if i == cur and stage != "preview" else "next")}
               for i, (k, nm, meta) in enumerate(STAGES)]
     if stage == "preview":
         stages[0]["state"] = "done"
+    if stage == "review":  # the stills are made; the clips wait for the user's Make the video
+        for st_ in stages:
+            if st_["id"] == "clips":
+                st_["state"] = "next"
     for st_ in stages:
         if st_["id"] == "stills":
             st_["meta"] = f"{n_stills} of {len(shots)} made"
@@ -817,7 +997,13 @@ def _run(name: str) -> dict:
     return {
         "run": os.path.basename(d), "project": _project(d), "stage": stage, "stages": stages, "pct": pct,
         "elapsed_min": round(elapsed, 1), "estimate_min": round(est), "left_min": 0 if done else round(max(0.0, est - elapsed)),
-        "queued_jobs": queued_jobs, "stalled": bool(started and not done and queued_jobs == 0),
+        "queued_jobs": queued_jobs, "stalled": bool(started and not done and queued_jobs == 0 and stage != "review"),
+        "review": ({"state": review, "rounds": len((p.get("review") or {}).get("rounds") or []),
+                    "redo": [it.get("shot") for it in (((p.get("review") or {}).get("rounds") or [{}])[-1].get("items") or [])]
+                    if review == "making" else [],
+                    "remake": sorted(n for n in _remakable(d, p) if any(x["n"] == n and x["kind"] == "sing"
+                                                                        for x in shots)) if review == "ready" else []}
+                   if review else {}),
         "errors": [] if done else errors[:3], "failed_jobs": 0 if done else len(errors),
         "brief": {"format": p.get("format"), "preset": p.get("preset"), "seconds": round(float(p.get("duration") or 0), 1),
                   "from": _clock(p.get("song_t0", 0)), "to": _clock(p.get("song_t1", 0)), "tempo": p.get("tempo"),
@@ -866,9 +1052,13 @@ def _stem(path: str) -> str:
     return b[:-4] if b.endswith("_fit") else b
 
 
+EDIT_ENCODERS = ("TextEncodeQwenImage21", "TextEncodeQwenImageEditPlus")  # their text is in "prompt"
+
+
 def _positive(g: dict) -> list[str]:
-    """Ids of the text-encode nodes that feed a sampler's positive input."""
-    ids = set()
+    """Ids of the text-encode nodes that feed a sampler's positive input (the image editors' encoders
+    too, whose one node holds the prompt)."""
+    ids = {k for k, n in g.items() if n.get("class_type") in EDIT_ENCODERS}
     for n in g.values():
         ins = n.get("inputs") or {}
         for k in ("positive", "conditioning"):
@@ -909,15 +1099,16 @@ def _with_note(g: dict, note: str) -> None:
     age = _note_age(note)
     for k in _positive(g):
         ins = g[k]["inputs"]
-        if isinstance(ins.get("text"), str):
-            t = ins["text"]
+        field = "prompt" if g[k].get("class_type") in EDIT_ENCODERS else "text"
+        if isinstance(ins.get(field), str):
+            t = ins[field]
             if age:
                 t = re.sub(r"\baged \d{2}\b", f"aged {age}", t)
                 dec = next((w for w, v in DECADES.items() if abs(v - age) <= 5), None)
                 if dec:
                     t = re.sub(r"\b(in (?:his|her|their)) (?:twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b",
                                lambda m: f"{m.group(1)} {dec}", t)
-            ins["text"] = director._insert_fix(t, note[0].upper() + note[1:])
+            ins[field] = director._insert_fix(t, note[0].upper() + note[1:])
 
 
 def _set_prefix(g: dict, cls: str, prefix: str) -> None:
@@ -1042,7 +1233,8 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
                 if c == "FVLoadImagePath":
                     out["image"] = ins.get("path")
                     out["image_exists"] = os.path.exists(ins.get("path", ""))
-            out["positive"] = [str(g[k]["inputs"].get("text", ""))[:260] for k in _positive(g)]
+            out["positive"] = [str(g[k]["inputs"].get("text", g[k]["inputs"].get("prompt", "")))[:260]
+                               for k in _positive(g)]
             return out
         return {"dry": True, "pickup": k, "stills": [show(g) for g in stills], "clips": [show(g) for g in clips],
                 "changes": changes}
@@ -1458,6 +1650,7 @@ async def _api(request: web.Request, route: str) -> web.Response:
             import time
             with open(os.path.join(_jobs_dir(), re.sub(r"[^0-9a-f-]", "", pid) + ".json"), "w", encoding="utf-8") as f:
                 json.dump({"t": time.time(), "estimate": est, "render": bool(body.get("render")), "project": project,
+                           "run_name": body.get("run_name", ""),
                            "brief": {k: v for k, v in body.items() if k not in ("render", "run_name")}}, f)
             return web.json_response({"prompt_id": pid, "estimate": est})
         if route == "recut":
@@ -1502,4 +1695,15 @@ async def _api(request: web.Request, route: str) -> web.Response:
         if route == "cancel":
             d = _run_dir(body.get("run", ""))
             return web.json_response(await _blocking(_cancel, os.path.basename(d)))
+        if route == "cancel_job":  # a Director still planning
+            return web.json_response(await _blocking(_cancel_job, str(body.get("prompt_id") or "")))
+        if route in ("review_remake", "review_go"):
+            try:
+                if route == "review_remake":
+                    res = await _blocking(_remake, body.get("run", ""), body.get("items") or [])
+                else:
+                    res = await _blocking(_release, body.get("run", ""))
+            except ValueError as e:
+                return web.json_response({"error": str(e)}, status=400)
+            return web.json_response(res)
     return web.json_response({"error": f"unknown api '{route}'"}, status=404)

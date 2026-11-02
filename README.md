@@ -51,10 +51,13 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    Pick a length, a World (four examples, write your own, or use a folder of your own images), who
    sings (Crowd or Single Artist) and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
-   where), before anything long renders. Change the World and plan again, or make the video.
+   where), before anything long renders. Change the World and plan again, then **Make the video**,
+   or **Generate images and review** to see every still before any clip is made.
 3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
    storyboard that fills in as stills and clips arrive, notes from the checks, and the time left.
-   You can close the tab and come back.
+   You can close the tab and come back. With Generate images and review, it stops once the stills
+   are made: pick any to make again, each with a note on what to change ("older, in a raincoat,
+   harder light"), as many rounds as you like, then press Make the video.
 4. **Result.** The video, Download MP4, and Export XML for Premiere Pro or DaVinci Resolve (every
    clip with its in and out points). From here you can:
    - Re-shoot any shot. Click it and choose a new take of the same person or a new person, with
@@ -68,6 +71,14 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
      pixel-for-pixel 1080p preview, and a vignette. Apply changes makes the new cut in about two
      minutes.
 5. **Your videos** lists every run, whether it came from the Studio, the workflow or the SDK.
+
+While the tool works (writing the plan, starting the video, making images, rendering, pickups, a new
+cut) there is a Cancel or Stop button; it only removes this video's jobs from ComfyUI's queue. The
+steps at the top stay clickable once a video has started, so you can go back to see what was picked:
+the Brief and the Plan of a video being made are greyed out, with **Restart from this stage** to
+change them (that stops the video if it is still rendering and makes a new one; the old one stays
+in Your videos). In the workflow, the Director's `review_images` does the same as Generate images
+and review; the Studio's Rendering screen then releases the rest.
 
 Every video starts with FX on Subtle, no color grade (a natural base grade is always applied),
 grain at 25% and the finest size, and no vignette. The project name is used for the run folder

@@ -283,6 +283,10 @@ class FVDirector:
                                    "tooltip": "Single artist without a photo: describe a new person, e.g. 'a singer "
                                               "in her late twenties with a shaved head and gold hoops'. The tool "
                                               "invents them and keeps them the same in every shot"}),
+            "review_images": ("BOOLEAN", {"default": False,
+                              "tooltip": "Make the images first: the run stops once every still is made, so you can "
+                                         "check them. The Studio's Rendering screen re-makes any you pick, with a "
+                                         "note, then makes the video."}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -298,7 +302,7 @@ class FVDirector:
     def run(self, audio, world, cast, seconds, start, format, quality, models, preview_only, world_images="",
             image_order="in order", image_fit="crop", professional=False, seed=1, cuts_low=None, cuts_medium=None,
             cuts_high=None, audio_fx="subtle", crowd="auto", cast_order="as written", broll_share=0.125, qc_retries=2,
-            run_name="", artist_photo=None, artist_description=""):
+            run_name="", artist_photo=None, artist_description="", review_images=False):
         _reload()
         artist_path, described = "", ""
         if (world_images or "").strip():
@@ -321,10 +325,28 @@ class FVDirector:
                               crowd=crowd or "auto", models=models or "auto",
                               artist_path=artist_path, artist_description=described,
                               world_images=(world_images or "").strip(), image_order=image_order or "in order",
-                              image_fit=image_fit or "crop", professional=bool(professional))
+                              image_fit=image_fit or "crop", professional=bool(professional),
+                              review=bool(review_images), log=_stoppable_log())
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)
         return {"ui": ui, "result": (res["summary"], res["run_dir"])}
+
+
+def _stoppable_log():
+    """The Director's log, which also stops it when the job is cancelled (the Studio's Cancel, or
+    ComfyUI's): every step logs a line, and once ComfyUI's interrupt flag is up each later line raises
+    again, so a step that catches errors to carry on can't swallow the stop. The flag is left up for
+    ComfyUI to clear when the next prompt starts."""
+    import comfy.model_management as mm
+    stopped = [False]
+
+    def log(*a, **k):
+        print(*a, **k)
+        flag = getattr(mm, "processing_interrupted", None)
+        if stopped[0] or (flag() if flag else False):
+            stopped[0] = True
+            raise mm.InterruptProcessingException()
+    return log
 
 
 class FVAssemble:
