@@ -386,6 +386,16 @@
             "name": "artist_description"
           },
           "link": null
+        },
+        {
+          "label": "Images first",
+          "localized_name": "review_images",
+          "name": "review_images",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "review_images"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -431,7 +441,8 @@
         0.125,
         2,
         "",
-        ""
+        "",
+        false
       ],
       "title": "OneShot MV: Director"
     },

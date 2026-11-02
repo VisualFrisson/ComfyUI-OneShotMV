@@ -86,7 +86,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
            cuts: dict | None = None, audio_fx: str = "", cast_order: str = "as written", crowd: str = "auto",
            log=print, models: str = "auto", artist_description: str = "", world_images: str = "",
            image_order: str = "in order", image_fit: str = "crop", professional: bool = False,
-           **legacy) -> dict:
+           review: bool = False, **legacy) -> dict:
     """staged (runs queued here, with QC): the 4-load order. Krea makes every portrait and the
     b-roll candidate stills; LTX makes every singer clip and the b-roll clips, and QC re-rolls the
     singer shots while LTX stays loaded; then the image editor makes every look keyframe from the
@@ -101,7 +101,10 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     and the cast; no World line, no Krea 2 portraits, no vision check. image_fit: "crop" (around the face)
     or "extend" (Qwen-Image 2.1 draws new edges on an image far off the video's shape).
     professional: Single Artist's portraits and looks by Qwen-Image-Edit 2511 (Apache-2.0) instead of
-    the default editor, Qwen-Image 2.1 (reported research-only); World images are cropped, never extended."""
+    the default editor, Qwen-Image 2.1 (reported research-only); World images are cropped, never extended.
+    review (staged runs): only the stills are queued (and the vision check, which holds the clips as
+    always); the rest is held in p["review"]["held"] until the Studio's Make the video queues it, after
+    any stills the user picked are re-made (studio._remake / _release)."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
@@ -441,9 +444,19 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         # at the front, like every later stage: a run's renders go before the next queued Director,
         # so several runs queued at once finish one after another (at the back, Directors queued
         # later would run before this run's portraits)
-        first = [g for name, g in jobs
+        first = [(name, g) for name, g in jobs
                  if not (name == "zz_assemble" and (not queue_assemble or use_qc)) and name not in deferred]
-        ids = queue_chain_front(first, server_url())
+        if review and staged:  # the stills (and the vision check) now, the rest when the user says so
+            stills_end = max(i for i, (n, _) in enumerate(jobs) if n in ("free_after_portraits", "zz_critic"))
+            now = {n for n, _ in jobs[:stills_end + 1]}
+            p["review"] = {"state": "stills", "rounds": [],
+                           "held": [f"{i:03d}_{n}.json" for i, (n, _) in enumerate(jobs)
+                                    if n not in now and any(n == m for m, _ in first)]}
+            first = [(n, g) for n, g in first if n in now]
+            json.dump(p, open(os.path.join(run_dir, "plan.json"), "w", encoding="utf-8"), indent=1)
+            log(f"[OneShotMV] images first: {len(first)} jobs queued, {len(p['review']['held'])} held for your review")
+        log(f"[OneShotMV] queueing {len(first)} jobs")
+        ids = queue_chain_front([g for _, g in first], server_url())
     summary = (f"OneShot MV run '{run_id}': {pack} / {fmt} / {label}\n"
                + (themes.summary(bible) + "\n" if bible else "") + emap +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
@@ -1253,7 +1266,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                 r = by_id.get(it["render"])
                 if r is not None:
                     r["key"] = it["final"]
-        later = []
+        later, kept = [], []
         for fn in cr.get("deferred", []):
             path = os.path.join(run_dir, "jobs", fn)
             if not os.path.exists(path):
@@ -1268,15 +1281,20 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
                 continue
             open(path, "w", encoding="utf-8").write(txt)
             later.append(g)
+            kept.append(fn)
         chain = [graphs.free_memory("after the vision check").nodes] + later
-        if queue:
+        rv = p.get("review")
+        if rv is not None and rv.get("state") != "released":  # images first: the clips wait for the user
+            rv["held"] = kept + [f for f in rv.get("held", []) if f not in kept]
+        elif queue:
             queued = queue_chain_front(chain, server_url())
         left = [f"{it['name']} ({'+'.join(it['final_faults'])})" for it in items if it.get("final_faults")]
         msg = (f"vision check pass {pass_idx}: {checked} pictures in {secs:.0f} s; final: "
                f"{len(items) - len(left)}/{len(items)} clean" + (f", kept best for {', '.join(left)}" if left else "") +
                (f"; {fitted} drop faces re-framed" if fitted else "") +
                (f"; {len(dropped)} b-roll still(s) dropped" if dropped else "") +
-               f"; {len(later)} clip jobs queued")
+               (f"; {len(later)} clip jobs wait for your review" if rv is not None and rv.get("state") != "released"
+                else f"; {len(later)} clip jobs queued"))
         cr["done"] = True
     cr["passes"] = pass_idx + 1
     p["critic"] = cr
