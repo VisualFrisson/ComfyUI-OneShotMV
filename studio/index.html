@@ -174,7 +174,10 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 .banner .err{font-family:var(--mono,ui-monospace,monospace);font-size:13px;overflow-wrap:anywhere}
 .banner.info{background:var(--panel2);border-color:var(--line2);color:var(--text)}
 .banner .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-.locked{opacity:.5;filter:saturate(.6)}
+.locked{opacity:.62;filter:grayscale(.75)}
+.hrow{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.hrow .btn{flex:none}
+.lockline{margin:8px 0 0;font-size:13px;color:var(--muted)}
 /* result */
 .player{background:#000;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .player video{width:100%;display:block;max-height:72vh;background:#000}
@@ -488,7 +491,7 @@ html[data-look="neon"] .lookmenu button{font-stretch:condensed;font-variation-se
 .namebox #nmi{font-size:18px;font-weight:600}
 html[data-look="neon"] .proj{font-stretch:condensed;font-variation-settings:'wdth' 75;text-transform:uppercase;letter-spacing:.03em}
 html[data-look="neon"] .sub{margin-top:8px}
-html[data-look="neon"] h1 + .sub{margin-top:12px}
+html[data-look="neon"] h1 + .sub,html[data-look="neon"] .hrow + .sub{margin-top:12px}
 /* card headings everywhere match the Brief's side headings */
 html[data-look="neon"] .label{font-size:20px;line-height:1;letter-spacing:.02em}
 /* time estimates inside the big buttons: condensed, larger, easy to read */
@@ -848,7 +851,8 @@ async function openBrief(run){
   try{ st = await api("run/" + encodeURIComponent(run)); }catch(e){}
   if (!b && st) b = st.form;
   // a video already being made (or made) shows its brief greyed out until Restart from this stage
-  S.lockedRun = st && st.stage !== "preview" && !S.unlocked[run] ? st : null;
+  const viaSteps = S.showBrief === run; S.showBrief = null;
+  S.lockedRun = st && viaSteps && !S.unlocked[run + ":brief"] ? st : null;
   if (b && (b.theme || b.song || b.world_images)){
     S.brief = Object.assign({}, DEFAULT_BRIEF, b); S.analysis = null; S.worldInfo = null; S.fromRun = run;
     // a folder with no mode is a World from images, as the server reads it
@@ -1102,15 +1106,11 @@ async function viewBrief(){
   if (!S.sys) loadSystem().then(drawTiers);
   // the brief of a video being made, or made: what was picked, greyed out, with Restart from this stage
   const L = S.lockedRun;
-  if (L && L.run === S.fromRun && !S.unlocked[L.run]){
+  if (L && L.run === S.fromRun && !S.unlocked[L.run + ":brief"]){
     setSteps(0, L.run, L.stage);
-    const cols = app.querySelector(".cols"); cols.inert = true; cols.classList.add("locked");
-    const ban = document.createElement("div"); ban.className = "banner info"; ban.setAttribute("role", "status");
-    ban.innerHTML = `This is the brief ${esc(projectOf(L) || "this video")} ${L.stage === "done" ? "was" : "is being"} made from, so changes are greyed out. <b>Restart from this stage</b> to change it and make a new video; this one stays in <a href="#/videos">Your videos</a>.
-      <div class="acts"><button class="btn" id="restartb" type="button">Restart from this stage</button>
-      <a class="btn primary" href="${L.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(L.run)}">${L.stage === "done" ? "Back to the video" : L.stage === "review" ? "Back to the images" : "Back to the render"}</a></div>`;
-    $("#setup").before(ban);
-    $("#restartb").onclick = () => restartFrom(L, () => { S.lockedRun = null; viewBrief(); }, "brief");
+    lockPage(() => restartFrom(L, () => { S.lockedRun = null; viewBrief(); }, "brief"),
+      L.stage === "preview" ? "The brief this plan was made from. Restart from here to change it and plan again."
+        : `The brief this video ${L.stage === "done" ? "was" : "is being"} made from. Restarting makes a new video; this one stays in Your videos.`);
   }
 }
 
@@ -1558,6 +1558,18 @@ async function start(render, briefOverride, review){
   }catch(e){ if (cancelled) return; overlay(); const m = e.message || ""; toast(/^(It can't|ComfyUI refused)/.test(m) ? m : "It didn't start: " + m, Math.max(9000, 70 * m.length)); }
 }
 
+// A step you went back to: the page stays readable but greyed out and not editable, with "Restart
+// from this stage" next to the heading (actions: what the button offers once pressed, or none).
+function lockPage(onRestart, why){
+  const app = $("#app"), head = app.querySelector(".head");
+  if (!head) return;
+  [...app.children].forEach(el => { if (el !== head){ el.inert = true; el.classList.add("locked"); } });
+  const h1 = head.querySelector("h1"), row = document.createElement("div");
+  row.className = "hrow"; h1.before(row); row.append(h1);
+  row.insertAdjacentHTML("beforeend", `<button class="btn" id="restart" type="button">Restart from this stage</button>`);
+  if (why) row.insertAdjacentHTML("afterend", `<p class="lockline">${why}</p>`);
+  $("#restart").onclick = onRestart;
+}
 // Restart from this stage: a video still being made is stopped first (what it made stays in Your videos);
 // then that stage opens for changes, and starting from it makes a new video
 async function restartFrom(r, then, where){
@@ -1567,7 +1579,7 @@ async function restartFrom(r, then, where){
     try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }
     catch(e){ toast("It didn't stop: " + e.message); return; }
   }
-  S.unlocked[r.run] = true; then();
+  S.unlocked[r.run + ":" + where] = true; then();  // that step only: the others stay as they were
 }
 
 // ---------------------------------------------------------------- 2. The Plan
@@ -1581,19 +1593,16 @@ async function viewPlan(run){
   // a video already rendering or made: its plan only when asked for from the steps, else go on to it
   if (r.stage !== "preview" && !asked){ location.hash = (r.stage === "done" ? "#/result/" : "#/render/") + encodeURIComponent(run); return; }
   setSteps(1, run, r.stage);
-  const made = r.stage !== "preview", locked = made && !S.unlocked[run];
+  const made = r.stage !== "preview", locked = made && !S.unlocked[run + ":plan"];
   const w = r.world, b = r.brief, im = imagesOf(r);
   const brief = store.get("briefs", {})[run] || (r.form && r.form.song ? r.form : null);
-  // images first: nothing to check for a World from your own images unless they're extended
-  const canReview = !im || (brief && brief.image_fit === "extend" && !brief.professional);
   const sing = r.shots.filter(s => s.kind === "sing").length, cut = r.shots.length - sing;
   const est = brief ? estimate(Object.assign({}, brief)) : r.estimate_min;
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
   <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
     <span class="mono muted" style="font-size:12px">${made && !locked ? "Restarted from here" : made ? (r.stage === "done" ? "This video is made" : r.stage === "review" ? "Its images are waiting for you" : "This video is rendering") : "Nothing is rendered yet"}</span></div>
-  ${locked ? `<div class="banner info" role="status" style="margin:0 0 16px">This is the plan this video ${r.stage === "done" ? "was" : "is being"} made from, so changes are greyed out. <b>Restart from this stage</b> to change it or make it again: that makes a new video, and this one stays in <a href="#/videos">Your videos</a>.</div>`
-    : made ? `<p class="note" style="margin:0 0 16px">Restarted from the plan: Make the video, or Generate images and review, makes a new video from it. The one before stays in <a href="#/videos">Your videos</a>.</p>` : ""}
+  ${made && !locked ? `<p class="note" style="margin:0 0 16px">Restarted from the plan: Make the video, or Generate images and review, makes a new video from it. The one before stays in <a href="#/videos">Your videos</a>.</p>` : ""}
   <div class="cols">
    <section class="card stack" style="flex:1 1 340px;min-width:0;gap:18px" aria-labelledby="wh">
      <div class="row" style="justify-content:space-between"><h2 class="label" id="wh">The World</h2>${locked ? `<span class="muted" style="font-size:13px;font-weight:600;opacity:.5">Edit</span>` : `<a href="#/brief/${encodeURIComponent(run)}" id="editw" style="font-size:13px;font-weight:600;text-decoration:none">Edit</a>`}</div>
@@ -1620,15 +1629,12 @@ async function viewPlan(run){
     ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>Shuffle the cast</button>`
       : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>`}
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    ${locked ? `<button class="btn" id="restart" type="button">Restart from this stage</button>
-      <a class="btn primary big" href="${r.stage === "done" ? "#/result/" : "#/render/"}${encodeURIComponent(run)}">${r.stage === "done" ? "Back to the video" : r.stage === "review" ? "Back to the images" : "Back to the render"}</a>`
-      : `${canReview ? `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>` : ""}
-      <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>`}
+    <button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>
+    <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
-  if ($("#restart")) $("#restart").onclick = () => restartFrom(r, () => { S.showPlan = run; viewPlan(run); }, "plan");
-  // a made video's Brief opens to change it (its own screen asks to restart first otherwise)
-  for (const id of ["#changew", "#editw"]) if ($(id) && made) $(id).addEventListener("click", () => { S.unlocked[run] = true; });
+  if (locked) lockPage(() => restartFrom(r, () => { S.showPlan = run; viewPlan(run); }, "plan"),
+    `The plan this video ${r.stage === "done" ? "was" : "is being"} made from. Restarting makes a new video from it; this one stays in Your videos.`);
   if (brief && !locked){
     if ($("#make")) $("#make").onclick = () => start(true, brief);
     if ($("#review")) $("#review").onclick = () => start(true, brief, true);
@@ -1657,12 +1663,26 @@ async function viewRender(run){
       if (mode !== "review"){ mode = "review"; reviewView(r, true); } else reviewView(r, false);
       return;
     }
-    if (mode !== "render" && mode !== "made"){ renderSkeleton(r); mode = r.stage === "done" ? "made" : "render"; }
+    const first = mode !== "render" && mode !== "made";
+    if (first){ renderSkeleton(r); mode = r.stage === "done" ? "made" : "render"; }
     renderUpdate(r);
-    if (r.stage === "done") stopTimer();
+    if (r.stage === "done"){
+      stopTimer();
+      // went back from the Result: how it was made, greyed out, with Restart from this stage
+      if (first) lockPage(() => restartRender(r), "How this video was made. Restarting makes it again from the same plan, as a new video; this one stays in Your videos.");
+    }
   };
   await tick();
   if (mode !== "made") S.timer = setInterval(tick, DEMO ? 1000 : 5000);
+}
+// Restart from Rendering (a made video): make it again from the same plan, straight or images first
+function restartRender(r){
+  const brief = store.get("briefs", {})[r.run] || (r.form && r.form.song ? r.form : null);
+  if (!brief){ toast("This video's brief isn't recorded, so start it again from The Brief."); return; }
+  const b = $("#restart"); if (!b) return;
+  b.outerHTML = `<button class="btn" id="rrreview" type="button">Generate images and review</button><button class="btn primary" id="rrmake" type="button">Make the video</button>`;
+  $("#rrreview").onclick = () => start(true, brief, true);
+  $("#rrmake").onclick = () => start(true, brief);
 }
 // images first, the stills made: pick any to make again, each with a note on what to change, then
 // Make the video. The picks and notes are kept in this browser until they're sent.
@@ -1682,9 +1702,10 @@ function reviewView(r, fresh){
   <div class="head"><div><h1>Review the images</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600">${mins(r.elapsed_min)} in</div><div class="muted" style="font-size:14px">${busy ? "making images again" : "waiting for you"}</div></div></div>
   ${busy ? `<div class="banner info" role="status"><b>Making ${rv.rounds ? "the picked images again" : "the images"}…</b> The board updates as each one lands. <div class="acts"><button class="btn danger sm" id="rvstop" type="button">Stop</button></div></div>`
+    : !can.size && imagesOf(r) ? `<div class="banner info" role="status">Your images, cropped to the video's shape. They're your own pictures, so none can be made again here: to change one, change it in the folder and plan again. Make the video when they look right.</div>`
     : `<div class="banner info" role="status">Every still is made${rv.rounds ? `, with ${rv.rounds} round${rv.rounds > 1 ? "s" : ""} of re-makes` : ""}. Click any you want made again and say what to change, or make the video as it is.</div>`}
   <section class="card" style="padding:20px 22px" aria-labelledby="rvh">
-    <div class="row" style="margin-bottom:14px"><h2 class="label" id="rvh">Images</h2><span class="tiny">${can.size} of ${r.shots.filter(s => s.kind === "sing").length} sung shots can be made again${r.shots.some(s => s.kind === "broll") ? "; cutaways are picked after the take check" : ""}</span></div>
+    <div class="row" style="margin-bottom:14px"><h2 class="label" id="rvh">Images</h2>${can.size ? `<span class="tiny">${can.size} of ${r.shots.filter(s => s.kind === "sing").length} sung shots can be made again${r.shots.some(s => s.kind === "broll") ? "; cutaways are picked after the take check" : ""}</span>` : ""}</div>
     <div class="board rvboard" id="rvboard">${r.shots.map(s => {
       const on = R.sel[s.n] != null && can.has(s.n), ok = can.has(s.n) && !busy, again = redo.has(s.n);
       const img = s.still && !again ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">`

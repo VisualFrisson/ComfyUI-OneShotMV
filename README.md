@@ -74,10 +74,11 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
 
 While the tool works (writing the plan, starting the video, making images, rendering, pickups, a new
 cut) there is a Cancel or Stop button; it only removes this video's jobs from ComfyUI's queue. The
-steps at the top stay clickable once a video has started, so you can go back to see what was picked:
-the Brief and the Plan of a video being made are greyed out, with **Restart from this stage** to
-change them (that stops the video if it is still rendering and makes a new one; the old one stays
-in Your videos). In the workflow, the Director's `review_images` does the same as Generate images
+steps at the top stay clickable, so you can go back to see what was picked: a step you go back to
+is greyed out but readable, with **Restart from this stage** next to its heading. Restarting the
+Brief or the Plan stops the video if it is still rendering, and starting again makes a new video;
+restarting Rendering on a made video makes it again from the same plan. The old video stays in Your
+videos. In the workflow, the Director's `review_images` does the same as Generate images
 and review; the Studio's Rendering screen then releases the rest.
 
 Every video starts with FX on Subtle, no color grade (a natural base grade is always applied),
