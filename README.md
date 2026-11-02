@@ -57,7 +57,7 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
 3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
    storyboard that fills in as stills and clips arrive, notes from the checks, and the time left.
    You can close the tab and come back. With Generate images and review, it stops once the stills
-   are made: pick any to make again, cutaways too, each with a note on what to change ("older, in
+   are made: **Fix image** on any, cutaways too, makes it again with a note on what to change ("older, in
    a raincoat, harder light"), as many rounds as you like, then press Make the video. With your own
    images, **New image** swaps a shot's picture for another from your folder or one you upload
    (it goes to `input/oneshot-mv/added/<video>`), cropped around the face or extended (the video's
