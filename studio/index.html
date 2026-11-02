@@ -1663,8 +1663,9 @@ async function viewRender(run){
       if (mode !== "review"){ mode = "review"; reviewView(r, true); } else reviewView(r, false);
       return;
     }
-    const first = mode !== "render" && mode !== "made";
-    if (first){ renderSkeleton(r); mode = r.stage === "done" ? "made" : "render"; }
+    // the screen's kind: a made video, images being made first, or the video being made
+    const kind = r.stage === "done" ? "made" : imagesFirst(r) ? "images" : "render", first = mode !== kind;
+    if (first){ renderSkeleton(r); mode = kind; }
     renderUpdate(r);
     if (r.stage === "done"){
       stopTimer();
@@ -1756,10 +1757,12 @@ function reviewView(r, fresh){
   };
 }
 function shotClass(fmt){ return fmt === "9:16" ? "v" : (fmt === "1:1" ? "sq" : ""); }
+// images first, the stills still being made (the review hasn't released the clips yet)
+const imagesFirst = r => !!(r.review && r.review.state && r.review.state !== "released");
 function renderSkeleton(r){
-  const app = $("#app");
+  const app = $("#app"), imf = imagesFirst(r);
   app.innerHTML = `
-  <div class="head"><div><h1>${r.stage === "done" ? "How it was made" : "Making your video"}</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
+  <div class="head"><div><h1>${r.stage === "done" ? "How it was made" : imf ? "Making the images" : "Making your video"}</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600" id="elapsed"></div><div class="muted" style="font-size:14px" id="left"></div></div></div>
   <div id="stall"></div><div id="rvfirst"></div>
   <div class="progress" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="pbar"><div id="pfill" style="width:0"></div></div>
@@ -1771,21 +1774,23 @@ function renderSkeleton(r){
       <div class="board" id="board"></div>
     </section>
     <aside class="colside">
-      <section class="card" aria-labelledby="lth"><h2 class="label" id="lth" style="margin-bottom:12px">Latest take</h2><div id="latest" class="muted" style="font-size:14px">No clips yet. Stills come first.</div></section>
+      ${imf ? "" : `<section class="card" aria-labelledby="lth"><h2 class="label" id="lth" style="margin-bottom:12px">Latest take</h2><div id="latest" class="muted" style="font-size:14px">No clips yet. Stills come first.</div></section>`}
       <section class="card" aria-labelledby="qch"><h2 class="label" id="qch" style="margin-bottom:12px">Checks</h2><ul class="notes" id="notes"></ul></section>
-      <p class="muted" style="margin:0;font-size:13px;padding:0 4px">You can close this tab. The render keeps going in ComfyUI, and this page picks up where it is when you come back.</p>
+      <p class="muted" style="margin:0;font-size:13px;padding:0 4px">${imf ? "You can close this tab. The images keep being made in ComfyUI, and this page shows them for review when you come back."
+        : "You can close this tab. The render keeps going in ComfyUI, and this page picks up where it is when you come back."}</p>
       <div class="row">${r.stage === "done" ? `<a class="btn primary" href="#/result/${encodeURIComponent(r.run)}" style="flex:1">Back to the video</a>`
-        : `<a class="btn" href="/" target="_blank" rel="noopener" style="flex:1">Open ComfyUI</a><button class="btn danger" id="cancel" type="button" style="flex:1">Stop this video</button>`}</div>
+        : `<a class="btn" href="/" target="_blank" rel="noopener" style="flex:1">Open ComfyUI</a><button class="btn danger" id="cancel" type="button" style="flex:1">${imf ? "Stop making the images" : "Stop this video"}</button>`}</div>
     </aside>
   </div>`;
   if ($("#cancel")) $("#cancel").onclick = async () => {
-    if (!confirm("Stop this video? Its queued shots are removed and the one rendering stops.")) return;
+    if (!confirm(imf ? "Stop making the images? The ones already made are kept."
+                     : "Stop this video? Its queued shots are removed and the one rendering stops.")) return;
     try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed===1?"":"s"} removed.`); }catch(e){ toast(e.message); }
   };
 }
 function renderUpdate(r){
   $("#elapsed").textContent = `${mins(r.elapsed_min)} in`;
-  $("#left").textContent = r.stalled ? "stopped" : (r.left_min > 0 ? `about ${mins(r.left_min)} to go` : "nearly there");
+  $("#left").textContent = r.stalled ? "stopped" : imagesFirst(r) ? "then your review" : (r.left_min > 0 ? `about ${mins(r.left_min)} to go` : "nearly there");
   $("#pfill").style.width = r.pct + "%"; $("#pbar").setAttribute("aria-valuenow", r.pct);
   const er = r.errors || [], last = er.length ? (er[0].node ? er[0].node + ": " : "") + (er[0].error || "no message") : "";
   const lastHtml = last ? `<div class="err">${esc(last.length > 400 ? last.slice(0, 400) + "…" : last)}</div>` : "";
@@ -1794,8 +1799,7 @@ function renderUpdate(r){
     ? (last ? `<div class="banner"><b>This video stopped: a step failed.</b> The last error:${lastHtml}Fix that, then start it again from <a href="#/">The Brief</a>; the ComfyUI console has the full error.</div>`
             : `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>`)
     : (last ? `<div class="banner">${r.failed_jobs} job${r.failed_jobs === 1 ? "" : "s"} of this video failed so far; the take check re-shoots clips that didn't render${sageNote}. The last error:${lastHtml}</div>` : "");
-  const rvf = r.review && r.review.state && r.review.state !== "released";
-  $("#rvfirst").innerHTML = rvf ? `<div class="banner info" role="status">Images first: this video stops once every still is made, so you can check them and make any again before the clips.</div>` : "";
+  $("#rvfirst").innerHTML = imagesFirst(r) ? `<div class="banner info" role="status">Images first: once every image is made, this page shows them so you can make any again. The clips are made after that.</div>` : "";
   const im = imagesOf(r);  // a World from images has no vision check: the images are the stills
   $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(im && s.id === "check" ? "none for your images" : s.meta)}</div></li>`).join("");
   const cls = shotClass(r.brief.format);
@@ -1806,7 +1810,7 @@ function renderUpdate(r){
     return `<div class="shot ${cls} ${s.state==="still" ? "still" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}"><div class="im">${img}<span class="tag">${esc(s.time)}</span>${s.kind==="broll" ? '<span class="tag r">cutaway</span>' : ""}</div>
       <div class="ft"><span class="who" title="${esc(s.role)}">${esc(s.role || s.size)}</span><b style="color:${col}">${st}</b></div></div>`;
   }).join("");
-  if (r.latest){
+  if (r.latest && $("#latest")){
     const cur = $("#latest video");
     if (!cur || cur.dataset.src !== r.latest) $("#latest").innerHTML = `<video src="${esc(r.latest)}" data-src="${esc(r.latest)}" autoplay muted loop playsinline style="width:100%;border-radius:10px;display:block"></video>`;
   }
