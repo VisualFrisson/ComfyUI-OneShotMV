@@ -53,17 +53,17 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    sings (Crowd or Single Artist) and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
    where), before anything long renders. Change the World and plan again, then **Make the video**,
-   or **Generate images and review** to see every image before any clip is made. A World from your
-   own images has it only with Extend, to check the drawn-in edges; cropped, they are the images.
+   or **Generate images and review** to see every image before any clip is made. With your own
+   images, review is offered only with Extend, since cropped images are already final.
 3. **Rendering.** The stages (plan, images, vision check, clips, take check, cutaways, edit), a
    storyboard that fills in as images and clips arrive, notes from the checks, and the time left.
    You can close the tab and come back. With Generate images and review, it stops once the images
-   are made: **Fix image** on any, cutaways too, makes it again with a note on what to change ("older, in
-   a raincoat, harder light"), as many rounds as you like, then press Make the video. With your own
-   images, **New image** swaps a shot's picture for another from your folder or one you upload
-   (it goes to `input/oneshot-mv/added/<video>`), cropped around the face or extended (the video's
-   choice unless you change it there), with a preview of the frame it makes; a sung shot takes only
-   an image with a face big enough to sing.
+   are made:
+   - **Fix image** makes any image again, cutaways too, with a note on what to change ("older, in
+     a raincoat, harder light"). Fix as many as you like, as often as you like, then press **Make
+     the video**.
+   - With your own images, **New image** swaps a shot's image for another from your folder or one
+     you upload, cropped or extended, with a preview. A sung shot needs a face big enough to sing.
 4. **Result.** The video, Download MP4, and Export XML for Premiere Pro or DaVinci Resolve (every
    clip with its in and out points). From here you can:
    - Fix any shot. Click it and choose a new take of the same person or a new person, with
@@ -78,14 +78,11 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
      minutes.
 5. **Your videos** lists every run, whether it came from the Studio, the workflow or the SDK.
 
-While the tool works (writing the plan, starting the video, making images, rendering, fixes, a new
-cut) there is a Cancel or Stop button; it only removes this video's jobs from ComfyUI's queue. The
-steps at the top stay clickable, so you can go back to see what was picked: a step you go back to
-is greyed out but readable, with **Restart from this stage** next to its heading. Restarting the
-Brief or the Plan stops the video if it is still rendering, and starting again makes a new video;
-restarting Rendering on a made video makes it again from the same plan. The old video stays in Your
-videos. In the workflow, the Director's `review_images` does the same as Generate images
-and review; the Studio's Rendering screen then releases the rest.
+While it works there is a **Cancel** or **Stop** button; it removes only this video's jobs from
+ComfyUI's queue. The steps at the top stay clickable: an earlier step is greyed out but readable,
+with **Restart from this stage** next to its heading. Restarting makes a new video, and the old one
+stays in Your videos. In the workflow, the Director's `review_images` does the same as Generate
+images and review.
 
 Every video starts with FX on Subtle, no color grade (a natural base grade is always applied),
 grain at 25% and the finest size, and no vignette. The project name is used for the run folder
@@ -227,8 +224,7 @@ light (true to its period, as for Crowd), with quick costume changes on the drop
   yourself or of someone who agreed to it. One photo is enough, and the best one is sharp, of
   just them, facing the camera with the head straight, in soft even light, with the whole face
   showing (no sunglasses, hat brim or hair across it); head and shoulders is ideal. Makeup and
-  jewellery in the photo tend to carry over. In a test on Nov 2, 2026, four photos given together
-  made the editor draw the person two or three times, and a front-on photo beat tilted selfies.
+  jewellery in the photo tend to carry over.
 - **A new artist:** describe them in a sentence ("a singer in her late twenties with a shaved
   head and gold hoops"). The tool makes their studio headshot first and keeps them the same in
   every shot, so no real person's photo is needed.
@@ -237,14 +233,12 @@ The portraits come out in the video's shape, so a tall phone photo keeps its hea
 the World's places with nobody in them. The crowd behind the singer is off unless you set crowd
 to `on`.
 
-Each main image is made in two steps, so the shots differ in light, angle and hair the way the World
-asks instead of all looking like the photo: Krea 2 draws the shot with a look-alike (the vision model
-describes the photo first: gender, age, skin, hair), in a hairstyle of its own, and the image editor
-then puts the artist's face in. A face check compares each image with the photo and makes it again
-when the face isn't the artist's; the last try edits the photo itself, keeping only the face. In the
-Nov 2, 2026 tests this kept the face better than editing the photo (0.50 against 0.44 face match) and
-gave far more varied shots. Without a description (no vision model), the photo is edited, keeping
-only the face.
+Each main image is made in two steps, so the shots vary in light, angle and hair the way the World
+asks instead of copying the photo: Krea 2 draws the shot with a look-alike (the vision model
+describes the photo first: gender, age, skin, hair), and the image editor then puts the artist's
+face in. A face check compares each image with the photo and makes it again if the face doesn't
+match; the last try edits the photo itself, keeping only the face. If the photo can't be
+described, every image is made that way.
 
 Qwen-Image 2.1 makes the artist's portraits and looks. It kept the face best in our tests, but its
 licence is reported to be research-only. For paid or client work, turn on **For professional use**
@@ -346,6 +340,7 @@ card:
 | Video | Time |
 |---|---|
 | 32 s, quality | about 70 min |
+| 1 min, quality | about 2 to 3 h |
 | 1:51, quality | about 6 h 45 min |
 | Re-cut (post processing) | about 2 min |
 | Fix one shot | about 10 to 15 min, mostly model loading |
