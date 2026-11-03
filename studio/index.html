@@ -769,6 +769,7 @@ function demoBar(){
     if (location.hash === h) route(); else location.hash = h;
   });
 }
+const stoppedMsg = j => "Stopped." + (j && j.removed ? ` ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.` : "");
 function toast(msg, ms=4200){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(t._h); t._h = setTimeout(()=>t.classList.add("hide"), ms); }
 // a full-screen "working" box; onCancel adds a Cancel button (the work it stops is the caller's)
 function overlay(title, sub, onCancel){ const o = $("#overlay"), c = $("#ovcancel"); if (!title){ o.classList.add("hide"); c.onclick = null; return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide");
@@ -962,6 +963,7 @@ async function viewBrief(){
       <div class="seg" role="group" aria-label="Model set" id="mset"></div>
       <p class="tiny" id="mnote" style="margin:8px 0 0"></p>
       <label class="check"><input type="checkbox" id="mpro">For professional use</label>
+      <p class="tiny" id="mpronote" style="margin:4px 0 0 27px">For paid or client work: Qwen-Image-Edit 2511 (Apache-2.0) is used instead of Qwen-Image 2.1, whose licence is reported to be research-only. Single Artist's faces match a little less closely, and your own images are cropped, never extended.</p>
       <div class="mlist" id="mlist"></div>
     </section>
     <section class="card">
@@ -1047,7 +1049,8 @@ async function viewBrief(){
     $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); loadSetup(); });
     const pro = $("#mpro");
     pro.checked = !!b.professional;
-    pro.onchange = () => { b.professional = pro.checked; saveBrief(); drawModels(); drawFit(); loadSetup(); refreshEstimate(); };
+    pro.onchange = () => { b.professional = pro.checked; saveBrief(); drawModels(); drawFit(); loadSetup(); refreshEstimate();
+      const al = $("#alicence"); if (al) al.classList.toggle("hide", pro.checked); };
     if (!r){ $("#mnote").textContent = "Checking your GPU…"; $("#mlist").innerHTML = ""; return; }
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
     let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}. ` : "";
@@ -1301,10 +1304,12 @@ function drawCast(){
     drawCast(); const f = $(`#amode [data-m="${m}"]`); if (f) f.focus();
   });
   const pane = $("#apane");
+  // Qwen-Image 2.1's licence, said where Single Artist is picked (For professional use swaps the editor)
+  const lic = `<p class="note${b.professional ? " hide" : ""}" id="alicence">Single Artist's images are made with Qwen-Image 2.1, whose licence is reported to be research-only. For paid or client work, tick For professional use on the Models card.</p>`;
   if (!photo){
     pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age and look</label>
       <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head and gold hoops"></textarea>
-      <p class="note">The tool invents this person and keeps them the same in every shot.</p>`;
+      <p class="note">The tool invents this person and keeps them the same in every shot.</p>${lic}`;
     const ta = $("#adesc"); ta.value = b.artist_description || "";
     ta.oninput = () => { b.artist_description = ta.value; saveBrief(); refreshEstimate(); };
     return;
@@ -1320,7 +1325,7 @@ function drawCast(){
         <div class="muted" style="font-size:13px">JPG, PNG or WebP. It goes into ComfyUI's input folder.</div></div>`)
     + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
       <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewellery in the photo tend to carry over into the video.</p>
-      <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>`;
+      <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>${lic}`;
   const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
   if (img){
     $("#areplace").onclick = pick;
@@ -1566,7 +1571,7 @@ async function start(render, briefOverride, review){
       }
       else if (j.state === "error") throw new Error(j.error);
       else if (j.state === "done"){
-        if (!j.run) throw new Error("the Director finished without a run folder");
+        if (!j.run) throw new Error("no video folder was made (the ComfyUI console says why)");
         const briefs = store.get("briefs", {}); briefs[j.run] = brief; store.set("briefs", briefs);
         overlay(); location.hash = (render ? "#/render/" : "#/plan/") + encodeURIComponent(j.run); return;
       }
@@ -1592,7 +1597,7 @@ async function restartFrom(r, then, where){
   const working = r.stage !== "done" && r.stage !== "preview" && r.stage !== "review" && !r.stalled;
   if (working){
     if (!confirm(`Stop this video and start again from the ${where}? What it made so far stays in Your videos.`)) return;
-    try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }
+    try{ const j = await api("cancel", {run: r.run}); toast(stoppedMsg(j)); }
     catch(e){ toast("It didn't stop: " + e.message); return; }
   }
   S.unlocked[r.run + ":" + where] = true; then();  // that step only: the others stay as they were
@@ -1614,6 +1619,8 @@ async function viewPlan(run){
   const brief = store.get("briefs", {})[run] || (r.form && r.form.song ? r.form : null);
   const sing = r.shots.filter(s => s.kind === "sing").length, cut = r.shots.length - sing;
   const est = brief ? estimate(Object.assign({}, brief)) : r.estimate_min;
+  // a new seed: a new cast for a Crowd, other outfits and places for a Single Artist, another cut of your images
+  const shuffleLabel = im ? "Shuffle the shots" : r.artist ? "New outfits and places" : "Shuffle the cast";
   const levels = r.shots.map(s => `<span style="flex:${s.len};background:${LEVEL_COL[s.energy]||'var(--mid)'}" title="${esc(s.time)} ${esc(s.energy)}"></span>`).join("");
   app.innerHTML = `
   <div class="head"><div><h1>The plan</h1>${projectOf(r) || (brief && brief.name) ? `<p class="proj">${esc(projectOf(r) || brief.name)}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(b.from)} – ${esc(b.to)} · ${esc(b.format)} · ${esc(b.preset)} · ${r.shots.length} shots</p></div>
@@ -1628,10 +1635,12 @@ async function viewPlan(run){
      ${w.places && w.places.length ? `<div><div class="kv">Places</div><div style="font-size:14px;color:#D4D4D4">${esc(w.places.slice(0,6).map(p=>String(p).replace(/^(in|on|at|near|by) (the )?/i,"")).join(" · "))}${w.places.length > 6 ? " · …" : ""}</div></div>` : ""}
      ${w.light && w.light.length ? `<div><div class="kv">Light</div><div style="font-size:14px;color:#D4D4D4">${esc(w.light.slice(0,4).join(" · "))}</div></div>` : ""}
      <div><div class="kv">Cast</div><div style="font-size:14px;color:#D4D4D4">${im ? `The images with a face sing, ${im.order === "random order" ? "in random order" : "in order"}; the rest are cutaways.`
+       : r.artist ? "Single Artist sings every line, in the World's outfits and places; the cutaways are its places with nobody in them."
        : `${w.characters} characters in the World${w.left_out.length ? `; not in this cut: ${esc(w.left_out.slice(0,10).join(", "))}${w.left_out.length > 10 ? "…" : ""}` : ""}.`}</div></div>
      <div><div class="kv">Energy</div><div class="emap" aria-hidden="true">${levels}</div>
        <ul class="tiny" style="margin:8px 0 0;padding-left:16px">${(r.energy_map||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
      <p class="tiny" style="margin:0">${im ? "To change who is in it, change the images or their order in the Brief."
+       : r.artist ? "To change the artist, change the photo or description in the Brief. New outfits and places picks other looks from the same World."
        : "To change who is in it, edit the World line: the characters it names are cast first, in that order. Same seed, same cast; a new seed re-casts."}</p>
    </section>
    <section class="card" style="flex:999 1 720px;min-width:0" aria-labelledby="sh">
@@ -1642,9 +1651,9 @@ async function viewPlan(run){
    </section>
   </div>
   <div class="bar">
-    ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>Shuffle the cast</button>`
-      : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>`}
-    <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
+    ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>${shuffleLabel}</button>`
+      : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>${shuffleLabel}</button>`}
+    <span class="grow">${r.shots.length} shots · ${sing} sung shot${sing === 1 ? "" : "s"} · about ${mins(est)} on this GPU</span>
     ${!reviewable(im, brief) ? "" : `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every image first, fix any with a note, then make the video">Generate images and review</button>`}
     <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
   </div>
@@ -1731,7 +1740,8 @@ function reviewView(r, fresh){
     return `Not made yet: ${fit} when you press ${makeLabel(picked().length, swapped().length)} below.`;
   };
   const hint = s => own ? "Like “keep the wall plain, no new people”"
-    : s.kind === "broll" ? "Like “at dusk, wider, warmer light”" : "Like “older, in a raincoat, harder light”";
+    : s.kind === "broll" ? "Like “at dusk, wider, warmer light”"
+    : r.artist ? "Like “closer to the photo, mouth open mid-word”" : "Like “older, in a raincoat, harder light”";
   const spares = r.shots.some(s => s.kind === "broll") ? " Some cutaways are spares: the take check keeps the ones it needs." : "";
   const how = can.size && sw.size ? "Fix any with a note, or give it a new image"
     : sw.size ? "Give any shot a new image" : "Fix any you want changed, with a note on what to change";
@@ -1797,7 +1807,7 @@ function reviewView(r, fresh){
   };
   if ($("#rvstop")) $("#rvstop").onclick = async () => {
     if (!confirm("Stop making these images? The ones already made are kept.")) return;
-    try{ const j = await api("cancel", {run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
+    try{ const j = await api("cancel", {run}); toast(stoppedMsg(j)); }catch(e){ toast(e.message); }
   };
 }
 // Another of the user's own images for one shot: from the World's folder, or one uploaded here
@@ -1901,7 +1911,7 @@ function renderSkeleton(r){
   if ($("#cancel")) $("#cancel").onclick = async () => {
     if (!confirm(imf ? "Stop making the images? The ones already made are kept."
                      : "Stop this video? Its queued shots are removed and the one rendering stops.")) return;
-    try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed===1?"":"s"} removed.`); }catch(e){ toast(e.message); }
+    try{ const j = await api("cancel", {run: r.run}); toast(stoppedMsg(j)); }catch(e){ toast(e.message); }
   };
 }
 function renderUpdate(r){
@@ -1951,7 +1961,7 @@ async function viewResult(run){
   const F0 = Object.assign({fx: Object.assign({}, fx0)}, r.finish || {});
   const E = Object.assign({}, F0, {fx: Object.assign({}, fx0)});
   app.innerHTML = `
-  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(worldName(r)) + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of fixes` : ""}</p></div>
+  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(worldName(r)) + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} sung shot${sing === 1 ? "" : "s"} · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of fixes` : ""}</p></div>
     <div class="row"><a class="btn" href="#/">New video</a>
       <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(fileStem(r))}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
       <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(fileStem(r))}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
@@ -2036,9 +2046,9 @@ async function viewResult(run){
       <div class="fixgrid">
         <div class="stack" role="group" aria-label="How to fix it" id="modes" style="gap:8px">
           <button type="button" class="tier" data-m="take" aria-pressed="${P.mode==="take"}"><span class="t"><b>New take</b><span class="eta">about 1 min</span></span><small>Same person and image, a new performance: mouths, motion, the camera.</small></button>
-          <button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>New person</b><span class="eta">about 1.5 min</span></span><small>A new image and take: the wrong look, age, clothes, place or light.</small></button>
+          ${imagesOf(r) ? "" : `<button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>${r.artist ? "New image" : "New person"}</b><span class="eta">about 1.5 min</span></span><small>${r.artist ? "The artist's face put in again, then a new take: when it doesn't look like them." : "A new image and take: the wrong look, age, clothes, place or light."}</small></button>`}
         </div>
-        <div class="stack" style="gap:10px"><label class="field">What to change (optional)<textarea id="pnote" rows="3" placeholder="${P.mode==="recast" ? "Like “a woman in her seventies, in bright midday sun”" : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
+        <div class="stack" style="gap:10px"><label class="field">What to change (optional)<textarea id="pnote" rows="3" placeholder="${P.mode==="recast" ? (r.artist ? "Like “closer to the photo, mouth open”" : "Like “a woman in her seventies, in bright midday sun”") : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
           <button class="btn" id="addpk" type="button">${queued ? "Update this fix" : "Add to fixes"}</button></div>
       </div></div>`;
     const ta = $("#pnote"); ta.value = P.note; ta.oninput = () => { P.note = ta.value; };
@@ -2054,7 +2064,7 @@ async function viewResult(run){
     $("#pkbox").classList.toggle("hide", !P.list.length || shooting);
     $("#pkcount").textContent = P.list.length ? `${P.list.length} shot${P.list.length > 1 ? "s" : ""}` : "";
     $("#pklist").innerHTML = P.list.map(x => `<li style="align-items:center">${x.still ? `<img src="${esc(x.still)}" alt="" style="width:64px;aspect-ratio:16/9;object-fit:cover;border-radius:6px">` : ""}
-      <span style="flex:1;min-width:0"><b>Shot ${x.n}</b> <span class="tiny mono">${esc(x.t)} · ${x.mode === "recast" ? "new person" : "new take"}</span><span class="tiny" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.note || x.role || "")}</span></span>
+      <span style="flex:1;min-width:0"><b>Shot ${x.n}</b> <span class="tiny mono">${esc(x.t)} · ${x.mode === "recast" ? (r.artist ? "new image" : "new person") : "new take"}</span><span class="tiny" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.note || x.role || "")}</span></span>
       <button type="button" class="btn sm ghost" data-ed="${x.n}">Edit</button><button type="button" class="btn sm ghost" data-rm="${x.n}" aria-label="Remove shot ${x.n}">✕</button></li>`).join("");
     $("#pklist").querySelectorAll("[data-rm]").forEach(el => el.onclick = () => { P.list = P.list.filter(x => x.n !== +el.dataset.rm); store.set(pickKey(run), P.list); drawPk(); });
     $("#pklist").querySelectorAll("[data-ed]").forEach(el => el.onclick = () => selectShot(+el.dataset.ed));
@@ -2144,7 +2154,7 @@ async function viewResult(run){
           <div class="progress" style="margin:12px 0 0"><div style="width:${pct}%"></div></div><p class="tiny" style="margin:10px 0 0">The video below is the cut before. It's kept as a version when the new cut is ready.</p></section>`;
         $("#pkstop").onclick = async () => {
           if (!confirm(`Stop the ${st.kind === "sharpen" ? "re-decode" : "fixes"}? What isn't made yet is dropped; the cut you have stays.`)) return;
-          try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
+          try{ const j = await api("cancel", {run: r.run}); toast(stoppedMsg(j)); }catch(e){ toast(e.message); }
         };
       } else if (st.state === "stopped"){
         pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "fixes"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;

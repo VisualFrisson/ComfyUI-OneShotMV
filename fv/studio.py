@@ -39,7 +39,7 @@ LEVEL = {"intro": "low", "break": "low", "outro": "low", "verse": "medium", "bui
 WHY = {"people": "someone else in frame", "gender": "wrong gender", "beard": "unwanted beard", "glasses": "stray glasses",
        "head": "head cut off", "mono": "black and white", "crowd": "modern crowd", "text": "lettering", "modern": "modern items",
        "outfit": "wrong outfit", "unread": "unreadable", "frozen": "frozen", "exposure": "bad exposure", "bars": "black bars",
-       "cut": "cut away", "noface": "no face", "headcut": "head out of frame", "sideways": "head sideways",
+       "cut": "a cut inside the clip", "noface": "no face", "headcut": "head out of frame", "sideways": "head sideways",
        "tooclose": "too close", "identity": "a different person", "drift": "drifted off the shot", "mouth": "mouth not moving",
        "sync": "weak lip sync", "missing": "missing", "human": "looked human", "look": "didn't match its description"}
 
@@ -85,7 +85,8 @@ def _run_dir(name: str) -> str:
     name = os.path.basename(name.strip().replace("\\", "/").rstrip("/"))
     d = os.path.join(_runs_root(), name)
     if not name or not os.path.isfile(os.path.join(d, "plan.json")):
-        raise web.HTTPNotFound(text=json.dumps({"error": f"no run '{name}'"}), content_type="application/json")
+        raise web.HTTPNotFound(text=json.dumps({"error": f"This video's folder isn't there any more ({name})."}),
+                               content_type="application/json")
     return d
 
 
@@ -903,9 +904,9 @@ def _remake(name: str, items: list) -> dict:
     p = _load(pj, {}) or {}
     rv = p.get("review")
     if not rv:
-        raise ValueError("this video wasn't made images-first")
+        raise ValueError("this video wasn't made with Generate images and review")
     if rv.get("state") == "released":
-        raise ValueError("the videos are already being made: re-shoot shots from the Result screen")
+        raise ValueError("the video is already being made: fix shots from the Result screen when it's done")
     if any(_run_jobs(os.path.basename(d))):
         raise ValueError("wait until the images being made are done")
     if not items:
@@ -1009,9 +1010,9 @@ def _release(name: str) -> dict:
     p = _load(pj, {}) or {}
     rv = p.get("review")
     if not rv:
-        raise ValueError("this video wasn't made images-first")
+        raise ValueError("this video wasn't made with Generate images and review")
     if rv.get("state") == "released":
-        raise ValueError("the videos are already being made")
+        raise ValueError("the video is already being made")
     if any(_run_jobs(os.path.basename(d))):
         raise ValueError("wait until the images being made are done")
     gs = [_load(os.path.join(d, "jobs", f), None) for f in rv.get("held") or []]
@@ -1036,6 +1037,10 @@ def _who(p: dict, s: dict, cast: dict) -> dict:
         ck = (br.get("broll") or {}).get("check") or {}
         return {"kind": "broll", "render": br, "role": ck.get("role") or "cutaway", "gender": ck.get("gender", ""),
                 "age": ck.get("age", ""), "wear": ck.get("wear", ""), "place": ck.get("place", "")}
+    if a is not None and a.get("performer") in cast and cast[a["performer"]].get("artist_edit"):
+        c = cast[a["performer"]]  # Single Artist: the same person in every sung shot, dressed for the World
+        return {"kind": "sing", "render": a, "performer": a["performer"], "role": "Single Artist", "gender": "",
+                "age": "", "wear": c.get("wear", ""), "place": c.get("place", "")}
     if a is not None and a.get("performer") in cast:
         c = cast[a["performer"]]
         ck = c.get("check") or {}
@@ -1215,6 +1220,8 @@ def _run(name: str) -> dict:
     est = _estimate_min(p)
     latest = _newest([x for x in glob.glob(os.path.join(d, "r*.mp4"))])
     chars = th.get("characters") or []
+    if any(c.get("artist_edit") for c in p.get("cast") or []):
+        chars = []  # Single Artist: the World's characters aren't cast; the artist sings every shot
     left = [str(ch.get("role") or str(ch.get("who", "")).split(",")[0]) for i, ch in enumerate(chars) if i not in used]
     world = {"line": th.get("theme", ""), "headline": (th.get("theme", "").split(":")[0].split(",")[0]).strip(),
              "camera": th.get("camera", ""), "places": th.get("places") or [], "light": th.get("light") or [],
@@ -1235,6 +1242,7 @@ def _run(name: str) -> dict:
                   "crowd": p.get("crowd", "auto"), "cast_order": p.get("cast_order", "as written")},
         "form": _form(d, p),
         "world": world, "energy_map": p.get("energy_map") or [], "shots": shots,
+        "artist": any(c.get("artist_edit") for c in p.get("cast") or []),  # Single Artist sings every shot
         "notes": _notes(d, p, label_of, done=bool(done)),
         "latest": _view(latest) if latest else "",
         "video": _view(done["video"]) if done else "",
@@ -1384,7 +1392,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
     if st.get("state") == "running":
         raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
-        raise ValueError("this run still has jobs in the queue")
+        raise ValueError("this video still has jobs in ComfyUI's queue")
     rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
     k = len(p.get("pickups") or []) + 1
     shots = {s["index"]: s for s in p.get("shots", [])}
@@ -1534,7 +1542,7 @@ def _sharpen(name: str, dry: bool = False) -> dict:
     if st.get("state") == "running":
         raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
-        raise ValueError("this run still has jobs in the queue")
+        raise ValueError("this video still has jobs in ComfyUI's queue")
     soft = _soft_clips(d, p)
     if not soft:
         raise ValueError("every clip in this cut is already sharp")

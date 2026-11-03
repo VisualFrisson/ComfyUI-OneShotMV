@@ -192,13 +192,13 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         f["light"] = f["light"][:1].upper() + f["light"][1:]
         move = _pick(rng, (c.get("moves") or {}).get(size, []), used, "move_" + size) or \
             "The handheld camera sways gently."
-        action = ""
+        action, place = "", f["background"]
         if size != "close" and c.get("places") and c.get("edit_wide"):
             action = _pick(rng, (c.get("actions") or {}).get(size, ["singing"]), used, "action_" + size)
+            place = _pick(rng, c["places"], used, "place")
             edit = c["edit_wide"].format(shot=fr["shot"][:1].lower() + fr["shot"][1:], lens=fr["lens"],
                                          angle=_pick(rng, c.get("angle_wide", c["angle"]), used, "angle_wide"),
-                                         action=action, place=_pick(rng, c["places"], used, "place"),
-                                         wear=f["wear"], light=f["light"])
+                                         action=action, place=place, wear=f["wear"], light=f["light"])
             edit = " ".join(edit.split())
         else:
             edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
@@ -214,6 +214,8 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         draft, portrait_a = artist_drafts(edit, hair)
         out.append({"id": i, "portrait": edit, "draft": draft, "portrait_a": portrait_a, "hair": hair,
                     "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
+                    # what the Studio's plan shows: what the artist wears and where, as for a Crowd's characters
+                    "wear": f["wear"], "place": re.sub(r"\s+behind$", "", place or ""),
                     "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],
                                                          "light": g["light"], "background": g["background"]},
                     "size": size, "seed": seed * 1000 + i * 7 + 1})

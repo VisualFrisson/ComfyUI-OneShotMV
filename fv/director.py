@@ -580,7 +580,7 @@ def plan_preview(p: dict, queued: bool = True) -> str:
             ga = ", ".join(x for x in (ck.get("gender", ""), str(ck.get("age", "") or "")) if x)
             who = f"{ck.get('role') or c.get('who', '')}" + (f" ({ga})" if ga else "") if ck else c.get("who", "")
             if c.get("artist_edit"):
-                who = "the artist"
+                who, wear, where = "Single Artist", c.get("wear", ""), c.get("place", "")
             where, wear = ck.get("place", ""), ck.get("wear", "")
         else:
             who, where, wear = "?", "", ""
