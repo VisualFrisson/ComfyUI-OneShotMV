@@ -85,11 +85,16 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     for c in out:
         creature = (c.get("check") or {}).get("kind") == "creature"
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera, creature=creature)
+        for key in ("draft", "portrait_a"):  # Single Artist's drawn shot and its fallback get the same brief
+            if c.get(key):
+                c[key] = finish_prompt(c[key], c.get("size", "close"), camera=camera)
         if creature:
             continue  # no crowd and no period-dressed people behind a creature
         if c.get("artist_edit"):  # a Single Artist's crowd only when it's turned on (auto: the singer alone)
             if (pack.get("casting") or {}).get("crowd_mode") == "on":
-                c["portrait"] = f"{c['portrait'].rstrip()} {CROWD_BEHIND}"
+                for key in ("portrait", "draft", "portrait_a"):
+                    if c.get(key):
+                        c[key] = f"{c[key].rstrip()} {CROWD_BEHIND}"
                 c["sing"] = f"{c['sing'].rstrip()} No one else close; the crowd behind stays a soft blur."
         elif (c.get("check") or {}).get("crowd"):
             dress = ((pack.get("casting") or {}).get("theme") or {}).get("crowd_dress") or ""
@@ -137,10 +142,39 @@ def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, f
     return out
 
 
+# Single Artist's main images (Nov 2, 2026 tests): Krea 2 draws each shot with an invented person who
+# looks broadly like the artist (ARTIST_WHO, from the photo), in a hairstyle of its own, and the image editor
+# then puts the artist's face in (graphs.FACE_IN). The shots then differ in light, angle and hair as the
+# World asks, where an edit of the photo itself keeps the photo's light and angle. When the artist can't be
+# described, the photo is edited with only the face kept (portrait_a).
+ARTIST_WHO = "@WHO@"
+_FROM_PHOTO = ("Photo of the same person as in image 1, photographed again somewhere new:", "Photo of the same person as in image 1.")
+_KEEP_ALL = "Keep their exact face, identity, skin tone and hair."
+FACE_ONLY = ("Keep only their face from image 1: the same eyes, nose, lips, jawline, skin tone and age. Everything else "
+             "is new: their hair is styled in {hair}, and the light and camera angle are as described here, not as in "
+             "image 1.")
+
+
+def artist_drafts(edit: str, hair: str) -> tuple[str, str]:
+    """(the drawn shot's prompt, with ARTIST_WHO for the artist's description; the fallback that edits the photo
+    keeping only the face) from an artist portrait prompt."""
+    draft, a = edit, edit
+    for start in _FROM_PHOTO:
+        if draft.startswith(start):
+            end = ":" if start.endswith(":") else "."
+            draft = f"Photo of {ARTIST_WHO}, their hair styled in {hair}{end}" + draft[len(start):]
+            a = "A new photo of the person from image 1, in a completely different situation" + end + a[len(start):]
+            break
+    draft = " ".join(draft.replace(_KEEP_ALL, "").split())
+    a = a.replace(_KEEP_ALL, FACE_ONLY.format(hair=hair))
+    return draft, a
+
+
 def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
     """Same person every shot: the portrait is an identity edit of the artist photo. Close-ups
     change outfit, light and wall; medium and wide shots (with `places` / `actions` in the pack)
-    put the artist somewhere new doing something: dancing, walking, sitting on a car hood."""
+    put the artist somewhere new doing something: dancing, walking, sitting on a car hood.
+    Each also gets a drawn-shot prompt and its fallback (artist_drafts), with a hairstyle of its own."""
     rng, used, out = random.Random(seed), {}, []
     who = c.get("who", "the person")
     for i in range(n):
@@ -168,7 +202,10 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         g["place"] = re.sub(r"^(in|on|at)\s+", "", g["place"])
         g["soft_light"] = _pick(rng, c.get("twin_light") or c.get("light", [""]), used, "twin_light")
         twin_prompt = " ".join(c["twin"].format(**g).split())
-        out.append({"id": i, "portrait": edit, "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
+        hair = _pick(rng, c.get("hair", [""]), used, "portrait_hair") or "their usual style"
+        draft, portrait_a = artist_drafts(edit, hair)
+        out.append({"id": i, "portrait": edit, "draft": draft, "portrait_a": portrait_a, "hair": hair,
+                    "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
                     "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],
                                                          "light": g["light"], "background": g["background"]},
                     "size": size, "seed": seed * 1000 + i * 7 + 1})

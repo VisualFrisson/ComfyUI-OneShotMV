@@ -228,7 +228,8 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
 # 111 s window takes about 16 min, most of it writing 53 extra characters 8 at a time). A World
 # already written for the same line and seed is reused, so a second preview is quick.
 T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
-     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5, "images": 10, "per_image": 0.4}
+     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5, "images": 10, "per_image": 0.4,
+     "artist_photo": 60}  # Single Artist: the vision model describes the photo for the drawn shots
 
 
 def _bible(theme: str, seed: int) -> dict | None:
@@ -286,6 +287,8 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
+    if artist and not folder and _artist_of(b)[0]:
+        parts.append({"id": "artist", "name": "Looking at the artist's photo", "s": T["artist_photo"]})
     if theme and b.get("crowd", "auto") != "off" and not artist:
         from . import theme as themes
         if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
@@ -296,7 +299,9 @@ def _estimate(b: dict) -> dict:
             "world_cached": bool(bible) and have >= need, "window": [round(p["song_t0"], 2), round(p["song_t1"], 2)],
             "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win
                                 # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
-                                + (4 if folder and _extends(b) else 0))}
+                                + (4 if folder and _extends(b) else 0)
+                                # Single Artist: Krea 2 draws each main image before the face goes in
+                                + (2 + round(0.4 * p["performers"]) if artist and not folder else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -395,6 +400,8 @@ def _progress(pid: str, rec: dict) -> dict:
             done.update({"listen", "images", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "[OneShotMV] stems:" in m or "lyrics:" in m or "lyrics skipped" in m:  # older runs logged lyrics
             done.update({"listen", "images", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
+        if "Single Artist: the photo shows" in m or "no description of the photo" in m:
+            done.update({"listen", "load", "world", "roles", "cast", "gender", "stems", "artist"}); last_t = ts
     now = time.time()
     left, cur = 0.0, None
     for x in parts:

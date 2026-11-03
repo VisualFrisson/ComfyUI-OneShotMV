@@ -390,6 +390,32 @@ def artist_portrait(*, artist_path, prompt, seed, prefix, size1, size2, resoluti
     return g
 
 
+# Single Artist's main images (Nov 2, 2026 tests): Krea 2 draws the shot with an invented look-alike, then this
+# edit puts the artist's face in with the photo as image 2. It kept likeness best (0.50 against 0.44 for an edit
+# of the photo itself) when a face check re-makes the misses; asking it to keep "everything" of image 1 made
+# it keep the drawn face too.
+FACE_IN = ("Recreate image 1 with the person from image 2 in it. Keep image 1 exactly as it is: the camera angle, "
+           "framing, distance, pose, head position, head tilt, mouth shape and expression, the hairstyle, the clothes, "
+           "the place and the light. Give the person image 2's identity: their face, eyes, nose, lips, jawline, skin "
+           "tone and age. Photorealistic, natural skin texture. No text or lettering anywhere.")
+
+
+def artist_face_in(*, draft_path, artist_path, seed, prefix, size1, size2, resolution=1024, editor=None, prompt=None):
+    """Single Artist: the artist's face put into a drawn shot (draft_path, Krea 2), the photo as image 2."""
+    g = Graph()
+    ref = O(g.add("FVLoadImagePath", path=draft_path))
+    if _has_node("FVFitAspect"):
+        ref = O(g.add("FVFitAspect", image=ref, width=size1[0], height=size1[1]))
+    photo = O(g.add("FVLoadImagePath", path=artist_path))
+    if (editor or artist_editor()) == "qwen_edit":
+        out = _qwen_edit(g, ref, prompt or FACE_IN, refs=[photo], seed=seed)
+    else:
+        out = _qwen21(g, ref, prompt or FACE_IN, [photo], seed=seed, resolution=resolution)
+    out = O(g.add("ImageScale", image=out, upscale_method="lanczos", width=size2[0], height=size2[1], crop="center"))
+    g.add("SaveImage", images=out, filename_prefix=prefix)
+    return g
+
+
 ARTIST_REF = ("Studio headshot photograph of {who}, facing the camera at eye level, head and shoulders, a calm "
               "neutral expression with the mouth closed, plain mid-grey backdrop, soft even light, sharp focus on "
               "the eyes. An invented person, the only person in frame. Natural skin texture, full colour. No text "
