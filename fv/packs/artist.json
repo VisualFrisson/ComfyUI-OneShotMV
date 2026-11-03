@@ -2,7 +2,7 @@
  "name": "artist",
  "label": "One artist (from a photo)",
  "mode": "voice",
- "about": "The same person sings every line: each shot puts the artist from one reference photo in a new outfit, setting and light (Qwen-Image identity edit); the flash twins are the same artist in a different look, like quick costume changes.",
+ "about": "The same person sings every line: each shot puts the artist in a new outfit, place and light from the World, and the looks on the drop are the same artist in a different look, like quick costume changes.",
  "casting": {
   "artist": true,
   "framing": {
@@ -189,7 +189,7 @@
   ]
  },
  "edit": {
-  "_note": "grammar 'hold': holds of shot_bars_quiet bars in quiet stretches (1: the n37 note, 'the longest shots should be half the length'), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar (remove 'grammar' to get it back).",
+  "_note": "grammar 'hold': holds of shot_bars_quiet bars in quiet stretches (the longest shots at half their first length), one bar a shot in the build (the last build_bars bars before a drop), and on the drop a cut every drop_cut_beats beat through drop_looks pose-matched looks of the same moment; never back to a shot already left. The insert_* / pingpong keys only drive the older 'flash' grammar.",
   "grammar": "hold",
   "shot_bars_quiet": 1,
   "shot_bars_build": 1,
@@ -215,7 +215,7 @@
   "insert_off_beat": 0.35,
   "insert_twin_share": 0.7,
   "drop_size": "close",
-  "_note_sizes": "n40: close-ups lip-sync far better than medium shots (SyncNet median 6.7 against 3.9 on a pop test track), and the artist looks frame themselves head-and-shoulders, so drops and most sung quiet shots are close; the close framing is head-and-shoulders (face about half the frame height), not the old face-filling close-up ('all mouth', the n30c note)",
+  "_note_sizes": "close-ups lip-sync far better than medium shots (SyncNet median 6.7 against 3.9 on a pop test track), and the artist looks frame themselves head-and-shoulders, so drops and most sung quiet shots are close; the close framing is head-and-shoulders (face about half the frame height), not a face-filling close-up, which read as 'all mouth'",
   "quiet_sizes": {"wide": 0.3, "medium": 0.3, "close": 0.4}
  },
  "fx": {

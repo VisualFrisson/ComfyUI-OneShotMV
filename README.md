@@ -8,8 +8,9 @@ models.
 
 ![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
 
-> Made for Comfy's Open Source Higgsfield challenge. Every face in this repo and in the videos it
-> makes is invented. Use music you have the rights to.
+> Made for Comfy's Open Source Higgsfield challenge. Every face in this repo is invented, and so is
+> everyone in the videos, unless you give Single Artist a photo of yourself or of someone who agreed
+> to it. Use music you have the rights to.
 
 ## What it does
 
@@ -33,7 +34,7 @@ models.
 
 | | Who it's for | What it is |
 |---|---|---|
-| The Studio (recommended) | Everyone | An app inside ComfyUI: the brief, the plan, live rendering, the result, post processing and re-shoots. |
+| The Studio (recommended) | Everyone | An app inside ComfyUI: the brief, the plan, live rendering, the result, post processing and fixes. |
 | The ComfyUI workflow | People who build in ComfyUI | The Director node: a song, a World and the same settings the Studio has, also in ComfyUI's App mode. |
 | The Comfy SDK | Scripts and automation | `run_sdk.bat` or `sdk_run.py`: one command takes a song and a World line to an MP4. |
 
@@ -52,11 +53,11 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    sings (Crowd or Single Artist) and a format. The buttons say how long the plan and the video will take.
 2. **The Plan.** The World the tool wrote and every shot (when, what energy, who, wearing what,
    where), before anything long renders. Change the World and plan again, then **Make the video**,
-   or **Generate images and review** to see every still before any clip is made. A World from your
-   own images has it only with Extend, to check the drawn-in edges; cropped, they are the stills.
-3. **Rendering.** The stages (plan, stills, vision check, clips, take check, b-roll, edit), a
-   storyboard that fills in as stills and clips arrive, notes from the checks, and the time left.
-   You can close the tab and come back. With Generate images and review, it stops once the stills
+   or **Generate images and review** to see every image before any clip is made. A World from your
+   own images has it only with Extend, to check the drawn-in edges; cropped, they are the images.
+3. **Rendering.** The stages (plan, images, vision check, clips, take check, cutaways, edit), a
+   storyboard that fills in as images and clips arrive, notes from the checks, and the time left.
+   You can close the tab and come back. With Generate images and review, it stops once the images
    are made: **Fix image** on any, cutaways too, makes it again with a note on what to change ("older, in
    a raincoat, harder light"), as many rounds as you like, then press Make the video. With your own
    images, **New image** swaps a shot's picture for another from your folder or one you upload
@@ -65,19 +66,19 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
    an image with a face big enough to sing.
 4. **Result.** The video, Download MP4, and Export XML for Premiere Pro or DaVinci Resolve (every
    clip with its in and out points). From here you can:
-   - Re-shoot any shot. Click it and choose a new take of the same person or a new person, with
+   - Fix any shot. Click it and choose a new take of the same person or a new person, with
      a note on what to change ("a woman in her seventies, in bright sun"). Pick several and they
-     shoot together; the video is then cut again, and the cut before stays as a version you can
+     are made together; the video is then cut again, and the cut before stays as a version you can
      switch back to.
    - Change the post processing without re-rendering anything: audio-reactive FX for low, medium
      and high energy sections (None, Subtle or Intense), a color grade (None, Neon Saturated,
      Technicolor, Teal & Orange, Golden Hour, Warm Romantic, Soft Eterna, Low Key, Industrial
-     Green or Silver Mono, each previewed on a still from your video), grain with a
+     Green or Silver Mono, each previewed on a frame from your video), grain with a
      pixel-for-pixel 1080p preview, and a vignette. Apply changes makes the new cut in about two
      minutes.
 5. **Your videos** lists every run, whether it came from the Studio, the workflow or the SDK.
 
-While the tool works (writing the plan, starting the video, making images, rendering, pickups, a new
+While the tool works (writing the plan, starting the video, making images, rendering, fixes, a new
 cut) there is a Cancel or Stop button; it only removes this video's jobs from ComfyUI's queue. The
 steps at the top stay clickable, so you can go back to see what was picked: a step you go back to
 is greyed out but readable, with **Restart from this stage** next to its heading. Restarting the
@@ -92,7 +93,7 @@ and the downloaded files. The Look menu in the top bar switches the Studio betwe
 palettes.
 
 To click through every screen on a finished video without rendering anything, open
-http://127.0.0.1:8188/oneshot-mv/?demo. Starting a video, rendering, Apply and re-shoots are
+http://127.0.0.1:8188/oneshot-mv/?demo. Starting a video, rendering, Apply and fixes are
 simulated there in seconds, and nothing is sent to ComfyUI.
 
 ### The ComfyUI workflow
@@ -113,8 +114,9 @@ starts faster. The Director queues every job itself, and the video lands in
 
 ### The Comfy SDK
 
-`sdk_run.py` makes a whole video through the [Comfy SDK](https://pypi.org/project/comfy-sdk/). It
-uploads the song, runs the Director and prints the shot plan. The run's stages then render in
+`sdk_run.py` makes a whole video through the [Comfy SDK](https://pypi.org/project/comfy-sdk/): a
+Crowd video from a World line, or a video from a folder of your own images (Single Artist is in the
+Studio and the workflow). It uploads the song, runs the Director and prints the shot plan. The run's stages then render in
 ComfyUI, a Run Result job waits for the finished video, and the SDK downloads it into
 `oneshot_mv_out/`.
 
@@ -144,8 +146,8 @@ python sdk_run.py --recut "<run folder>" --fx none
 ```
 
 `python sdk_run.py --help` lists every option: length and start, format, quality, seed, FX, the
-cut for each energy level, cast order, crowd, b-roll share, take-check rounds and the model set. `--preview`
-prints the plan without rendering. To use another deployment that has the OneShot MV nodes, set
+cut for each energy level, cast order, crowd, cutaway share, take-check rounds and the model set.
+`--preview` prints the plan without rendering. To use another deployment that has the OneShot MV nodes, set
 `COMFY_BASE_URL`, and `COMFY_API_KEY` if it needs one.
 
 ## Writing a World
@@ -160,7 +162,7 @@ in the order you want them, then the places, then the light.
 > their seventies and eighties with big attitude, in velour tracksuits, sun visors, pearls, gold
 > chains and oversized sunglasses, at aqua aerobics in the condo pool, the bingo hall, the
 > shuffleboard court, the early-bird buffet and rows of golf carts; harsh Florida sun and
-> sun-faded pastel colour
+> sun-faded pastel color
 
 What you write is followed, and what you leave out is filled in. A short line gets a general
 World; the more you say, the closer it sticks:
@@ -180,7 +182,7 @@ Some things that help:
 
 - The characters you name are cast first, in your order. Set cast order to "mixed" to shuffle them.
 - Name the period ("1965", "ancient Rome", "1813"). It keeps modern clothes and objects out, and
-  the vision check rejects stills that show them.
+  the vision check rejects images that show them.
 - Say the tone: "played straight like an epic film", "over the top", "cinematic".
 - Casts are adults only. Give ages when they matter ("in their seventies").
 - Say whether it's night or day ("at 3 a.m.", "hard midday sun"), and the light follows.
@@ -207,7 +209,7 @@ own image stage and animates yours:
     over the middle with a soft seam. One close to the shape (within 20%) is cropped a little. It
     adds a few minutes, and needs the Qwen-Image 2.1 files (see the model tables). With For
     professional use on, images are always cropped.
-- There is no World line, no cast and no vision check on stills; the take check runs as usual.
+- There is no World line, no cast and no vision check on images; the take check runs as usual.
 
 In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
 of a folder on this computer. In the workflow, put the folder in the Director's `world_images`
@@ -218,7 +220,7 @@ of a folder on this computer. In the workflow, put the folder in the Director's 
 
 After the World comes who sings. **Crowd** (the default) casts a different invented person for
 each line. **Single Artist** has one person sing every line, in the World's outfits, places and
-light, with quick costume changes on the drop:
+light (true to its period, as for Crowd), with quick costume changes on the drop:
 
 - **From a photo:** upload a photo of the singer in the Studio, or connect a Load Image to the
   Director's `artist_photo` (the example workflow has one, bypassed). Use only a photo of
@@ -294,7 +296,7 @@ about every beat on intense.
 2. Install these node packs: [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo),
    [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (the LTX attention tuner and Sage
    attention) and [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) (samplers). OneShot MV
-   was built on ComfyUI 0.39; it needs a recent ComfyUI for the core Generate Text node, Krea 2
+   was built and tested on ComfyUI 0.43; it needs a recent ComfyUI for the core Generate Text node, Krea 2
    and App mode. Single Artist also needs
    [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) (pose guides). The Studio's Brief checks all of this when it opens: if a node pack is missing
    or didn't load, a model file can't be found, or ComfyUI or a pack is too old, it says what to
@@ -346,7 +348,7 @@ card:
 | 32 s, quality | about 70 min |
 | 1:51, quality | about 6 h 45 min |
 | Re-cut (post processing) | about 2 min |
-| Re-shoot one shot | about 10 to 15 min, mostly model loading |
+| Fix one shot | about 10 to 15 min, mostly model loading |
 | 1:04, quality, 24 GB set on the same card held to 24 GB | about 3 h 35 min |
 
 On a cold start, loading LTX-2.3 and its Gemma 3 text encoder (about 65 GB with the full set)
@@ -395,7 +397,7 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
   or the default kernel on an RTX 30 card, failed every clip. Update the pack, or set
   `ltx23_sage` in `fv/models.json` to `""` (off) or `"auto"`.
 - Off-theme people or modern things in a period World: name the period and the people in the
-  World line, then re-shoot the wrong shots from the Result screen with a note.
+  World line, then fix the wrong shots from the Result screen with a note.
 - Slow sampling on Windows with `--highvram`: ComfyUI keeps LoRA weight backups on the GPU and
   overflows into shared memory. The Director adds Weight Backups to RAM after the LTX loaders to
   prevent this.
@@ -405,11 +407,11 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 | Node | What it does |
 |---|---|
 | OneShot MV: Director | Takes a song and a World line, then plans, casts and queues the whole run. |
-| OneShot MV: Vision Check | Checks every portrait and b-roll still and redoes the wrong ones (the Director queues it). |
+| OneShot MV: Vision Check | Checks every portrait and cutaway image and redoes the wrong ones (the Director queues it). |
 | OneShot MV: Take QC | Checks every take, lip sync included, re-shoots bad ones, then queues the cut. |
 | OneShot MV: Assemble | Cuts a run together with FX and the finish. Run it again to re-cut; nothing re-renders. |
 | OneShot MV: Run Result | Reports where a run is and returns the finished video as a job output (the SDK uses it). |
-| OneShot MV: Theme Preview | Shows what a World line turns into before you spend a run on it. |
+| OneShot MV: World Preview | Shows what a World line turns into before you spend a run on it. |
 | OneShot MV: Lip Sync Score | Scores a finished run's lip sync with SyncNet, take by take. |
 | OneShot MV: Finish | Applies the finish (grade, grain, vignette) to any frames. |
 | OneShot MV: Keep Models Loaded, Weight Backups to RAM, Free Memory | Memory helpers for the Director's jobs. |
@@ -456,7 +458,7 @@ Every run uses:
 
 | Model | Used for | Licence | Download |
 |---|---|---|---|
-| Krea 2 Turbo, the Qwen3-VL 4B text encoder and the Qwen-Image VAE (full set: also Krea 2 Raw and the Turbo LoRA) | Every portrait and b-roll still | Krea 2 Community License: commercial use of the model and its images only for companies under US$1M annual revenue (Qwen3-VL and the VAE are Apache-2.0 upstream) | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
+| Krea 2 Turbo, the Qwen3-VL 4B text encoder and the Qwen-Image VAE (full set: also Krea 2 Raw and the Turbo LoRA) | Every portrait and cutaway image | Krea 2 Community License: commercial use of the model and its images only for companies under US$1M annual revenue (Qwen3-VL and the VAE are Apache-2.0 upstream) | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
 | LTX-2.3 22B dev, the distilled LoRA 384 v1.1 and the spatial upscaler x2 v1.1 | Every clip: lip sync and b-roll | LTX-2 Community License: free under US$10M annual revenue; label output as machine-generated; no impersonation without consent | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
 | LTX-2 19B IC-LoRA Detailer | Fine detail in every clip | LTX-2 Community License | [Lightricks/LTX-2-19b-IC-LoRA-Detailer](https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer) |
 | LTX2.3 Crisp Enhance and Soft Enhance (community LoRAs by vrgamedevgirl84) | Sharpness and detail in every clip | No licence stated by the author. To run without them, remove them from `ltx23_loras` in `fv/models.json` | [CivitAI: LTX 2.3 Enhancers](https://civitai.com/models/2535622/ltx-23-enhancers) |

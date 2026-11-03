@@ -39,7 +39,7 @@ LEVEL = {"intro": "low", "break": "low", "outro": "low", "verse": "medium", "bui
 WHY = {"people": "someone else in frame", "gender": "wrong gender", "beard": "unwanted beard", "glasses": "stray glasses",
        "head": "head cut off", "mono": "black and white", "crowd": "modern crowd", "text": "lettering", "modern": "modern items",
        "outfit": "wrong outfit", "unread": "unreadable", "frozen": "frozen", "exposure": "bad exposure", "bars": "black bars",
-       "cut": "cut away", "noface": "no face", "headcut": "head out of frame", "sideways": "head sideways",
+       "cut": "a cut inside the clip", "noface": "no face", "headcut": "head out of frame", "sideways": "head sideways",
        "tooclose": "too close", "identity": "a different person", "drift": "drifted off the shot", "mouth": "mouth not moving",
        "sync": "weak lip sync", "missing": "missing", "human": "looked human", "look": "didn't match its description"}
 
@@ -48,9 +48,9 @@ def _why(fs) -> str:
     return ", ".join(WHY.get(f, f) for f in fs)
 
 
-STAGES = [("plan", "Plan", "song, World, shot list"), ("stills", "Stills", "Krea 2 portraits"),
-          ("check", "Vision check", "re-makes bad stills"), ("clips", "Clips", "LTX lip sync"),
-          ("takes", "Take check", "SyncNet, re-takes"), ("broll", "B-roll", "cutaways"),
+STAGES = [("plan", "Plan", "song, World, shot list"), ("stills", "Images", "Krea 2 images"),
+          ("check", "Vision check", "re-makes bad images"), ("clips", "Clips", "LTX lip sync"),
+          ("takes", "Take check", "lip sync, re-takes"), ("broll", "Cutaways", "shots without singing"),
           ("edit", "Edit", "beat cut, FX, grade")]
 
 
@@ -85,7 +85,8 @@ def _run_dir(name: str) -> str:
     name = os.path.basename(name.strip().replace("\\", "/").rstrip("/"))
     d = os.path.join(_runs_root(), name)
     if not name or not os.path.isfile(os.path.join(d, "plan.json")):
-        raise web.HTTPNotFound(text=json.dumps({"error": f"no run '{name}'"}), content_type="application/json")
+        raise web.HTTPNotFound(text=json.dumps({"error": f"This video's folder isn't there any more ({name})."}),
+                               content_type="application/json")
     return d
 
 
@@ -258,6 +259,15 @@ def _estimate(b: dict) -> dict:
     theme = "" if folder else (b.get("theme") or "").strip()
     share = float(b.get("broll", 0.125))
     artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
+    n_sung = 0
+    if artist and not folder:  # Single Artist draws each main image with Krea 2 before the face goes in (~18 s each)
+        apk = casting.load_pack("artist")
+        if cuts:
+            apk["edit"] = dict(apk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items()})
+        ap = planner.plan_voice(tl, apk, fmt=b.get("format", "16:9"), preset=b.get("preset", "quality"),
+                                seconds=float(b.get("seconds", 30)), start=float(b.get("start", -1)),
+                                seed=int(b.get("seed", 1)), framing="mixed")
+        n_sung = sum(1 for r in ap.get("renders", []) if r.get("role") == "A")
     need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme and not artist else 0
     bible = _bible(theme, int(b.get("seed", 1))) if theme else None
     have = len((bible or {}).get("characters") or [])
@@ -301,7 +311,7 @@ def _estimate(b: dict) -> dict:
                                 # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
                                 + (4 if folder and _extends(b) else 0)
                                 # Single Artist: Krea 2 draws each main image before the face goes in
-                                + (2 + round(0.4 * p["performers"]) if artist and not folder else 0))}
+                                + (2 + round(0.4 * n_sung) if artist and not folder else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -387,7 +397,7 @@ def _progress(pid: str, rec: dict) -> dict:
             done.add("listen"); done.add("load"); last_t = ts
         if "[OneShotMV] World images:" in m:
             done.update({"listen", "images"}); last_t = ts
-        if "[OneShotMV] Theme:" in m:
+        if "[OneShotMV] World: " in m or "[OneShotMV] Theme:" in m:  # older Directors logged "Theme:"
             done.update({"listen", "load", "world"}); last_t = ts
         if "new roles:" in m:
             done.update({"listen", "load", "world", "roles"}); last_t = ts
@@ -747,12 +757,6 @@ def _shot_images(d: str, p: dict) -> dict:
     return out
 
 
-def _remakable(d: str, p: dict) -> dict:
-    """{shot number: the still its held clip job reads} for every shot whose still can be made again,
-    sung or cutaway."""
-    return {n: v["image"] for n, v in _shot_images(d, p).items() if v["makes"]}
-
-
 ADDED = "oneshot-mv/added"  # under ComfyUI's input folder: images added during a review, one folder per run
 
 
@@ -894,9 +898,9 @@ def _remake(name: str, items: list) -> dict:
     p = _load(pj, {}) or {}
     rv = p.get("review")
     if not rv:
-        raise ValueError("this video wasn't made images-first")
+        raise ValueError("this video wasn't made with Generate images and review")
     if rv.get("state") == "released":
-        raise ValueError("the videos are already being made: re-shoot shots from the Result screen")
+        raise ValueError("the video is already being made: fix shots from the Result screen when it's done")
     if any(_run_jobs(os.path.basename(d))):
         raise ValueError("wait until the images being made are done")
     if not items:
@@ -1000,9 +1004,9 @@ def _release(name: str) -> dict:
     p = _load(pj, {}) or {}
     rv = p.get("review")
     if not rv:
-        raise ValueError("this video wasn't made images-first")
+        raise ValueError("this video wasn't made with Generate images and review")
     if rv.get("state") == "released":
-        raise ValueError("the videos are already being made")
+        raise ValueError("the video is already being made")
     if any(_run_jobs(os.path.basename(d))):
         raise ValueError("wait until the images being made are done")
     gs = [_load(os.path.join(d, "jobs", f), None) for f in rv.get("held") or []]
@@ -1027,6 +1031,10 @@ def _who(p: dict, s: dict, cast: dict) -> dict:
         ck = (br.get("broll") or {}).get("check") or {}
         return {"kind": "broll", "render": br, "role": ck.get("role") or "cutaway", "gender": ck.get("gender", ""),
                 "age": ck.get("age", ""), "wear": ck.get("wear", ""), "place": ck.get("place", "")}
+    if a is not None and a.get("performer") in cast and cast[a["performer"]].get("artist_edit"):
+        c = cast[a["performer"]]  # Single Artist: the same person in every sung shot, dressed for the World
+        return {"kind": "sing", "render": a, "performer": a["performer"], "role": "Single Artist", "gender": "",
+                "age": "", "wear": c.get("wear", ""), "place": c.get("place", "")}
     if a is not None and a.get("performer") in cast:
         c = cast[a["performer"]]
         ck = c.get("check") or {}
@@ -1074,7 +1082,7 @@ def _notes(d: str, p: dict, label_of: dict, done: bool = False) -> list[dict]:
             nm = str(it.get("name") or "")
             who = label_of.get(("p", it.get("performer"))) or label_of.get(("r", it.get("render"))) or \
                 ("A cutaway" if nm.startswith("k") else "A spare portrait")
-            notes.append({"kind": "fix", "text": f"{who}: still re-made ({_why(faults) or 'failed the check'})."})
+            notes.append({"kind": "fix", "text": f"{who}: image re-made ({_why(faults) or 'failed the check'})."})
     qc = _load(os.path.join(d, "qc.json"), []) or []
     passes = [x for x in (qc if isinstance(qc, list) else []) if x.get("report")]
     for k, ps in enumerate(passes):
@@ -1206,6 +1214,8 @@ def _run(name: str) -> dict:
     est = _estimate_min(p)
     latest = _newest([x for x in glob.glob(os.path.join(d, "r*.mp4"))])
     chars = th.get("characters") or []
+    if any(c.get("artist_edit") for c in p.get("cast") or []):
+        chars = []  # Single Artist: the World's characters aren't cast; the artist sings every shot
     left = [str(ch.get("role") or str(ch.get("who", "")).split(",")[0]) for i, ch in enumerate(chars) if i not in used]
     world = {"line": th.get("theme", ""), "headline": (th.get("theme", "").split(":")[0].split(",")[0]).strip(),
              "camera": th.get("camera", ""), "places": th.get("places") or [], "light": th.get("light") or [],
@@ -1226,6 +1236,7 @@ def _run(name: str) -> dict:
                   "crowd": p.get("crowd", "auto"), "cast_order": p.get("cast_order", "as written")},
         "form": _form(d, p),
         "world": world, "energy_map": p.get("energy_map") or [], "shots": shots,
+        "artist": any(c.get("artist_edit") for c in p.get("cast") or []),  # Single Artist sings every shot
         "notes": _notes(d, p, label_of, done=bool(done)),
         "latest": _view(latest) if latest else "",
         "video": _view(done["video"]) if done else "",
@@ -1373,9 +1384,9 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
         raise ValueError("pick at least one shot")
     st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
     if st.get("state") == "running":
-        raise ValueError("the last pickups are still shooting")
+        raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
-        raise ValueError("this run still has jobs in the queue")
+        raise ValueError("this video still has jobs in ComfyUI's queue")
     rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
     k = len(p.get("pickups") or []) + 1
     shots = {s["index"]: s for s in p.get("shots", [])}
@@ -1406,7 +1417,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
                 cur = next((n["inputs"].get("path") for n in g.values() if n.get("class_type") == "FVLoadImagePath"), "")
             sj = _find_job(d, _stem(cur)) if cur else None
             if not sj:
-                raise ValueError(f"shot {idx + 1}: its still's job is missing")
+                raise ValueError(f"shot {idx + 1}: its image's job is missing")
             gs = director._bump(_load(sj, {}), 307 + 17 * k + i)
             sbase = _stem(cur).split("_")[0]
             stag = f"{sbase}_u{k}"
@@ -1523,9 +1534,9 @@ def _sharpen(name: str, dry: bool = False) -> dict:
     p = _load(pj, {}) or {}
     st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
     if st.get("state") == "running":
-        raise ValueError("the last pickups are still shooting")
+        raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
-        raise ValueError("this run still has jobs in the queue")
+        raise ValueError("this video still has jobs in ComfyUI's queue")
     soft = _soft_clips(d, p)
     if not soft:
         raise ValueError("every clip in this cut is already sharp")

@@ -76,6 +76,19 @@ def _saves(g):
     return [n["inputs"].get("filename_prefix", "") for n in g.values() if n["class_type"] in ("SaveImage", "SaveVideo")]
 
 
+def test_a_single_artist_plan_reads_as_one_artist(studio):
+    """Nov 3, 2026: the Plan, Rendering and Result screens name every sung shot Single Artist, with what they wear
+    and where, as for a Crowd's characters, and list no World characters as left out of the cut."""
+    st, q, posted = studio
+    res = _direct(artist_path=_photo())
+    run = st._run(os.path.basename(res["run_dir"]))
+    sung = [s for s in run["shots"] if s["kind"] == "sing"]
+    assert run["artist"] and sung and all(s["role"] == "Single Artist" for s in sung)
+    assert all(s["wear"] and s["place"] for s in sung)
+    assert run["world"]["left_out"] == []
+    assert "': Single Artist / " in res["summary"]  # the summary's header names the cast, not the internal pack
+
+
 def test_images_first_queues_only_the_stills(studio):
     st, q, posted = studio
     res = _direct(artist_path=_photo(), review=True)

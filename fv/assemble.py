@@ -127,7 +127,7 @@ def fx_levels(plan: dict, override: str | None = None) -> dict:
 
 
 def _active(edl: list[dict], f: int):
-    best, start = None, None
+    best = None
     for e in edl:
         if e["f0"] <= f < e["f1"] and (best is None or PRIORITY[e["kind"]] >= PRIORITY[best["kind"]]):
             best = e

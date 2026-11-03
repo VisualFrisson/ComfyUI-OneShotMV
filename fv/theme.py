@@ -78,7 +78,7 @@ _NO_PEOPLE = re.compile(r"(?i)\b(?:no|without)\s+(?:other\s+)?(?:people|humans?|
 _CREATURE_CAST = re.compile(r"(?i)\b(?:all|every|only|entirely)\b[^,.;:]{0,40}?\b(?:creatures?|animals?|beasts?|robots?|"
                             r"androids?|machines?|monsters?|elementals?|aliens?|dragons?|spirits?|golems?|puppets?|toys?)\b")
 _W, _M = r"(?:women|woman|females?|ladies|lady|girls?)", r"(?:men|man|males?|guys?|gentlemen|boys?)"
-# "only sexy females", "all grown men" (a word or two between); not "the only two women", "all day long the women"
+# "only young females", "all grown men" (a word or two between); not "the only two women", "all day long the women"
 _BETWEEN = (r"(?:(?!(?:one|two|three|four|five|six|a|few|of|day|night|long|year|week|around|over|along|at|in|with|"
             r"and|or)\b)[a-z][\w-]*\s+){{0,2}}?")
 _ONLY = (r"\bno (?:{other})\b|(?<!the )\b(?:only|all)[- ](?:the )?" + _BETWEEN + r"(?:{one})\b(?!\s+(?:and|or|&)\s)|"
@@ -1015,16 +1015,6 @@ def eyewear_ok(theme: str) -> bool:
     return bool(EYEWEAR.search(theme or ""))
 
 
-def _cast_line(chars: list[dict]) -> str:
-    out = []
-    for c in chars:
-        if c.get("role"):
-            out.append(f"{c['role']} ({c.get('gender') or '?'}, {c.get('age') or '?'})")
-        else:
-            out.append(c.get("who", "").split(",")[0])
-    return "; ".join(out)
-
-
 def _same(a: dict, b: dict) -> bool:
     """Two characters that would read as the same person: same role, gender and age band."""
     if not a.get("role") or not b.get("role"):
@@ -1589,7 +1579,7 @@ def summary(bible: dict, n: int = 3) -> str:
     if not bible:
         return ""
     rng = random.Random(0)
-    lines = [f"Theme: {bible['theme']} ({bible.get('source', '')}, grade {bible.get('grade', '')})"]
+    lines = [f"World: {bible['theme']} (grade: {bible.get('grade', '')})"]
     for k in ("who", "wear", "places"):
         items = bible.get(k, [])
         lines.append(f"  {k}: " + " | ".join(rng.sample(items, min(n, len(items)))))

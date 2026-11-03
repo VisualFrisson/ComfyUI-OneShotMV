@@ -31,10 +31,6 @@ DANCE_STILL = ("Medium shot on a 35mm lens of {who}, wearing {wear}, dancing to 
 DANCE_MOTION = ("Medium shot of {who} dancing to the beat: shoulders, hips and arms move with the rhythm, the head "
                 "bobs, a relaxed smile, the mouth stays closed, not singing. The handheld camera sways with the "
                 "rhythm. No one else in frame. No text appears.")
-DANCE_ARTIST = ("Photo of the same person as in image 1, photographed again somewhere new: a medium shot on a 35mm "
-                "lens. They are dancing to the music with loose shoulders and one arm raised, eyes half closed, "
-                "mouth closed in a slight smile. Wearing {wear}. {light}. Setting: {place}. Keep their exact face, "
-                "identity, skin tone and hair. Candid photograph, natural colour, subtle film grain.")
 # A person in every cutaway (empty environment shots don't fit the video): one of the world's
 # characters caught in a candid moment of their own life, not singing.
 PROMPT_ACTION = """You are editing a music video set in this world: "{world}". One person from it: {who}, {place}. Write what they are doing in a candid moment between the sung lines: one specific, everyday action that belongs to their role and place, with their hands on the real things of their work or life. No musical instruments, microphones, phones, screens, books, papers or anything with writing, and nothing to eat, drink or smoke. At most 10 words, starting with a verb ending in -ing. Answer with the action only."""
@@ -250,7 +246,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
     creatures = ((((pack.get("casting") or {}).get("theme") or {}).get("rules") or {}).get("cast") == "creatures")
-    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
+    camera = ((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("camera")  # the world's period camera
     from .casting import era_line
     era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink
     drums = os.path.join(run_dir, "drums.wav")
@@ -316,7 +312,6 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
             d = _dancer(p, pack, k)
             check = d.pop("check", None)
             d["light"] = d["light"][:1].upper() + d["light"][1:]
-            short = d["who"].split(",")[0].split(" with ")[0]
             img = " ".join((DANCE_STILL.format(**d) + " " + era).split())
             img_still = finish_prompt(img, "medium", camera=camera)
             motion = " ".join(DANCE_MOTION.format(who=d["who"]).split()) + " " + \
@@ -383,7 +378,6 @@ def finalize(p: dict, log=print) -> list[int]:
             continue
         clean.append(r)
     ok = clean
-    shots = {s["index"]: s for s in p.get("shots", [])}
     share = float(p.get("broll_share", 0.0))
     n = slots(p, share)
     picks = choose(p, share=share, n=n, only={r["shot"] for r in ok})

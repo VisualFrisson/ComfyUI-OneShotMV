@@ -5,7 +5,6 @@ in assemble).
 torch, works on (H, W, 3) float frames in 0..1."""
 from __future__ import annotations
 
-import math
 
 # sRGB D65 matrices
 _M = [[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750], [0.0193339, 0.1191920, 0.9503041]]
@@ -80,8 +79,8 @@ BASE_LOOK = "natural"  # under every grade, "None" included; not offered as a gr
 STUDIO_DEFAULTS = {"look": "none", "grain": 0.05, "grain_size": 0.5, "vignette": 0.0}
 
 # no finish at all (no grade, glow, grain or vignette: the cut skips the finish) on a machine whose
-# fv/local.json says {"finish": "plain"}, or for a run whose finish_user says {"plain": true}. Test runs use
-# it (the user, Oct 31: "for all tests there should be no grade, grain or vignette")
+# fv/local.json says {"finish": "plain"}, or for a run whose finish_user says {"plain": true}. Test runs
+# use it, so the grade never hides what a test is looking at
 def local_settings() -> dict:
     """This computer's own settings (fv/local.json, not part of the pack: an update never touches it)."""
     import json
@@ -96,27 +95,6 @@ def local_settings() -> dict:
 def plain(finish_user: dict | None = None) -> bool:
     return bool((finish_user or {}).get("plain")) or local_settings().get("finish") == "plain"
 
-# the reference and what each look is after
-LOOK_NOTES = {
-    "teal_orange": ("Transformers, Mad Max: Fury Road", "Teal shadows, warm skin and highlights, pushed halfway to Fury Road: complementary colours make faces jump out."),
-    "print_2383": ("Kodak 2383 print stock", "Denser colour, highlights that roll off softly, slightly warm."),
-    "eterna": ("Fujifilm Eterna", "Soft, low-saturation film stock with quiet greens and gentle contrast."),
-    "bleach": ("Saving Private Ryan", "Silver retention: muted colour, deeper blacks, harder contrast; textures jump out."),
-    "golden": ("Late-afternoon sun", "Warm amber across the frame, gentle lift in the blacks."),
-    "moonlit": ("Day for night", "Darker, cool blue, low saturation."),
-    "faded70s": ("1970s prints", "Faded blacks, warm highlights, muted colour."),
-    "silver": ("Soft black and white", "Gentle mono with a slight cool tint in the shadows."),
-    "neon": ("Good Time, The Neon Demon, Mandy", "Punchy, saturated colour: magenta in the shadows, cool highlights."),
-    "natural": ("No Country for Old Men", "Believable daylight and skin, restrained saturation, warm tungsten."),
-    "lowcon": ("Arrival, Nomadland", "Blacks never reach black, soft highlights, gentle tonal steps, a little murky."),
-    "lowkey": ("The Godfather", "Most of the frame falls into deep amber shadow, while faces and lights stay bright."),
-    "tobacco": ("O Brother, Where Art Thou?", "Dusty yellow-brown over everything; greens turned to straw."),
-    "romantic": ("Her", "Peach, coral, cream and warm neutrals; blue held back; a soft mist on the highlights."),
-    "technicolor": ("La La Land, The Wizard of Oz", "Rich, saturated primaries across the full rainbow."),
-    "pushed_to": ("Mad Max: Fury Road", "Teal and orange pushed hard: burning orange, deep teal shadows."),
-    "matrix": ("The Matrix", "A green, contaminated, industrial cast."),
-    "hardmono": ("The Lighthouse", "Harsh, high-contrast black and white with an orthochromatic look: darker skin, more texture."),
-}
 
 
 def apply_look(x, name: str, amount: float = 1.0):

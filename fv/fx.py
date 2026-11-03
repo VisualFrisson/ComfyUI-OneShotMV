@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
 
 def _hash01(i: int, k: int) -> float:
     return ((i * 73856093) ^ (k * 19349663)) % 1000 / 1000.0

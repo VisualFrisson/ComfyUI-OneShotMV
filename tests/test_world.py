@@ -5,11 +5,9 @@ back as 60 people with jobs, and a "No men" World as 7 women and 5 men.
 
 The language model is a scripted stand-in (it records every prompt and answers like Gemma), so this
 runs without ComfyUI or a GPU:  python tests/test_world.py"""
-import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
 
@@ -26,7 +24,7 @@ ELEMENTS = ("A hidden northern valley at golden hour where the land itself has c
             "fringe, a glacier creature of clear blue ice with meltwater running down its sides, a moss creature with "
             "a back of ferns, a tide creature of sea foam and kelp with sea-glass eyes; a blue glacier edge, a mossy "
             "old-growth forest, a rocky tide line; low golden-hour sun, long blue shadows")
-NO_MEN = ("A sunny beach in modern time, on a hot day, every single character is a woman in a swimsuit. No men. "
+NO_MEN = ("A sunny beach in modern time, on a hot day, every single character is a woman. No men. "
           "All characters are from 2020s.")
 VILLAGE = ("A frozen fishing village in 1890, played straight: a net mender in her seventies with a weathered face and "
            "a grey bun, the harbour master in a brass-buttoned coat; the frozen harbour, the smokehouse; low winter sun")
@@ -95,9 +93,9 @@ def _cast(bible, n=6):
     ("A 1965 airline, nothing modern: pilots, stewardesses and passengers", {"cast": "people", "gender": "", "now": False}),
     ("a barbershop quartet contest in 1910, men only", {"cast": "people", "gender": "man", "now": False}),
     ("a car factory run entirely by robots, no humans", {"cast": "creatures", "gender": "", "now": False}),
-    # Oct 31: the author's own line came out 6 women and 6 men
-    ("A sunny beach in modern day, on a hot day. Only sexy females.", {"cast": "people", "gender": "woman", "now": True}),
-    ("only beautiful young women", {"cast": "people", "gender": "woman", "now": False}),
+    # "only" with a word or two before the gender (one such line once came out 6 women and 6 men)
+    ("A sunny beach in modern day, on a hot day. Only young females.", {"cast": "people", "gender": "woman", "now": True}),
+    ("only grey-haired older women", {"cast": "people", "gender": "woman", "now": False}),
     ("a boxing gym, all grown men", {"cast": "people", "gender": "man", "now": False}),
     ("A ball where all the men and women dance", {"cast": "people", "gender": "", "now": False}),
     ("all women and men", {"cast": "people", "gender": "", "now": False}),
@@ -350,37 +348,6 @@ def test_described_characters_keep_their_words_and_the_rest_fills_in(gemma):
     assert master["who"] == "a harbour master in a brass-buttoned coat, a man aged 50, a ruddy face and a white beard"
     assert "The theme is the brief and it wins" in asked[0]
 
-
-# ------------------------------------------------------------------ nothing else changes for people
-def test_people_characters_are_read_as_before():
-    """Main's _characters and this one give the same people for the same answer (only the World
-    line's own characters and its rules change anything)."""
-    old_src = subprocess.run(["git", "-C", ROOT, "show", "main:fv/theme.py"], capture_output=True, text=True).stdout
-    if not old_src:
-        pytest.skip("main isn't in this checkout")
-    d = tempfile.mkdtemp()
-    os.makedirs(os.path.join(d, "fvold"))
-    open(os.path.join(d, "fvold", "theme.py"), "w").write(old_src)
-    for m in ("casting", "formats"):  # theme imports these lazily
-        open(os.path.join(d, "fvold", f"{m}.py"), "w").write(
-            subprocess.run(["git", "-C", ROOT, "show", f"main:fv/{m}.py"], capture_output=True, text=True).stdout)
-    open(os.path.join(d, "fvold", "__init__.py"), "w").close()
-    spec = importlib.util.spec_from_file_location("fvold.theme", os.path.join(d, "fvold", "theme.py"),
-                                                  submodule_search_locations=None)
-    sys.path.insert(0, d)
-    try:
-        old = importlib.import_module("fvold.theme")
-    finally:
-        sys.path.remove(d)
-    answer = [_char("murmillo gladiator", "man", "34", "deep olive skin, short black curls and a broken nose",
-                    "a bronze crested helmet and a manica on the sword arm"),
-              _char("Vestal Virgin", "woman", "19", "pale skin, hair in six braids", "a white stola and a veil"),
-              _char("senator", "", "61", "thin grey hair, a hooked nose", "a toga with a broad purple stripe"),
-              _char("chariot racer", "man", "27", "sun-darkened skin, a shaved head, glasses",
-                    "a short green tunic and leather wraps")]
-    for line in ("the gladiator games in ancient Rome", "a 1965 airline: pilots, stewardesses and passengers"):
-        assert theme._characters(answer, rules=theme.rules(line)) == old._characters(answer)
-    assert spec is not None
 
 
 if __name__ == "__main__":  # pytest from the pack root would import the pack itself

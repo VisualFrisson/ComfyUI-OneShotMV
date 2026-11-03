@@ -24,7 +24,6 @@ def _clean():
     graphs.use_models("auto")
     yield
     graphs.use_models("auto")
-    graphs.M.pop("artist_editor_test", None)
 
 
 def _direct(**kw):
@@ -259,6 +258,30 @@ def test_a_crowd_world_doesnt_dress_a_crowd_for_one_singer(monkeypatch):
     _direct(artist_path=_photo(), theme=bible["theme"])
     _direct(artist_path=_photo(), theme=bible["theme"], crowd="on")
     assert dressed == []
+
+
+def test_a_period_world_locks_the_artists_outfits_and_places():
+    """Nov 3, 2026: a Single Artist in a period World gets the period lock and the World's camera a Crowd gets,
+    on the drawn shot, its fallback and the looks; whoever walks into a clip is dressed for the period too."""
+    from fv import casting
+    camera = "Shot on 35mm colour film with a long lens"
+    bible = {"theme": "the gladiator games in ancient Rome", "camera": camera,
+             "wear": [f"a bronze helmet and leather armour, style {i}" for i in range(6)],
+             "light": ["hard midday sun"] * 4, "places": [f"on the arena sand, spot {i}" for i in range(6)],
+             "actions": ["raising a sword"] * 4}
+    pk = casting.apply_theme(casting.load_pack("artist"), bible)
+    cast = casting.cast_voice(pk, 3, 1, ["close", "close", "close"])
+    lock = casting.era_line(bible["theme"])
+    assert lock and "ancient Rome" in lock
+    for c in cast:
+        for key in ("portrait", "draft", "portrait_a", "twin_prompt"):
+            assert lock in c[key], key
+        assert camera in c["draft"] and camera in c["portrait"]
+        assert "ancient Rome" in c["sing"]  # casting.period_background
+        assert "Photo of @WHO@" in c["draft"]  # still the artist, not the World's characters
+    modern = casting.cast_voice(casting.apply_theme(casting.load_pack("artist"), dict(bible, theme="a beach party")),
+                                2, 1, ["close", "close"])
+    assert all("period-accurate" not in c["draft"] for c in modern)
 
 
 def test_the_setup_check_asks_for_the_editors_files(monkeypatch):

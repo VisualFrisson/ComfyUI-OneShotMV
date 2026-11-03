@@ -1,6 +1,6 @@
 """SageAttention is chosen for the machine, so it never stops a run: the kernel in fv/models.json when
 it can run here, else "auto" (SageAttention 2 picks the kernel for the card), else none. A clip that
-still doesn't render is re-shot without it. Reported Oct 30 by pxl-pshr: with SageAttention 1 the
+still doesn't render is re-shot without it. Reported Oct 30 by a tester: with SageAttention 1 the
 default kernel failed every LTX clip, and the run was cut with no singer clips.
 
 Runs without ComfyUI, torch or a GPU:  python tests/test_sage_kernel.py

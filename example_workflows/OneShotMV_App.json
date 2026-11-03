@@ -25,7 +25,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## OneShot MV: app\n\nThis workflow opens as an **app**: the settings on the right, the results in the middle. **App / Graph** at the top left switches to this node graph and back. It is the main workflow with the main settings shown and friendlier names (**Preview only** is **preview_only**).\n\n**A song and a World in, a music video out.** Load a song, write a World, click **Run**.\n\n**1. Preview first**\nTurn **preview_only** on and click **Run**. The Director:\n- analyses the song,\n- writes the World,\n- plans every shot.\n\nThe summary lists every shot: time, energy, who, wearing what, and where. Nothing renders yet. Change the World line if you need to, turn **preview_only** off, and click **Run** again. The song analysis and the World are cached, so the second run starts faster.\n\n**2. The World**\nOne line is enough: *the gladiator games in ancient Rome*. It decides who the characters are, what they wear, the places, the light and the grade.\n\nFor more control, write it the way the Studio's examples are written: the tone, then the people in the order you want them, then the places, then the light. What you say about the cast is a rule (\"no men\", \"present day\", \"no people, all robots\"), and a character you describe keeps your words.\n\nThe characters you name are cast first, in that order (**cast_order** `as written`; `mixed` shuffles them). Every shot is a different person.\n\n**Your own images instead** (**world_images**): put a folder path here (on this computer, or a folder inside ComfyUI's input or output folder) and the tool skips its image stage. Images with a face sing, the rest become cutaways; **image_order** plays them `in order` (by file name) or in `random order`, repeating when there are more shots than images. Images that aren't the video's shape are cropped, or extended to fit with FLUX.2 Klein. The World line and **cast** are then not used.\n\n**Who sings** (**cast**): `crowd` casts a different invented person for each line. `single artist` has one person sing every line: un-bypass **Artist photo** and pick a photo of yourself or of someone who agreed to it, or leave it bypassed and describe a new person in **artist_description** (the tool makes their headshot first). The crowd behind the singer stays off unless **crowd** is `on`. It needs FLUX.2 Klein, the LTX union-control LoRA and comfyui_controlnet_aux (see the README).\n\n**The edit**\nThe song is mapped into three energy levels, each cut its own way (**cuts_low / cuts_medium / cuts_high**):\n- **low** (the intro, quiet bridges): a cut every 2 bars.\n- **medium** (verses, builds): a cut every bar.\n- **high** (choruses, the drop): cuts to the music, each to a new face in the same spot.\n\n**audio_fx**: `subtle` (the default) adds flash, zoom, glow and colour split on the drums. `intense` is stronger and adds a motion-blurred twitch. `none` turns them off.\n\n**crowd**: `auto` puts a soft-focus crowd behind the singers when the World is a packed spectacle (an arena, a stadium, crowded stands); otherwise nobody else is in frame.\n\n**Take QC** checks every take and re-renders bad ones, at most doubling the render time. With the SyncNet weights installed (see the README), it also scores lip sync. A vision check looks at every picture before any video is made: one person, the right gender, no stray glasses or writing, period-right clothes.\n\n**broll_share**: about 1 shot in 8 becomes a cutaway where nobody sings, never on the drop. 0 turns it off.\n\n**quality**: `quality` is LTX-2.3 in 3 stages at 50 fps; `fast` uses the same model at 25 fps with fewer steps. **models**: `auto` picks the full set on a 48 GB+ card when its files are installed, else the 24 GB set.\n\n**seconds**: 0 renders the whole song. **start**: -1 picks the strongest stretch.\n\nThe finished MP4 lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`.\n\nUse music you have the rights to."
+        "## OneShot MV: app\n\nThis workflow opens as an **app**: the settings on the right, the results in the middle. **App / Graph** at the top left shows the graph behind it.\n\nLoad a song, write a World, turn **Preview only** on and click **Run** to see every shot without rendering anything. Then turn it off and run again. The video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`, and the Studio (the OneShot MV button) shows it as it renders.\n\n**Who sings**: Crowd, or Single Artist from a description (**New artist**). For a photo, switch to Graph and un-bypass **Artist photo**. **World images**: a folder of your own images instead of a World line. **For professional use**: for paid or client work (Qwen-Image-Edit 2511 instead of Qwen-Image 2.1, and your own images are always cropped).\n\nEvery other setting is on the Director in the graph; hover any of them for more. Use music you have the rights to."
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -223,7 +223,7 @@
           "link": null
         },
         {
-          "label": "Start at (second)",
+          "label": "Start at (seconds)",
           "localized_name": "start",
           "name": "start",
           "type": "FLOAT",
@@ -388,7 +388,7 @@
           "link": null
         },
         {
-          "label": "Images first",
+          "label": "Review images first",
           "localized_name": "review_images",
           "name": "review_images",
           "type": "BOOLEAN",
@@ -563,7 +563,7 @@
           "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:cast",
           "cast",
           {
-            "description": "crowd, or one singer from a photo or a description"
+            "description": "Crowd, or one singer from a description (for a photo, see the note)"
           }
         ],
         [
@@ -578,14 +578,14 @@
           "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:professional",
           "professional",
           {
-            "description": "Single artist: Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1"
+            "description": "For paid or client work: Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1"
           }
         ],
         [
           "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:preview_only",
           "preview_only",
           {
-            "description": "On: just the shot plan, in about a minute"
+            "description": "On: only the shot plan, nothing rendered"
           }
         ],
         [

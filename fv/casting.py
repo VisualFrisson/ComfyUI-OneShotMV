@@ -1,18 +1,12 @@
-"""Style packs and casting: deterministic prompt combinatorics per performer."""
+"""Casting: every performer's image and singing prompts, from the pack and the World (deterministic per seed)."""
 from __future__ import annotations
 
-import glob
 import json
 import os
 import random
 import re
 
 PACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "packs")
-
-
-def list_packs() -> list[str]:
-    """The casting and edit configs in fv/packs: crowd (every run) and artist (one singer from a photo)."""
-    return [json.load(open(f, encoding="utf-8"))["name"] for f in sorted(glob.glob(os.path.join(PACK_DIR, "*.json")))]
 
 
 def load_pack(name_or_path: str) -> dict:
@@ -79,9 +73,12 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     leads: the performers with a lead shot of their own, cast first (themed runs), so the singers
     are all different characters before the looks on the drop take theirs."""
     out = _cast_voice(pack, n, seed, sizes, fmt, leads, phases)
-    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
+    # the World: a Crowd's whole bible, or the line and camera a Single Artist's pack keeps (apply_theme)
+    world = (pack.get("casting") or {}).get("theme") or (pack.get("casting") or {}).get("world") or {}
+    camera = world.get("camera")
     from .critic import check_era
-    era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
+    era = check_era(world.get("theme") or "")
+    lock = era_line(world.get("theme") or "")  # "Hair, clothes and every object ... period-accurate for 1813"
     for c in out:
         creature = (c.get("check") or {}).get("kind") == "creature"
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera, creature=creature)
@@ -90,7 +87,12 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
                 c[key] = finish_prompt(c[key], c.get("size", "close"), camera=camera)
         if creature:
             continue  # no crowd and no period-dressed people behind a creature
-        if c.get("artist_edit"):  # a Single Artist's crowd only when it's turned on (auto: the singer alone)
+        if c.get("artist_edit"):
+            if lock:  # the period lock a Crowd's portraits get (_cast_theme), on every image of the artist
+                for key in ("portrait", "draft", "portrait_a", "twin_prompt"):
+                    if c.get(key):
+                        c[key] = f"{c[key].rstrip()} {lock}"
+            # a Single Artist's crowd only when it's turned on (auto: the singer alone)
             if (pack.get("casting") or {}).get("crowd_mode") == "on":
                 for key in ("portrait", "draft", "portrait_a"):
                     if c.get(key):
@@ -184,13 +186,13 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         f["light"] = f["light"][:1].upper() + f["light"][1:]
         move = _pick(rng, (c.get("moves") or {}).get(size, []), used, "move_" + size) or \
             "The handheld camera sways gently."
-        action = ""
+        action, place = "", f["background"]
         if size != "close" and c.get("places") and c.get("edit_wide"):
             action = _pick(rng, (c.get("actions") or {}).get(size, ["singing"]), used, "action_" + size)
+            place = _pick(rng, c["places"], used, "place")
             edit = c["edit_wide"].format(shot=fr["shot"][:1].lower() + fr["shot"][1:], lens=fr["lens"],
                                          angle=_pick(rng, c.get("angle_wide", c["angle"]), used, "angle_wide"),
-                                         action=action, place=_pick(rng, c["places"], used, "place"),
-                                         wear=f["wear"], light=f["light"])
+                                         action=action, place=place, wear=f["wear"], light=f["light"])
             edit = " ".join(edit.split())
         else:
             edit = " ".join(c["edit"].format(shot=fr["shot"], lens=fr["lens"], **f).split())
@@ -206,6 +208,8 @@ def _cast_artist(c: dict, n: int, seed: int, sizes: list[str]) -> list[dict]:
         draft, portrait_a = artist_drafts(edit, hair)
         out.append({"id": i, "portrait": edit, "draft": draft, "portrait_a": portrait_a, "hair": hair,
                     "artist_edit": True, "sing": sing, "who": c.get("who", "the person"),
+                    # what the Studio's plan shows: what the artist wears and where, as for a Crowd's characters
+                    "wear": f["wear"], "place": re.sub(r"\s+behind$", "", place or ""),
                     "twin_prompt": twin_prompt, "twin": {"who": "", "detail": "", "wear": g["wear"],
                                                          "light": g["light"], "background": g["background"]},
                     "size": size, "seed": seed * 1000 + i * 7 + 1})
@@ -247,7 +251,7 @@ SCENE_MOVES = {
 # picture inside black bars)
 SCENE_SHOT = {"medium": ("Medium shot", "on a 35mm lens at chest height, filling the whole frame edge to edge"),
               "wide": ("Wide full-body shot", "on a 24mm lens a few meters away, filling the whole frame edge to edge")}
-# The realism brief, against the default AI look: every image prompt ends with REALISM, close-up
+# The realism brief, against the default AI look: every image prompt ends with it, close-up
 # portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only say no text;
 # finish_prompt adds the photograph wording last.
 # no "fine facial hair": on every portrait it made the drop looks more likely to give women stubble
@@ -259,7 +263,6 @@ REALISM_LIGHT = ("Light comes from real sources with mixed colour temperatures a
 REALISM_LOOK = ("Muted, true-to-life colour, moderate depth of field, fine grain, slight lens softness toward the "
                 "edges, imperfect off-centre framing.")
 REALISM_CAMERA = REALISM_LIGHT + " " + REALISM_LOOK
-REALISM = REALISM_PERSON + " " + REALISM_CAMERA
 CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, faint redness around the nostrils, "
               "fine lines at the corners of the eyes, a light natural sheen on the forehead, natural eye whites "
               "with tiny visible veins, a single soft catchlight, dry texture on the lips.")
@@ -367,7 +370,7 @@ def period_background(sing: str, era: str) -> str:
 def edit_realism(close: bool = True) -> str:
     """For image edits that must keep the frame (the looks on the drop): the skin and fabric part of
     the brief, without the framing and depth of field. Never CLOSE_SKIN: its pores-and-veins close-up
-    makes Klein zoom every look into a face shot. close is kept for callers."""
+    made an image editor zoom every look into a face shot. close is kept for callers."""
     return REALISM_PERSON
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "
@@ -807,6 +810,9 @@ def apply_theme(pack: dict, bible: dict) -> dict:
         c["places"] = bible["places"]
         c["background"] = [_place_noun(pl) + " behind" for pl in bible["places"]]
         c["actions"] = {"medium": SCENE_ACTIONS["medium"], "wide": bible["actions"]}
+        # the World's line and camera, for the period lock and the camera (cast_voice); not under "theme",
+        # which would cast the World's characters instead of the artist
+        c["world"] = {"theme": bible.get("theme", ""), "camera": bible.get("camera")}
     else:
         p["casting"] = {"theme": bible, "framing": c.get("framing"),
                         "framing_landscape": c.get("framing_landscape"), "negative": neg,
