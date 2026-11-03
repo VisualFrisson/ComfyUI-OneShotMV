@@ -220,9 +220,10 @@ class FVDirector:
                                      "extend: keep the whole image while Qwen-Image 2.1 draws the missing sides (its "
                                      "licence is reported to be research-only). With professional on, always crop."}),
             "cast": (["crowd", "single artist"], {"default": "crowd",
-                     "tooltip": "crowd: a different invented person sings each line. single artist: one person "
-                                "sings every line, in the World's outfits and places, from a photo (artist_photo) "
-                                "or a description (artist_description)."}),
+                     "tooltip": "crowd: a different invented person sings each line. single artist "
+                                "(experimental: the likeness varies from shot to shot): one person sings every "
+                                "line, in the World's outfits and places, from a photo (artist_photo) or a "
+                                "description (artist_description)."}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
                                   "tooltip": "Length of the video; 0 = the whole song"}),
             "start": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 3600.0, "step": 0.01,

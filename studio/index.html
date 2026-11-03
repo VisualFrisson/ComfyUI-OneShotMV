@@ -1289,7 +1289,7 @@ function setCast(c){
 function drawCast(){
   const b = S.brief, box = $("#casts"); if (!box) return;
   const single = b.cast === SINGLE, photo = b.artist_mode !== "describe";
-  box.innerHTML = [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line.", ICON_ONE]]
+  box.innerHTML = [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line. Experimental.", ICON_ONE]]
     .map(([k, n, d, ic]) => `<button type="button" class="tier" data-c="${k}" aria-pressed="${(single ? SINGLE : "crowd") === k}"><span class="t">${ic}<b>${n}</b></span><small>${d}</small></button>`).join("");
   box.querySelectorAll(".tier").forEach(el => el.onclick = () => setCast(el.dataset.c));
   drawNotes();
@@ -1309,7 +1309,7 @@ function drawCast(){
   if (!photo){
     pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age and look</label>
       <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head and gold hoops"></textarea>
-      <p class="note">The tool invents this person and keeps them the same in every shot.</p>${lic}`;
+      <p class="note">The tool invents this person and keeps them close to the same in every shot. <b>Experimental:</b> the likeness varies from shot to shot.</p>${lic}`;
     const ta = $("#adesc"); ta.value = b.artist_description || "";
     ta.oninput = () => { b.artist_description = ta.value; saveBrief(); refreshEstimate(); };
     return;
@@ -1325,7 +1325,8 @@ function drawCast(){
         <div class="muted" style="font-size:13px">JPG, PNG or WebP. It goes into ComfyUI's input folder.</div></div>`)
     + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
       <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewellery in the photo tend to carry over into the video.</p>
-      <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>${lic}`;
+      <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>
+      <p class="note"><b>Experimental:</b> the likeness varies from shot to shot, and the photo's clothes or jewellery can carry over. Generate images and review lets you fix any that miss.</p>${lic}`;
   const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
   if (img){
     $("#areplace").onclick = pick;

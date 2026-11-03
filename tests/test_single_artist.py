@@ -114,6 +114,22 @@ def test_a_described_artist_is_made_first(monkeypatch):
     res = _direct(artist_description="A singer in her late twenties with a shaved head and gold hoops.")
     jobs = _jobs(res)
     assert jobs[0][0].endswith("free_before_portraits.json") and jobs[1][0].endswith("artist_ref.json")
+    want = os.path.join(res["run_dir"], "artist_ref_00001_.png")
+    faces = [(f, g) for f, g in jobs[2:] if "_p0" in f]
+    assert faces and not any(f.endswith("d.json") for f, _ in faces)  # no drawn shots: the headshot is edited
+    for f, g in faces:
+        assert any(n["class_type"] == "FVLoadImagePath" and n["inputs"]["path"] == want for n in g.values())
+        enc = next(n for n in g.values() if n["class_type"] == "TextEncodeQwenImage21")["inputs"]
+        assert "Keep only their face from image 1" in enc["prompt"]
+
+
+def test_with_drawn_shots_a_described_artist_is_the_look_alike(monkeypatch):
+    fc.install(monkeypatch, artist=True)
+    from fv import casting
+    monkeypatch.setattr(casting, "DRAWN_SHOTS", True)
+    res = _direct(artist_description="A singer in her late twenties with a shaved head and gold hoops.")
+    jobs = _jobs(res)
+    assert jobs[0][0].endswith("free_before_portraits.json") and jobs[1][0].endswith("artist_ref.json")
     ref = jobs[1][1]
     prompt = next(n["inputs"]["text"] for n in ref.values() if n["class_type"] == "CLIPTextEncode")
     assert "a singer in her late twenties with a shaved head and gold hoops" in prompt
@@ -132,9 +148,12 @@ WHO = "a woman in her thirties with olive skin and short dark hair"
 
 
 def test_each_shot_is_drawn_then_the_face_goes_in(monkeypatch):
-    """Nov 2, 2026: Krea 2 draws each main image with a look-alike (the photo described by the vision model), in a
-    hairstyle of its own, then the editor puts the artist's face in; the face check follows the portraits."""
+    """Nov 2, 2026 (off by default since Nov 3, casting.DRAWN_SHOTS): Krea 2 draws each main image with a
+    look-alike (the photo described by the vision model), in a hairstyle of its own, then the editor puts the
+    artist's face in; the face check follows the portraits."""
     fc.install(monkeypatch, artist=True)
+    from fv import casting
+    monkeypatch.setattr(casting, "DRAWN_SHOTS", True)
     monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: WHO)
     import json
     photo = _photo()
@@ -164,8 +183,30 @@ def test_each_shot_is_drawn_then_the_face_goes_in(monkeypatch):
     assert "zz_critic" in names and names.index("zz_critic") > names.index("free_after_portraits")
 
 
+def test_by_default_every_shot_edits_the_photo_keeping_only_the_face(monkeypatch):
+    """Nov 3, 2026: after the check run (the face went in on 2 of 16 drawn shots), every main image edits the
+    photo keeping only the face; the photo isn't described and nothing is drawn first."""
+    fc.install(monkeypatch, artist=True)
+    asked = []
+    monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: asked.append(photo) or WHO)
+    import json
+    photo = _photo()
+    res = _direct(artist_path=photo)
+    jobs = _jobs(res)
+    mains = [(f, g) for f, g in jobs if "_p0" in f]
+    assert mains and not asked and not any(f.endswith("d.json") for f, _ in mains)
+    for f, g in mains:
+        assert any(n["class_type"] == "FVLoadImagePath" and n["inputs"]["path"] == photo for n in g.values())
+        enc = next(n for n in g.values() if n["class_type"] == "TextEncodeQwenImage21")["inputs"]
+        assert "Keep only their face from image 1" in enc["prompt"]
+    p = json.load(open(os.path.join(res["run_dir"], "plan.json")))
+    assert p["artist_shots"] == "photo" and not any(it["kind"] == "artist" for it in (p.get("critic") or {}).get("items", []))
+
+
 def test_without_a_description_the_photo_keeps_only_the_face(monkeypatch):
     fc.install(monkeypatch, artist=True)
+    from fv import casting
+    monkeypatch.setattr(casting, "DRAWN_SHOTS", True)
     monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: "")
     import json
     res = _direct(artist_path=_photo())
@@ -182,6 +223,8 @@ def test_the_face_check_remakes_then_falls_back_to_the_photo(monkeypatch):
     """A drawn shot whose face isn't the artist's is made again (a new seed); if it still isn't, the last try
     edits the photo itself, keeping only the face; the closest take is kept."""
     fc.install(monkeypatch, artist=True)
+    from fv import casting
+    monkeypatch.setattr(casting, "DRAWN_SHOTS", True)
     monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: WHO)
     import json
     from PIL import Image

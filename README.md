@@ -21,11 +21,11 @@ models.
    is cut its own way: long shots in the quiet parts, a cut every bar in the verses, a new face on
    the beat in the chorus or drop.
 4. Krea 2 paints a portrait of every performer, each one a different person. With Single Artist,
-   Krea 2 draws each shot with a look-alike and the image editor puts the artist's face in. With
-   your own images, this step is skipped and your images are used.
+   the image editor puts the artist from the photo into each shot instead. With your own images,
+   this step is skipped and your images are used.
 5. A vision check looks at every portrait (one person, the right gender, the whole head in frame,
    no writing, nothing from after the World's period, the right outfit) and redoes the wrong ones.
-   Single Artist gets a face check against the photo instead.
+   Single Artist skips it; the take check compares each clip's face with the photo.
 6. LTX-2.3 turns each portrait into a clip that sings the isolated vocal.
 7. A take check re-shoots missing, frozen or blown-out takes, dead mouths, takes that drift to
    another person or place, bad framing, and weak lip sync (scored with SyncNet).
@@ -221,7 +221,7 @@ of a folder on this computer. In the workflow, put the folder in the Director's 
 ### Crowd or Single Artist
 
 After the World comes who sings. **Crowd** (the default) casts a different invented person for
-each line. **Single Artist** has one person sing every line, in the World's outfits, places and
+each line. **Single Artist** (experimental) has one person sing every line, in the World's outfits, places and
 light (true to its period, as for Crowd), with quick costume changes on the drop:
 
 - **From a photo:** upload a photo of the singer in the Studio, or connect a Load Image to the
@@ -238,12 +238,10 @@ The portraits come out in the video's shape, so a tall phone photo keeps its hea
 the World's places with nobody in them. The crowd behind the singer is off unless you set crowd
 to `on`.
 
-Each main image is made in two steps, so the shots vary in light, angle and hair the way the World
-asks instead of copying the photo: Krea 2 draws the shot with a look-alike (the vision model
-describes the photo first: gender, age, skin, hair), and the image editor then puts the artist's
-face in. A face check compares each image with the photo and makes it again if the face doesn't
-match; the last try edits the photo itself, keeping only the face. If the photo can't be
-described, every image is made that way.
+Each main image is an edit of the photo that keeps only the face: the hairstyle, outfit, light and
+place come from the World. Single Artist is experimental: the likeness varies from shot to shot,
+and the photo's clothes or jewellery can carry over into some shots. Check the images with
+**Generate images and review** and fix any that miss.
 
 Qwen-Image 2.1 makes the artist's portraits and looks. It kept the face best in our tests, but its
 licence is reported to be research-only. For paid or client work, turn on **For professional use**

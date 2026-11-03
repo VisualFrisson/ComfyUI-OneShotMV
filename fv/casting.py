@@ -150,6 +150,10 @@ def _cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, f
 # World asks, where an edit of the photo itself keeps the photo's light and angle. When the artist can't be
 # described, the photo is edited with only the face kept (portrait_a).
 ARTIST_WHO = "@WHO@"
+# Single Artist's drawn shots (Krea 2 draws a look-alike, then the editor puts the face in): off since the
+# Nov 3, 2026 check run, where the face went in on 2 of 16 shots and 14 fell back to editing the photo.
+# Off, every main image edits the photo keeping only the face (portrait_a, FACE_ONLY).
+DRAWN_SHOTS = False
 _FROM_PHOTO = ("Photo of the same person as in image 1, photographed again somewhere new:", "Photo of the same person as in image 1.")
 _KEEP_ALL = "Keep their exact face, identity, skin tone and hair."
 FACE_ONLY = ("Keep only their face from image 1: the same eyes, nose, lips, jawline, skin tone and age. Everything else "
