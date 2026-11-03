@@ -119,9 +119,121 @@ def test_a_described_artist_is_made_first(monkeypatch):
     prompt = next(n["inputs"]["text"] for n in ref.values() if n["class_type"] == "CLIPTextEncode")
     assert "a singer in her late twenties with a shaved head and gold hoops" in prompt
     want = os.path.join(res["run_dir"], "artist_ref_00001_.png")
-    for f, g in jobs[2:]:
+    faces = [(f, g) for f, g in jobs[2:] if "_p0" in f and not f.endswith("d.json")]
+    drafts = [(f, g) for f, g in jobs[2:] if "_p0" in f and f.endswith("d.json")]
+    assert faces and drafts  # the description is the look-alike each shot is drawn with
+    for f, g in faces:
+        assert any(n["class_type"] == "FVLoadImagePath" and n["inputs"]["path"] == want for n in g.values())
+    for f, g in drafts:
+        text = next(n["inputs"]["text"] for n in g.values() if n["class_type"] == "CLIPTextEncode")
+        assert text.startswith("Photo of a singer in her late twenties with a shaved head and gold hoops, their hair styled in")
+
+
+WHO = "a woman in her thirties with olive skin and short dark hair"
+
+
+def test_each_shot_is_drawn_then_the_face_goes_in(monkeypatch):
+    """Nov 2, 2026: Krea 2 draws each main image with a look-alike (the photo described by the vision model), in a
+    hairstyle of its own, then the editor puts the artist's face in; the face check follows the portraits."""
+    fc.install(monkeypatch, artist=True)
+    monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: WHO)
+    import json
+    photo = _photo()
+    res = _direct(artist_path=photo)
+    jobs = _jobs(res)
+    names = [f.split("_", 1)[1][:-5] for f, _ in jobs]
+    drafts = [(n, g) for n, (f, g) in zip(names, jobs) if n.startswith("p") and n.endswith("d")]
+    faces = [(n, g) for n, (f, g) in zip(names, jobs) if n.startswith("p") and not n.endswith("d")]
+    assert drafts and len(drafts) == len(faces)
+    texts = [next(x["inputs"]["text"] for x in g.values() if x["class_type"] == "CLIPTextEncode") for _, g in drafts]
+    assert all(t.startswith(f"Photo of {WHO}, their hair styled in") for t in texts)
+    assert len({t.split("styled in ")[1].split(".")[0].split(":")[0] for t in texts}) > 1  # the hair changes
+    for n, g in faces:
+        paths = [x["inputs"]["path"] for x in g.values() if x["class_type"] == "FVLoadImagePath"]
+        assert paths[0].endswith(f"{n}d_00001_.png") and paths[1] == photo
+        enc = next(x for x in g.values() if x["class_type"] == "TextEncodeQwenImage21")["inputs"]
+        assert enc["prompt"] == graphs.FACE_IN and "images.image_2" in enc
+    # one Krea 2 load (the drawn shots and the cutaways' stills), then one editor load
+    free = names.index("free_after_drafts")
+    assert max(names.index(n) for n, _ in drafts) < free < min(names.index(n) for n, _ in faces)
+    assert all(names.index(n) < free for n in names if n.startswith("brollk"))
+    p = json.load(open(os.path.join(res["run_dir"], "plan.json")))
+    assert p["artist_who"] == WHO and p["artist_shots"] == "drawn"
+    items = p["critic"]["items"]
+    assert {it["name"] for it in items if it["kind"] == "artist"} == {n for n, _ in faces}
+    assert all("Keep only their face" in it["fallback"] for it in items if it["kind"] == "artist")
+    assert "zz_critic" in names and names.index("zz_critic") > names.index("free_after_portraits")
+
+
+def test_without_a_description_the_photo_keeps_only_the_face(monkeypatch):
+    fc.install(monkeypatch, artist=True)
+    monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: "")
+    import json
+    res = _direct(artist_path=_photo())
+    jobs = _jobs(res)
+    assert not any(f.endswith("d.json") and "_p0" in f for f, _ in jobs)
+    for f, g in jobs:
         if "_p0" in f:
-            assert any(n["class_type"] == "FVLoadImagePath" and n["inputs"]["path"] == want for n in g.values())
+            enc = next(n for n in g.values() if n["class_type"] == "TextEncodeQwenImage21")["inputs"]
+            assert "Keep only their face from image 1" in enc["prompt"]
+    assert json.load(open(os.path.join(res["run_dir"], "plan.json")))["artist_shots"] == "photo"
+
+
+def test_the_face_check_remakes_then_falls_back_to_the_photo(monkeypatch):
+    """A drawn shot whose face isn't the artist's is made again (a new seed); if it still isn't, the last try
+    edits the photo itself, keeping only the face; the closest take is kept."""
+    fc.install(monkeypatch, artist=True)
+    monkeypatch.setattr(director, "_artist_who", lambda photo, log=print: WHO)
+    import json
+    from PIL import Image
+    from fv import identity
+    photo = _photo()
+    res = _direct(artist_path=photo)
+    d = res["run_dir"]
+    monkeypatch.setattr(identity, "available", lambda: True)
+    # the photo and the fallback's pictures (_c2) are the artist; the drawn shots and their re-makes are not
+    monkeypatch.setattr(identity, "embed_path", lambda path: np.array([1.0, 0.0]) if (path == photo or "_c2" in path)
+                        else np.array([0.3, 0.954]))
+    p = json.load(open(os.path.join(d, "plan.json")))
+    for it in p["critic"]["items"]:
+        Image.new("RGB", (64, 64)).save(it["image"])
+    director.critic_pass(d, pass_idx=0, queue=False, log=lambda *a: None)
+    remade = sorted(f for f in os.listdir(os.path.join(d, "jobs")) if f.startswith("critic1_"))
+    assert remade and all(f.endswith("_c1.json") for f in remade)
+    g = json.load(open(os.path.join(d, "jobs", remade[0])))
+    assert any(n["class_type"] == "TextEncodeQwenImage21" and n["inputs"]["prompt"] == graphs.FACE_IN for n in g.values())
+    p = json.load(open(os.path.join(d, "plan.json")))
+    for it in p["critic"]["items"]:
+        Image.new("RGB", (64, 64)).save(it["image"])
+    director.critic_pass(d, pass_idx=1, queue=False, log=lambda *a: None)
+    fall = sorted(f for f in os.listdir(os.path.join(d, "jobs")) if f.startswith("critic2_"))
+    g = json.load(open(os.path.join(d, "jobs", fall[0])))
+    enc = next(n for n in g.values() if n["class_type"] == "TextEncodeQwenImage21")["inputs"]
+    assert "Keep only their face from image 1" in enc["prompt"]
+    assert next(n for n in g.values() if n["class_type"] == "FVLoadImagePath")["inputs"]["path"] == photo
+    p = json.load(open(os.path.join(d, "plan.json")))
+    for it in p["critic"]["items"]:
+        Image.new("RGB", (64, 64)).save(it["image"])
+    director.critic_pass(d, pass_idx=2, queue=False, log=lambda *a: None)
+    p = json.load(open(os.path.join(d, "plan.json")))
+    assert p["critic"]["done"] and all(it["final"].endswith("_c2_00001_.png") for it in p["critic"]["items"])
+    a = next(r for r in p["renders"] if r["role"] == "A")
+    assert a["portrait"].endswith("_c2_00001_.png")
+
+
+@pytest.mark.parametrize("said, who", [
+    ("A woman in her mid-twenties with fair skin and long blonde hair.", "a woman in her mid-twenties with fair skin and long blonde hair"),
+    ("**a man in his forties, olive skin, short grey hair**", "a man in his forties, olive skin, short grey hair"),
+    ("a woman resembling a famous singer, with fair skin", "a woman"),
+    ("Sorry, I can't describe people in photos.", ""),
+])
+def test_the_photo_is_described_without_names(monkeypatch, said, who):
+    import types
+    fake = types.SimpleNamespace(ask=lambda *a, **k: said, free=lambda: None)
+    monkeypatch.setitem(sys.modules, "fv.critic", fake)
+    import fv
+    monkeypatch.setattr(fv, "critic", fake, raising=False)
+    assert director._artist_who("photo.png", log=lambda *a: None) == who
 
 
 def test_the_crowd_stays_off_unless_turned_on(monkeypatch):

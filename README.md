@@ -235,6 +235,15 @@ The portraits come out in the video's shape, so a tall phone photo keeps its hea
 the World's places with nobody in them. The crowd behind the singer is off unless you set crowd
 to `on`.
 
+Each main image is made in two steps, so the shots differ in light, angle and hair the way the World
+asks instead of all looking like the photo: Krea 2 draws the shot with a look-alike (the vision model
+describes the photo first: gender, age, skin, hair), in a hairstyle of its own, and the image editor
+then puts the artist's face in. A face check compares each image with the photo and makes it again
+when the face isn't the artist's; the last try edits the photo itself, keeping only the face. In the
+Nov 2, 2026 tests this kept the face better than editing the photo (0.50 against 0.44 face match) and
+gave far more varied shots. Without a description (no vision model), the photo is edited, keeping
+only the face.
+
 Qwen-Image 2.1 makes the artist's portraits and looks. It kept the face best in our tests, but its
 licence is reported to be research-only. For paid or client work, turn on **For professional use**
 (the Studio's Models card, or `professional` on the Director node): Qwen-Image-Edit 2511

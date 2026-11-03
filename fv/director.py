@@ -276,6 +276,17 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
                                              for n, _ in list(staged_img.values())[::-1]]
     else:
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
+    # Single Artist: each main image drawn by Krea 2 with a look-alike, then the artist's face put in
+    # (casting.artist_drafts, graphs.FACE_IN); the look-alike needs the artist described first
+    who = ""
+    if imgs is None and any(c.get("artist_edit") and c.get("draft") for c in cast):
+        if artist_description:
+            who = artist_description.rstrip(".")
+            who = who[0].lower() + who[1:] if who[:1].isupper() and not who[1:2].isupper() else who
+        elif artist_path:
+            who = _artist_who(artist_path, log=log)
+        p["artist_who"] = who
+        p["artist_shots"] = "drawn" if who else "photo"
     port = {}
     # the Director's own language-model work (World, cast, crowd dress) and whatever ran before
     # stay loaded under --highvram: the first portrait then shares the card with them
@@ -284,6 +295,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     if ref_job:
         jobs.append(ref_job)
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
+    drafts = []  # Single Artist: Krea 2's drawn shots, made before the face goes into any of them
     for name, it in staged_img.values():
         jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size=s2,
                                               crop=it.get("crop"), extend=it["fit"] == "extend",
@@ -295,8 +307,15 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         if c["id"] not in need_portrait:
             continue
         name = f"p{c['id']:03d}"
-        if c.get("artist_edit"):
-            jobs.append((name, graphs.artist_portrait(artist_path=artist_path, prompt=c["portrait"],
+        if c.get("artist_edit") and who and c.get("draft"):
+            drafts.append((f"{name}d", graphs.krea2_portrait(prompt=c["draft"].replace(casting.ARTIST_WHO, who),
+                                                             seed=c["seed"], prefix=f"{rel}/{name}d", size1=s1,
+                                                             size2=s2, turbo_only=(label == "fast")).nodes))
+            jobs.append((name, graphs.artist_face_in(draft_path=os.path.join(run_dir, f"{name}d_00001_.png"),
+                                                     artist_path=artist_path, seed=c["seed"], prefix=f"{rel}/{name}",
+                                                     size1=s1, size2=s2, editor=editor).nodes))
+        elif c.get("artist_edit"):  # the artist couldn't be described: the photo, keeping only the face
+            jobs.append((name, graphs.artist_portrait(artist_path=artist_path, prompt=c.get("portrait_a") or c["portrait"],
                                                       seed=c["seed"], prefix=f"{rel}/{name}", size1=s1,
                                                       size2=s2, editor=editor).nodes))
         else:
@@ -308,6 +327,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         for r in p["renders"]:
             if r["role"] == "A":
                 r["portrait"] = port[r["performer"]]
+    if drafts:  # every drawn shot (one Krea 2 load), then every face (one image-editor load)
+        first = next(i for i, (n, _) in enumerate(jobs) if n == drafts[0][0][:-1])
+        jobs[first:first] = drafts + [("free_after_drafts", graphs.free_memory("after the drawn shots").nodes)]
     free_idx = len(jobs)
     jobs.append(("free_after_portraits", graphs.free_memory(f"after {stills_are}").nodes))
     neg = pk["casting"]["negative"]
@@ -388,15 +410,22 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             except Exception as e:  # never let b-roll block a run
                 log(f"[OneShotMV] b-roll skipped ({e})")
                 stills, clips = [], []
-            jobs[free_idx:free_idx] = [(f"brollk{i:02d}", g) for i, g in enumerate(stills)]
+            # with the drawn shots, Krea 2 makes the cutaways' stills in the same load
+            at = next((i for i, (n, _) in enumerate(jobs) if n == "free_after_drafts"), free_idx)
+            jobs[at:at] = [(f"brollk{i:02d}", g) for i, g in enumerate(stills)]
             last_a = max([i for i, (n, _) in enumerate(jobs) if re.match(r"^r\d{3}A$", n)] + [len(jobs) - 1])
             jobs[last_a + 1:last_a + 1] = [(f"brollr{i:02d}", g) for i, g in enumerate(clips)]
             p["broll_planned"] = True  # broll.finalize() picks the slots after singer QC
         p["staged"] = True
-        if p.get("unique_cast") and _node_available("FVCritic"):
+        # Single Artist's drawn shots: the face check (critic_pass) re-makes any whose face isn't the artist's
+        artist_items = [{"name": f"p{c['id']:03d}", "job": f"p{c['id']:03d}", "kind": "artist", "performer": c["id"],
+                         "orig": port[c["id"]], "image": port[c["id"]], "check": {"kind": "artist"},
+                         "fallback": c.get("portrait_a") or "", "takes": []}
+                        for c in cast if c.get("artist_edit") and who and c["id"] in port]
+        if (p.get("unique_cast") or artist_items) and _node_available("FVCritic"):
             # the vision check (fv/critic.py) between the stills and the videos: every portrait and
             # b-roll still is checked, the bad ones re-made, and only then are the clips queued
-            items = []
+            items = list(artist_items)
             for c in cast:
                 if c["id"] in port and c.get("check"):
                     items.append({"name": f"p{c['id']:03d}", "job": f"p{c['id']:03d}", "kind": "portrait",
@@ -612,6 +641,41 @@ def _video_in(graph: dict) -> str | None:
         if node.get("class_type") == "FVLoadVideoPath":
             return node.get("inputs", {}).get("path")
     return None
+
+
+ARTIST_ASK = ("Describe the person in this photo for a casting note, in one short phrase of at most 18 words: their "
+              "apparent gender, age range, skin tone, and hair colour and length. Start with \"a woman\", \"a man\" or "
+              "\"a person\", like \"a woman in her mid-twenties with fair skin and long blonde hair\". No names and no "
+              "clothes. Answer with the phrase only.")
+
+
+def _artist_who(photo: str, log=print) -> str:
+    """Single Artist from a photo: a short description of the artist (gender, age, skin, hair), from the vision
+    model, for the look-alike Krea 2 draws each shot with. "" when it can't tell."""
+    from . import critic
+    try:
+        text = str(critic.ask(photo, ARTIST_ASK, max_length=80) or "")
+    except Exception as e:
+        log(f"[OneShotMV] Single Artist: the photo couldn't be described ({e}); the photo itself is edited")
+        text = ""
+    finally:
+        critic.free()
+        try:
+            import gc
+            import comfy.model_management as mm  # type: ignore
+            mm.unload_all_models()
+            mm.soft_empty_cache()
+            gc.collect()
+        except Exception:
+            pass
+    t = " ".join(text.replace("*", "").split()).strip().strip('"').rstrip(".")
+    m = re.match(r"(?i)^(a (?:woman|man|person)\b[^.\n]{0,140})", t)
+    who = m.group(1) if m else ""
+    who = re.sub(r"(?i)[,;]?\s*\b(?:resembling|who looks like|looking like|similar to)\b.*$", "", who).strip(" ,")  # no names
+    who = who[0].lower() + who[1:] if who else ""
+    log(f"[OneShotMV] Single Artist: the photo shows {who}" if who else
+        "[OneShotMV] Single Artist: no description of the photo; the photo itself is edited, keeping only the face")
+    return who
 
 
 def _job_file(run_dir: str, name: str) -> str | None:
@@ -1133,6 +1197,26 @@ def _empty_place(prompt: str) -> str:
     return re.sub(r"(?i)\b(Background:|Setting:)\s*([^.]+)\.", sub, prompt, count=1)
 
 
+ARTIST_FACE_MIN = 0.45  # the take check's bar for a still (qc.THRESH["id_min_key"])
+
+
+def _face_check(path: str, ref) -> dict:
+    """One drawn shot of Single Artist against the artist's photo (ArcFace): no faults at or above the bar;
+    the score orders the takes (lower is better) so the closest is kept when none passes."""
+    if ref is None:
+        return {"faults": [], "score": 0}
+    try:
+        from . import identity
+        e = identity.embed_path(path)
+    except Exception as e_:
+        return {"faults": [], "score": 0, "error": str(e_)[:200]}
+    if e is None:
+        return {"faults": ["noface"], "score": 2, "id_sim": None}
+    sim = float(identity.similarity(e, ref))
+    return {"faults": [] if sim >= ARTIST_FACE_MIN else ["identity"], "id_sim": round(sim, 3),
+            "score": 0 if sim >= ARTIST_FACE_MIN else round(1 - sim, 3)}
+
+
 def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: bool = True, log=print) -> dict:
     """Check every still of a unique-cast run (fv/critic.py); re-make the ones with faults (new
     seeds, a line that says what to fix) and check again, at most max_passes times; then keep the
@@ -1152,12 +1236,22 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
     tm[f"critic_{pass_idx}"] = _dt.datetime.now().isoformat(timespec="seconds")
     t0 = _dt.datetime.now()
     checked = 0
+    ref = None  # Single Artist: the photo's face, for the drawn shots' face check
+    if any(it["kind"] == "artist" for it in items):
+        try:
+            from . import identity
+            if identity.available() and os.path.exists(p.get("artist_path", "")):
+                ref = identity.embed_path(p["artist_path"])
+        except Exception as e:
+            log(f"[OneShotMV] face check off ({e})")
     for it in items:
         if any(t.get("image") == it["image"] for t in it["takes"]):
             continue
         take = {"image": it["image"]}
         if not os.path.exists(it["image"]):
             take.update(faults=["missing"], score=9)
+        elif it["kind"] == "artist":  # the face check: is the artist's face in the drawn shot?
+            take.update(_face_check(it["image"], ref))
         else:
             try:
                 text = critic.ask(it["image"], critic.rubric(it["check"], world, era))
@@ -1186,6 +1280,20 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
     if bad and pass_idx < max_passes:
         jobs = []
         for it in bad:
+            if it["kind"] == "artist" and pass_idx == max_passes - 1 and it.get("fallback"):
+                # the last re-make of a drawn shot whose face still isn't the artist's: the photo itself,
+                # edited keeping only the face (it always kept the face in the tests)
+                from . import formats
+                s1, s2 = formats.portrait_size(p.get("format") or "16:9")
+                tag = f"{it['name']}_c{pass_idx + 1}"
+                g = graphs.artist_portrait(artist_path=p["artist_path"], prompt=it["fallback"],
+                                           seed=101 + 31 * (pass_idx + 1) + int(it.get("performer") or 0),
+                                           prefix=f"{rel}/{tag}", size1=s1, size2=s2, editor=p.get("editor")).nodes
+                json.dump(g, open(os.path.join(run_dir, "jobs", f"critic{pass_idx + 1}_{tag}.json"), "w",
+                               encoding="utf-8"), indent=1)
+                it["image"] = os.path.join(run_dir, f"{tag}_00001_.png")
+                jobs.append(g)
+                continue
             jf = _job_file(run_dir, it["job"])
             if not jf:
                 continue
@@ -1252,7 +1360,7 @@ def critic_pass(run_dir: str, *, pass_idx: int = 0, max_passes: int = 2, queue: 
         for it in items:
             if it["final"] != it["orig"]:
                 swaps[it["orig"]] = it["final"]
-            if it["kind"] == "portrait":
+            if it["kind"] in ("portrait", "artist"):
                 for r in p["renders"]:
                     if r["role"] == "A" and r["performer"] == it["performer"]:
                         r["portrait"] = it["final"]
