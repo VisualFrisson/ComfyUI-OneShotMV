@@ -237,7 +237,11 @@ light, with quick costume changes on the drop:
 
 - **From a photo:** upload a photo of the singer in the Studio, or connect a Load Image to the
   Director's `artist_photo` (the example workflow has one, bypassed). Use only a photo of
-  yourself or of someone who agreed to it. A clear, front-on photo of the face works best.
+  yourself or of someone who agreed to it. One photo is enough, and the best one is sharp, of
+  just them, facing the camera with the head straight, in soft even light, with the whole face
+  showing (no sunglasses, hat brim or hair across it); head and shoulders is ideal. Makeup and
+  jewellery in the photo tend to carry over. In a test on Nov 2, 2026, four photos given together
+  made the editor draw the person two or three times, and a front-on photo beat tilted selfies.
 - **A new artist:** describe them in a sentence ("a singer in her late twenties with a shaved
   head and gold hoops"). The tool makes their studio headshot first and keeps them the same in
   every shot, so no real person's photo is needed.

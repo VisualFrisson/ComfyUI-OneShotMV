@@ -1323,6 +1323,7 @@ function drawCast(){
         <div style="font-weight:700;font-size:16px">Drop a photo here, or click to upload</div>
         <div class="muted" style="font-size:13px">JPG, PNG or WebP. It goes into ComfyUI's input folder.</div></div>`)
     + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
+      <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewellery in the photo tend to carry over into the video.</p>
       <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>`;
   const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
   if (img){
