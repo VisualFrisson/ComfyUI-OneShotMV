@@ -48,9 +48,9 @@ def _why(fs) -> str:
     return ", ".join(WHY.get(f, f) for f in fs)
 
 
-STAGES = [("plan", "Plan", "song, World, shot list"), ("stills", "Stills", "Krea 2 portraits"),
-          ("check", "Vision check", "re-makes bad stills"), ("clips", "Clips", "LTX lip sync"),
-          ("takes", "Take check", "SyncNet, re-takes"), ("broll", "B-roll", "cutaways"),
+STAGES = [("plan", "Plan", "song, World, shot list"), ("stills", "Images", "Krea 2 images"),
+          ("check", "Vision check", "re-makes bad images"), ("clips", "Clips", "LTX lip sync"),
+          ("takes", "Take check", "lip sync, re-takes"), ("broll", "Cutaways", "shots without singing"),
           ("edit", "Edit", "beat cut, FX, grade")]
 
 
@@ -258,6 +258,15 @@ def _estimate(b: dict) -> dict:
     theme = "" if folder else (b.get("theme") or "").strip()
     share = float(b.get("broll", 0.125))
     artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
+    n_sung = 0
+    if artist and not folder:  # Single Artist draws each main image with Krea 2 before the face goes in (~18 s each)
+        apk = casting.load_pack("artist")
+        if cuts:
+            apk["edit"] = dict(apk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items()})
+        ap = planner.plan_voice(tl, apk, fmt=b.get("format", "16:9"), preset=b.get("preset", "quality"),
+                                seconds=float(b.get("seconds", 30)), start=float(b.get("start", -1)),
+                                seed=int(b.get("seed", 1)), framing="mixed")
+        n_sung = sum(1 for r in ap.get("renders", []) if r.get("role") == "A")
     need = p["performers"] + 2 * broll.slots(p, share) + 2 if theme and not artist else 0
     bible = _bible(theme, int(b.get("seed", 1))) if theme else None
     have = len((bible or {}).get("characters") or [])
@@ -301,7 +310,7 @@ def _estimate(b: dict) -> dict:
                                 # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
                                 + (4 if folder and _extends(b) else 0)
                                 # Single Artist: Krea 2 draws each main image before the face goes in
-                                + (2 + round(0.4 * p["performers"]) if artist and not folder else 0))}
+                                + (2 + round(0.4 * n_sung) if artist and not folder else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -1074,7 +1083,7 @@ def _notes(d: str, p: dict, label_of: dict, done: bool = False) -> list[dict]:
             nm = str(it.get("name") or "")
             who = label_of.get(("p", it.get("performer"))) or label_of.get(("r", it.get("render"))) or \
                 ("A cutaway" if nm.startswith("k") else "A spare portrait")
-            notes.append({"kind": "fix", "text": f"{who}: still re-made ({_why(faults) or 'failed the check'})."})
+            notes.append({"kind": "fix", "text": f"{who}: image re-made ({_why(faults) or 'failed the check'})."})
     qc = _load(os.path.join(d, "qc.json"), []) or []
     passes = [x for x in (qc if isinstance(qc, list) else []) if x.get("report")]
     for k, ps in enumerate(passes):
@@ -1373,7 +1382,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
         raise ValueError("pick at least one shot")
     st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
     if st.get("state") == "running":
-        raise ValueError("the last pickups are still shooting")
+        raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
         raise ValueError("this run still has jobs in the queue")
     rel = p.get("run_rel") or os.path.relpath(d, _out()).replace(os.sep, "/")
@@ -1406,7 +1415,7 @@ def _pickups(name: str, items: list, dry: bool = False) -> dict:
                 cur = next((n["inputs"].get("path") for n in g.values() if n.get("class_type") == "FVLoadImagePath"), "")
             sj = _find_job(d, _stem(cur)) if cur else None
             if not sj:
-                raise ValueError(f"shot {idx + 1}: its still's job is missing")
+                raise ValueError(f"shot {idx + 1}: its image's job is missing")
             gs = director._bump(_load(sj, {}), 307 + 17 * k + i)
             sbase = _stem(cur).split("_")[0]
             stag = f"{sbase}_u{k}"
@@ -1523,7 +1532,7 @@ def _sharpen(name: str, dry: bool = False) -> dict:
     p = _load(pj, {}) or {}
     st = _pickup_state(d, p, _load(os.path.join(d, "done.json")))
     if st.get("state") == "running":
-        raise ValueError("the last pickups are still shooting")
+        raise ValueError("the last fixes are still being made")
     if _run_jobs(os.path.basename(d))[1]:
         raise ValueError("this run still has jobs in the queue")
     soft = _soft_clips(d, p)

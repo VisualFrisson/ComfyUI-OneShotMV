@@ -588,7 +588,7 @@ html[data-look="neon"] .wthumbs img,html[data-look="neon"] .wthumbs .noimg,html[
     <span class="chip" id="sys"><span class="led" aria-hidden="true"></span>ComfyUI</span>
     <a class="toplink" href="#/videos">Your videos</a>
     <a class="toplink" href="/" target="_blank" rel="noopener">Open ComfyUI</a>
-    <span class="lookwrap"><button type="button" class="chip looksw" id="look" aria-haspopup="true" aria-expanded="false" aria-controls="lookmenu" title="The Studio's colours"><span class="lsw" aria-hidden="true"></span><span id="lookname">Look: Neon</span></button><div class="lookmenu hide" id="lookmenu" role="menu" aria-label="Look"></div></span>
+    <span class="lookwrap"><button type="button" class="chip looksw" id="look" aria-haspopup="true" aria-expanded="false" aria-controls="lookmenu" title="The Studio's colors"><span class="lsw" aria-hidden="true"></span><span id="lookname">Look: Neon</span></button><div class="lookmenu hide" id="lookmenu" role="menu" aria-label="Look"></div></span>
   </div>
 </header>
 <main id="app" aria-live="polite"></main>
@@ -603,13 +603,13 @@ html[data-look="neon"] .wthumbs img,html[data-look="neon"] .wthumbs .noimg,html[
 const WORLDS = [
   {id:"custom", title:"Custom", sub:"Describe your own world", text:""},
   {id:"rome", img:true, title:"Gladiator Games", sub:"Fighters first, then the crowd", sw:["#C9A15B","#8E3B22","#E8D3A9","#5C4630","#2B1C12"],
-   text:"The gladiator games in ancient Rome, a blood-and-bronze spectacle on the sand of the packed Colosseum, played completely straight like an epic historical film, all invented adults: a champion murmillo gladiator in a bronze fish-crested helmet with the visor up, a short sword and a tall curved shield, a retiarius gladiator with a weighted net and a bronze trident, a thraex gladiator with his griffin-crested helmet under his arm, a gladiatrix in bronze greaves and a leather breastband with a short sword, the emperor in a purple toga and gold laurel wreath in the imperial box, a beautiful young noblewoman in fine dyed silk and gold earrings cheering in the stands, a rich senator in a white toga with a purple stripe betting gold in the front-row seats; the sand floor of the Colosseum in front of the roaring stands, the arena gate, the imperial box draped in purple; hard midday sun on the sand, the coloured shade of the awning over the stands"},
+   text:"The gladiator games in ancient Rome, a blood-and-bronze spectacle on the sand of the packed Colosseum, played completely straight like an epic historical film, all invented adults: a champion murmillo gladiator in a bronze fish-crested helmet with the visor up, a short sword and a tall curved shield, a retiarius gladiator with a weighted net and a bronze trident, a thraex gladiator with his griffin-crested helmet under his arm, a gladiatrix in bronze greaves and a leather breastband with a short sword, the emperor in a purple toga and gold laurel wreath in the imperial box, a beautiful young noblewoman in fine dyed silk and gold earrings cheering in the stands, a rich senator in a white toga with a purple stripe betting gold in the front-row seats; the sand floor of the Colosseum in front of the roaring stands, the arena gate, the imperial box draped in purple; hard midday sun on the sand, the colored shade of the awning over the stands"},
   {id:"night", img:true, title:"Night Shift", sub:"Cooks, nurses, guards and cabbies at 3 a.m.", sw:["#E08A2E","#8FBF6A","#1B2433","#C2373A","#0B0B0B"],
    text:"Night-shift workers you recognise at a glance, played straight and cinematic: a short-order cook in a paper hat and grease-spotted apron at a 24-hour diner, a nurse in scrubs with a stethoscope in a hospital corridor, a security guard in a navy uniform with a flashlight, a cab driver behind the wheel, a baker in flour-dusted whites at the ovens, a janitor with a mop cart, a gas station attendant, a firefighter in turnout gear at the station, a trucker at a truck stop; each in their own workplace at 3 a.m.; sodium-orange streetlight and buzzing fluorescent green"},
   {id:"florida", img:true, title:"Florida Retirement", sub:"Velour, visors and early-bird dinners", sw:["#F29BB2","#9ED9C3","#4FB3D9","#EAD7A8","#F6F3EA"],
-   text:"A 1980s Florida retirement community, played completely straight and over the top: seniors in their seventies and eighties with big attitude, in velour tracksuits, sun visors, pearls, gold chains and oversized sunglasses, at aqua aerobics in the condo pool, the bingo hall, the shuffleboard court, the early-bird buffet and rows of golf carts; harsh Florida sun and sun-faded pastel colour"},
+   text:"A 1980s Florida retirement community, played completely straight and over the top: seniors in their seventies and eighties with big attitude, in velour tracksuits, sun visors, pearls, gold chains and oversized sunglasses, at aqua aerobics in the condo pool, the bingo hall, the shuffleboard court, the early-bird buffet and rows of golf carts; harsh Florida sun and sun-faded pastel color"},
   {id:"y2k", img:true, title:"Y2K Pop Star", sub:"1999–2002, shot on a point-and-shoot", sw:["#F2A65A","#E86FA0","#3FA7C9","#C8B48A","#1E1A16"],
-   text:"Pop stars of 1999 to 2002, the last years before smartphones and social media, all invented adults in their twenties, styled exactly the way pop artists dressed then: bubblegum-pop princesses, boy-band members, R&B divas, pop-punk singers and rappers; frosted tips, butterfly clips, crimped hair, tinted rimless shades and body glitter; low-rise flared jeans, baby tees, velour tracksuits, denim on denim and cargo pants; a bedroom with an inflatable chair and a lava lamp, an empty shopping-mall atrium with a fountain after closing time, a roller rink, a backyard pool with an inflatable raft, the back of a stretch limo; photographed with a 35mm point-and-shoot, direct flash, warm film colour and grain"},
+   text:"Pop stars of 1999 to 2002, the last years before smartphones and social media, all invented adults in their twenties, styled exactly the way pop artists dressed then: bubblegum-pop princesses, boy-band members, R&B divas, pop-punk singers and rappers; frosted tips, butterfly clips, crimped hair, tinted rimless shades and body glitter; low-rise flared jeans, baby tees, velour tracksuits, denim on denim and cargo pants; a bedroom with an inflatable chair and a lava lamp, an empty shopping-mall atrium with a fountain after closing time, a roller rink, a backyard pool with an inflatable raft, the back of a stretch limo; photographed with a 35mm point-and-shoot, direct flash, warm film color and grain"},
 ];
 const CUTS = ["every 2 bars","every bar","to the music (subtle)","to the music (intense)"];
 const LEVEL_COL = {low:"var(--low)", medium:"var(--mid)", high:"var(--high)"};
@@ -742,7 +742,7 @@ function demoRun(r){
 function demoBar(){
   if (!DEMO) return;
   const bar = document.createElement("div"); bar.className = "demobar"; bar.id = "demobar";
-  bar.innerHTML = `<b>Demo mode</b><span class="dmn">Nothing is queued in ComfyUI; renders, Apply and pickups are simulated.</span>
+  bar.innerHTML = `<b>Demo mode</b><span class="dmn">Nothing is queued in ComfyUI; renders, Apply and fixes are simulated.</span>
     <select id="dmrun" aria-label="The finished video the demo uses"><option value="">Video: match the brief</option></select>
     <span class="dmgo">${[["brief","Brief"],["plan","Plan"],["render","Rendering"],["result","Result"],["videos","Your videos"]].map(([k, n]) => `<button type="button" data-go="${k}">${n}</button>`).join("")}</span>
     <button type="button" data-go="hide" title="Hide this bar; Shift+D shows it again">Hide</button><button type="button" data-go="exit">Exit demo</button>`;
@@ -1302,8 +1302,8 @@ function drawCast(){
   });
   const pane = $("#apane");
   if (!photo){
-    pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age, their look, their voice</label>
-      <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head, gold hoops and a calm, low voice"></textarea>
+    pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age and look</label>
+      <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head and gold hoops"></textarea>
       <p class="note">The tool invents this person and keeps them the same in every shot.</p>`;
     const ta = $("#adesc"); ta.value = b.artist_description || "";
     ta.oninput = () => { b.artist_description = ta.value; saveBrief(); refreshEstimate(); };
@@ -1543,8 +1543,8 @@ async function start(render, briefOverride, review){
   try{
     const what = imgs ? "looking at your images" : "writing the World";
     overlay(b.review ? "Making the images" : render ? "Starting the video" : "Writing the plan",
-      b.review ? `Analysing the song, ${what} and queueing the stills. The video waits until you've checked them.`
-      : render ? `Analysing the song, ${what} and queueing every shot. This takes a minute or two.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
+      b.review ? `Analysing the song, ${what} and queueing the images. The video waits until you've checked them.`
+      : render ? `Analysing the song, ${what} and queueing every shot.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
     const {prompt_id} = await api("start", b);
     overlay($("#ovt").textContent, $("#ovs").textContent, async () => {
       cancelled = true;
@@ -1645,7 +1645,7 @@ async function viewPlan(run){
     ${locked ? `<button class="btn" type="button" disabled>Change the World</button><button class="btn" type="button" disabled>Shuffle the cast</button>`
       : `<a class="btn" href="#/brief/${encodeURIComponent(run)}" id="changew">Change the World</a><button class="btn" id="shuffle" type="button" ${brief ? "" : "disabled"}>Shuffle the cast</button>`}
     <span class="grow">${r.shots.length} shots · ${sing} singers · about ${mins(est)} on this GPU</span>
-    ${!reviewable(im, brief) ? "" : `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every still first and check them; re-make any with a note, then make the video">Generate images and review</button>`}
+    ${!reviewable(im, brief) ? "" : `<button class="btn big" id="review" type="button" ${brief ? "" : "disabled"} title="Make every image first, fix any with a note, then make the video">Generate images and review</button>`}
     <button class="btn primary big" id="make" type="button" ${brief ? "" : "disabled"}>Make the video <span class="eta-b">≈ ${mins(est)}</span></button>
   </div>
   ${brief ? "" : `<p class="note">This plan was made outside the Studio, so start the render from <a href="#/">The Brief</a>.</p>`}`;
@@ -1733,8 +1733,8 @@ function reviewView(r, fresh){
   const hint = s => own ? "Like “keep the wall plain, no new people”"
     : s.kind === "broll" ? "Like “at dusk, wider, warmer light”" : "Like “older, in a raincoat, harder light”";
   const spares = r.shots.some(s => s.kind === "broll") ? " Some cutaways are spares: the take check keeps the ones it needs." : "";
-  const how = can.size && sw.size ? "Fix any with a note or swap in another of your images"
-    : sw.size ? "Swap any for another of your images" : "Fix any you want changed, with a note on what to change";
+  const how = can.size && sw.size ? "Fix any with a note, or give it a new image"
+    : sw.size ? "Give any shot a new image" : "Fix any you want changed, with a note on what to change";
   app.innerHTML = `
   <div class="head"><div><h1>Review the images</h1>${projectOf(r) ? `<p class="proj">${esc(projectOf(r))}</p>` : ""}<p class="sub">${esc(worldName(r))} · ${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)}</p></div>
     <div style="text-align:right"><div class="mono" style="font-size:22px;font-weight:600">${mins(r.elapsed_min)} in</div><div class="muted" style="font-size:14px">${busy ? "fixing images" : "waiting for you"}</div></div></div>
@@ -1746,7 +1746,7 @@ function reviewView(r, fresh){
       const nw = sw.has(s.n) && R.img[s.n], on = !nw && R.sel[s.n] != null && can.has(s.n), again = redo.has(s.n);
       const src = nw ? R.img[s.n].url : s.still;
       const img = src && !again ? `<img src="${esc(src)}" alt="${esc(nw ? R.img[s.n].name : s.role)}" loading="lazy">`
-        : `<div class="ph">${again || busy ? "Making…" : s.kind === "broll" ? "Cutaway" : "No still"}</div>`;
+        : `<div class="ph">${again || busy ? "Making…" : s.kind === "broll" ? "Cutaway" : "No image"}</div>`;
       const acts = busy ? "" : (can.has(s.n) && !nw ? `<button type="button" class="btn sm ${on ? "" : "ghost"}" data-pick="${s.n}" aria-pressed="${on}">${on ? "Picked" : "Fix image"}</button>` : "")
         + (sw.has(s.n) ? (nw ? `<button type="button" class="btn sm" data-undo="${s.n}">Undo</button>` : `<button type="button" class="btn sm ghost" data-swap="${s.n}" data-kind="${s.kind}">New image</button>`) : "");
       return `<div class="shot rvcard ${cls} ${on || nw ? "on" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}">
@@ -1890,7 +1890,7 @@ function renderSkeleton(r){
       <div class="board" id="board"></div>
     </section>
     <aside class="colside">
-      ${imf ? "" : `<section class="card" aria-labelledby="lth"><h2 class="label" id="lth" style="margin-bottom:12px">Latest take</h2><div id="latest" class="muted" style="font-size:14px">No clips yet. Stills come first.</div></section>`}
+      ${imf ? "" : `<section class="card" aria-labelledby="lth"><h2 class="label" id="lth" style="margin-bottom:12px">Latest take</h2><div id="latest" class="muted" style="font-size:14px">No clips yet. Images come first.</div></section>`}
       <section class="card" aria-labelledby="qch"><h2 class="label" id="qch" style="margin-bottom:12px">Checks</h2><ul class="notes" id="notes"></ul></section>
       <p class="muted" style="margin:0;font-size:13px;padding:0 4px">${imf ? "You can close this tab. The images keep being made in ComfyUI, and this page shows them for review when you come back."
         : "You can close this tab. The render keeps going in ComfyUI, and this page picks up where it is when you come back."}</p>
@@ -1915,13 +1915,13 @@ function renderUpdate(r){
     ? (last ? `<div class="banner"><b>This video stopped: a step failed.</b> The last error:${lastHtml}Fix that, then start it again from <a href="#/">The Brief</a>; the ComfyUI console has the full error.</div>`
             : `<div class="banner">Nothing of this video is left in ComfyUI's queue, but it isn't finished. A step probably failed: the ComfyUI console shows why. You can start it again from <a href="#/">The Brief</a>.</div>`)
     : (last ? `<div class="banner">${r.failed_jobs} job${r.failed_jobs === 1 ? "" : "s"} of this video failed so far; the take check re-shoots clips that didn't render${sageNote}. The last error:${lastHtml}</div>` : "");
-  $("#rvfirst").innerHTML = imagesFirst(r) ? `<div class="banner info" role="status">Images first: once every image is made, this page shows them so you can make any again. The clips are made after that.</div>` : "";
+  $("#rvfirst").innerHTML = imagesFirst(r) ? `<div class="banner info" role="status">Once every image is made, it shows here so you can fix any before the clips are made.</div>` : "";
   const im = imagesOf(r);  // a World from images has no vision check: the images are the stills
   $("#rail").innerHTML = r.stages.map((s,i) => `<li class="${s.state}"><div class="t"><i aria-hidden="true">${s.state==="done" ? "✓" : i+1}</i>${esc(s.name)}</div><div class="m">${esc(im && s.id === "check" ? "none for your images" : s.meta)}</div></li>`).join("");
   const cls = shotClass(r.brief.format);
   $("#board").innerHTML = r.shots.map(s => {
-    const img = s.still ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">` : `<div class="ph">${s.kind==="broll" ? "Cutaway, chosen after the take check" : "Waiting for its still"}</div>`;
-    const st = s.state === "clip" ? (s.kind==="broll" ? "✓ cutaway" : (s.takes > 1 ? `✓ take ${s.takes}` : "✓ sung")) : (s.state === "still" ? "◐ still ready" : "○ planned");
+    const img = s.still ? `<img src="${esc(s.still)}" alt="${esc(s.role)}" loading="lazy">` : `<div class="ph">${s.kind==="broll" ? "Cutaway, chosen after the take check" : "Waiting for its image"}</div>`;
+    const st = s.state === "clip" ? (s.kind==="broll" ? "✓ cutaway" : (s.takes > 1 ? `✓ take ${s.takes}` : "✓ sung")) : (s.state === "still" ? "◐ image ready" : "○ planned");
     const col = s.state === "clip" ? "var(--ok)" : (s.state === "still" ? "var(--ready)" : "var(--idle)");
     return `<div class="shot ${cls} ${s.state==="still" ? "still" : ""}" style="border-top-color:${LEVEL_COL[s.energy]||'var(--mid)'}"><div class="im">${img}<span class="tag">${esc(s.time)}</span>${s.kind==="broll" ? '<span class="tag r">cutaway</span>' : ""}</div>
       <div class="ft"><span class="who" title="${esc(s.role)}">${esc(s.role || s.size)}</span><b style="color:${col}">${st}</b></div></div>`;
@@ -1932,7 +1932,7 @@ function renderUpdate(r){
   }
   const icon = {fix:['↻','var(--warn)'], redo:['↻','var(--warn)'], ok:['✓','var(--ok)']};
   $("#notes").innerHTML = r.notes.length ? r.notes.map(n => `<li><i aria-hidden="true" style="color:${(icon[n.kind]||['·','var(--muted)'])[1]}">${(icon[n.kind]||['·'])[0]}</i><span>${esc(n.text)}</span></li>`).join("")
-    : `<li><i aria-hidden="true" class="muted">·</i><span class="muted">${im ? "The take check scores every clip's lip sync." : "The vision check looks at every still before any clip is made; the take check scores every clip's lip sync."}</span></li>`;
+    : `<li><i aria-hidden="true" class="muted">·</i><span class="muted">${im ? "The take check scores every clip's lip sync." : "The vision check looks at every image before any clip is made; the take check scores every clip's lip sync."}</span></li>`;
 }
 
 // ---------------------------------------------------------------- 4. Result
@@ -1951,7 +1951,7 @@ async function viewResult(run){
   const F0 = Object.assign({fx: Object.assign({}, fx0)}, r.finish || {});
   const E = Object.assign({}, F0, {fx: Object.assign({}, fx0)});
   app.innerHTML = `
-  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(worldName(r)) + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of pickups` : ""}</p></div>
+  <div class="head"><div><h1>${esc(projectOf(r) || r.world.headline || "Your video")}</h1><p class="sub">${projectOf(r) ? esc(worldName(r)) + " · " : ""}${esc(r.brief.from)} – ${esc(r.brief.to)} · ${esc(r.brief.format)} · ${esc(r.brief.preset)} · ${sing} singers · made in ${mins(r.elapsed_min)}${r.pickup && r.pickup.n ? ` · ${r.pickup.n} round${r.pickup.n > 1 ? "s" : ""} of fixes` : ""}</p></div>
     <div class="row"><a class="btn" href="#/">New video</a>
       <a class="btn" id="xml" href="/oneshot-mv/api/xml/${encodeURIComponent(r.run)}" download="${esc(fileStem(r))}.xml" title="Final Cut Pro 7 XML: every shot's clip with its in and out points and the song, for Premiere Pro and DaVinci Resolve"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4M9.5 2.5l-3 11"/></svg>Export XML</a>
       <a class="btn primary" id="dl" href="${esc(r.video)}" download="${esc(fileStem(r))}.mp4"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v9M4 7l4 4 4-4M3 14h10"/></svg>Download MP4</a></div></div>
@@ -1962,15 +1962,15 @@ async function viewResult(run){
       <div class="player"><video id="vid" src="${esc(r.video)}" controls playsinline preload="metadata"></video></div>
       <section class="card shotscard" aria-labelledby="tlh">
         <div class="row" style="justify-content:space-between;margin-bottom:12px;gap:10px">
-          <div><h2 class="label" id="tlh">Shots</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Something off in a shot? <b style="color:var(--text)">Click it to re-shoot it</b>, with a note on what to change.</p></div>
+          <div><h2 class="label" id="tlh">Shots</h2><p class="muted" style="margin:6px 0 0;font-size:14px">Something off in a shot? <b style="color:var(--text)">Click it to fix it</b>, with a note on what to change.</p></div>
           <button class="btn sm" id="fixnow" type="button"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.5 2.5a3 3 0 0 0-3.8 3.8L2.5 10.5a1.4 1.4 0 0 0 2 2l4.2-4.2a3 3 0 0 0 3.8-3.8l-1.8 1.8-1.6-.4-.4-1.6z"/></svg>Fix the shot at <span id="nowt">0:00</span></button></div>
-        <div class="strip big" id="strip">${r.shots.map(s => `<button type="button" data-n="${s.n}" data-t="${s.t0}" aria-label="Shot ${s.n} at ${esc(clock(s.t0))}, ${esc(s.role)}: re-shoot" style="border-top:3px solid ${LEVEL_COL[s.energy]||'var(--mid)'}">${s.still ? `<img src="${esc(s.still)}" alt="" loading="lazy">` : `<span class="noimg"></span>`}<span class="sn" aria-hidden="true">${s.n}</span>${s.pickup ? `<span class="pk" aria-hidden="true">new</span>` : ""}<span class="fixhint" aria-hidden="true">Re-shoot</span></button>`).join("")}</div>
+        <div class="strip big" id="strip">${r.shots.map(s => `<button type="button" data-n="${s.n}" data-t="${s.t0}" aria-label="Shot ${s.n} at ${esc(clock(s.t0))}, ${esc(s.role)}: fix" style="border-top:3px solid ${LEVEL_COL[s.energy]||'var(--mid)'}">${s.still ? `<img src="${esc(s.still)}" alt="" loading="lazy">` : `<span class="noimg"></span>`}<span class="sn" aria-hidden="true">${s.n}</span>${s.pickup ? `<span class="pk" aria-hidden="true">new</span>` : ""}<span class="fixhint" aria-hidden="true">Fix</span></button>`).join("")}</div>
         <div id="fixbody"></div>
         <div id="pkbox" class="hide">
-          <div class="row" style="justify-content:space-between;margin-top:18px"><h3 class="label">Pickups</h3><span class="tiny" id="pkcount"></span></div>
+          <div class="row" style="justify-content:space-between;margin-top:18px"><h3 class="label">Fixes</h3><span class="tiny" id="pkcount"></span></div>
           <ul class="notes" id="pklist" style="margin-top:10px"></ul>
           <div class="row" style="margin-top:14px;gap:12px"><button class="btn" id="shoot" type="button" style="flex:1"></button></div>
-          <p class="tiny" style="margin:8px 0 0">They shoot together, so each model loads once; then the video is cut again. This cut is kept as a version.</p>
+          <p class="tiny" style="margin:8px 0 0">They're made together, then the video is cut again. This cut is kept as a version.</p>
         </div>
       </section>
       <section class="card" aria-labelledby="wh2"><h2 class="label" id="wh2" style="margin-bottom:10px">The World</h2>
@@ -1984,7 +1984,7 @@ async function viewResult(run){
         <div class="acc-b" id="acc-fx" hidden><p class="tiny">Flash, zoom punch, glow and color split on the drums, set for each energy in the song.</p>
           <div class="fxrows" id="efx"></div></div></section>
       <section class="card ed acc" data-acc="grade"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grade"><h3>Color grade</h3><span class="acc-sum" id="sum-grade"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
-        <div class="acc-b" id="acc-grade" hidden><p class="tiny">None keeps the default look; the rest go on top of it. A still from your video shows each one.</p>
+        <div class="acc-b" id="acc-grade" hidden><p class="tiny">Each shows a frame of your video with that grade. None keeps the default look.</p>
           <div class="grades" role="group" aria-label="Color grade" id="grades"></div></div></section>
       <section class="card ed acc" data-acc="grain"><button type="button" class="acc-h" aria-expanded="false" aria-controls="acc-grain"><h3>Grain</h3><span class="acc-sum" id="sum-grain"></span><svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l4 4 4-4"/></svg></button>
         <div class="acc-b" id="acc-grain" hidden>
@@ -2001,7 +2001,7 @@ async function viewResult(run){
   </div>`;
   const vid = $("#vid");
   // versions
-  const vers = [{url: r.video, label: "Current cut"}].concat((r.versions || []).slice().reverse().map(v => ({url: v.url, label: `${v.name} · before pickups`})));
+  const vers = [{url: r.video, label: "Current cut"}].concat((r.versions || []).slice().reverse().map(v => ({url: v.url, label: `${v.name} · before fixes`})));
   let curV = 0;
   const drawVers = () => { $("#vers").innerHTML = vers.map((v,i) => `<button type="button" class="opt" data-i="${i}" aria-pressed="${i===curV}">${esc(v.label)}</button>`).join("");
     $("#vers").querySelectorAll(".opt").forEach(el => el.onclick = () => { curV = +el.dataset.i; const t = vid.currentTime; vid.src = vers[curV].url; vid.currentTime = t; $("#dl").href = vers[curV].url; drawVers(); }); };
@@ -2022,31 +2022,31 @@ async function viewResult(run){
   function selectShot(n){ P.sel = n; const q = P.list.find(x => x.n === n); P.mode = q ? q.mode : "take"; P.note = q ? q.note : ""; strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.n === n)); reveal(n); drawFix(); $("#fixbody").scrollIntoView({behavior:"smooth", block:"nearest"}); }
   function drawFix(){
     const body = $("#fixbody");
-    if (shooting){ body.innerHTML = `<p class="muted" style="margin:14px 0 0;font-size:14px">Pickups are shooting. You can pick more shots when they're done.</p>`; return; }
+    if (shooting){ body.innerHTML = `<p class="muted" style="margin:14px 0 0;font-size:14px">The fixes are being made. You can pick more shots when they're done.</p>`; return; }
     const s = r.shots.find(x => x.n === P.sel);
     if (!s){ body.innerHTML = ""; return; }
     const queued = P.list.find(x => x.n === s.n);
     body.innerHTML = `<div class="fixpanel">
       <div class="fixhead">
         ${s.still ? `<img src="${esc(s.still)}" alt="">` : ""}
-        <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px">Shot ${s.n} · ${esc(clock(s.t0))}</div><div class="tiny mono">${esc(s.kind === "broll" ? "cutaway" : s.size)} · ${esc(s.energy)}${s.pickup ? " · re-shot" : ""}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:800;font-size:16px">Shot ${s.n} · ${esc(clock(s.t0))}</div><div class="tiny mono">${esc(s.kind === "broll" ? "cutaway" : s.size)} · ${esc(s.energy)}${s.pickup ? " · fixed" : ""}</div>
           <div style="font-size:14px;margin-top:4px"><b>${esc(s.role || "?")}</b>${s.age ? `, ${esc(s.gender)} ${esc(s.age)}` : ""}</div>
           <div class="tiny" style="margin-top:2px">${esc([s.wear, s.place].filter(Boolean).join(" · ").slice(0, 200))}</div></div>
         <button type="button" class="btn sm ghost" id="fxclose" aria-label="Close">✕</button></div>
       <div class="fixgrid">
-        <div class="stack" role="group" aria-label="What to re-shoot" id="modes" style="gap:8px">
-          <button type="button" class="tier" data-m="take" aria-pressed="${P.mode==="take"}"><span class="t"><b>New take</b><span class="eta">about 1 min</span></span><small>Same person and still, a new performance: mouths, motion, the camera.</small></button>
-          <button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>New person</b><span class="eta">about 1.5 min</span></span><small>A new still and take: the wrong look, age, clothes, place or light.</small></button>
+        <div class="stack" role="group" aria-label="How to fix it" id="modes" style="gap:8px">
+          <button type="button" class="tier" data-m="take" aria-pressed="${P.mode==="take"}"><span class="t"><b>New take</b><span class="eta">about 1 min</span></span><small>Same person and image, a new performance: mouths, motion, the camera.</small></button>
+          <button type="button" class="tier" data-m="recast" aria-pressed="${P.mode==="recast"}"><span class="t"><b>New person</b><span class="eta">about 1.5 min</span></span><small>A new image and take: the wrong look, age, clothes, place or light.</small></button>
         </div>
-        <div class="stack" style="gap:10px"><label class="field">Notes for the re-shoot (optional)<textarea id="pnote" rows="3" placeholder="${P.mode==="recast" ? "Like “a woman in her seventies, in bright midday sun”" : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
-          <button class="btn" id="addpk" type="button">${queued ? "Update this pickup" : "Add to pickups"}</button></div>
+        <div class="stack" style="gap:10px"><label class="field">What to change (optional)<textarea id="pnote" rows="3" placeholder="${P.mode==="recast" ? "Like “a woman in her seventies, in bright midday sun”" : "Like “the camera holds still, nobody else walks in”"}"></textarea></label>
+          <button class="btn" id="addpk" type="button">${queued ? "Update this fix" : "Add to fixes"}</button></div>
       </div></div>`;
     const ta = $("#pnote"); ta.value = P.note; ta.oninput = () => { P.note = ta.value; };
     $("#fxclose").onclick = () => { P.sel = null; strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); drawFix(); };
     $("#modes").querySelectorAll(".tier").forEach(el => el.onclick = () => { P.mode = el.dataset.m; P.note = ta.value; drawFix(); });
     $("#addpk").onclick = () => { const item = {n: s.n, mode: P.mode, note: ta.value.trim(), still: s.still, role: s.role, t: clock(s.t0)};
       P.list = P.list.filter(x => x.n !== s.n).concat([item]).sort((a,b) => a.n - b.n); store.set(pickKey(run), P.list); P.sel = null;
-      strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); drawFix(); drawPk(); toast(`Shot ${s.n} added to the pickups.`); };
+      strip.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false")); drawFix(); drawPk(); toast(`Shot ${s.n} added to the fixes.`); };
   }
   function pkEstimate(){ const nr = P.list.filter(x => x.mode === "recast").length, n = P.list.length;
     return (nr ? 3 + 0.5 * nr : 0) + 2 + 1.2 * n + 1 + 0.035 * (+r.brief.seconds || 30); }
@@ -2058,7 +2058,7 @@ async function viewResult(run){
       <button type="button" class="btn sm ghost" data-ed="${x.n}">Edit</button><button type="button" class="btn sm ghost" data-rm="${x.n}" aria-label="Remove shot ${x.n}">✕</button></li>`).join("");
     $("#pklist").querySelectorAll("[data-rm]").forEach(el => el.onclick = () => { P.list = P.list.filter(x => x.n !== +el.dataset.rm); store.set(pickKey(run), P.list); drawPk(); });
     $("#pklist").querySelectorAll("[data-ed]").forEach(el => el.onclick = () => selectShot(+el.dataset.ed));
-    $("#shoot").innerHTML = `Shoot ${P.list.length} pickup${P.list.length > 1 ? "s" : ""} <span class="eta-b">about ${mins(pkEstimate())}</span>`;
+    $("#shoot").innerHTML = `Fix ${P.list.length} shot${P.list.length > 1 ? "s" : ""} <span class="eta-b">about ${mins(pkEstimate())}</span>`;
     primary();
   }
   // Download always carries the gradient; Shoot and Apply light up when they have work to do
@@ -2067,10 +2067,10 @@ async function viewResult(run){
   $("#shoot").onclick = async () => {
     if (!P.list.length) return;
     try{
-      overlay("Queueing the pickups", `${P.list.length} shot${P.list.length > 1 ? "s" : ""}, then a new cut.`);
+      overlay("Queueing the fixes", `${P.list.length} shot${P.list.length > 1 ? "s" : ""}, then a new cut.`);
       await api("pickups", {run: r.run, items: P.list.map(x => ({n: x.n, mode: x.mode, note: x.note}))});
       store.set(pickKey(run), []); overlay(); viewResult(run);
-    }catch(e){ overlay(); toast("Pickups didn't start: " + e.message, 9000); }
+    }catch(e){ overlay(); toast("The fixes didn't start: " + e.message, 9000); }
   };
   // post processing: FX, grade, grain, vignette; one Apply re-cuts with all of them
   const ENERGIES = [["low", "Low energy sections"], ["medium", "Medium energy sections"], ["high", "High energy sections"]];
@@ -2139,22 +2139,22 @@ async function viewResult(run){
     const drawBanner = st => {
       if (st.state === "running"){
         const done = Math.max(0, st.jobs - st.jobs_left), pct = Math.round(100 * done / Math.max(1, st.jobs));
-        const what = st.kind === "sharpen" ? `Re-decoding ${st.items.length} clips` : `Shooting pickups: ${st.items.map(x => "shot " + x.shot).join(", ")}`;
+        const what = st.kind === "sharpen" ? `Re-decoding ${st.items.length} clips` : `Fixing ${st.items.map(x => "shot " + x.shot).join(", ")}`;
         pb.innerHTML = `<section class="card" style="margin-bottom:20px"><div class="row" style="justify-content:space-between"><b>${what}</b><span class="row"><span class="mono tiny">${done} of ${st.jobs} jobs · about ${mins(st.left_min)} left</span><button class="btn sm danger" id="pkstop" type="button">Stop</button></span></div>
           <div class="progress" style="margin:12px 0 0"><div style="width:${pct}%"></div></div><p class="tiny" style="margin:10px 0 0">The video below is the cut before. It's kept as a version when the new cut is ready.</p></section>`;
         $("#pkstop").onclick = async () => {
-          if (!confirm(`Stop the ${st.kind === "sharpen" ? "re-decode" : "pickups"}? What isn't shot yet is dropped; the cut you have stays.`)) return;
+          if (!confirm(`Stop the ${st.kind === "sharpen" ? "re-decode" : "fixes"}? What isn't made yet is dropped; the cut you have stays.`)) return;
           try{ const j = await api("cancel", {run: r.run}); toast(`Stopped: ${j.removed} queued job${j.removed === 1 ? "" : "s"} removed.`); }catch(e){ toast(e.message); }
         };
       } else if (st.state === "stopped"){
-        pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "pickups"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;
+        pb.innerHTML = `<div class="banner">The last ${st.kind === "sharpen" ? "re-decode" : "fixes"} stopped before the new cut was made; the ComfyUI console shows why. The video below is the cut before.</div>`;
       } else pb.innerHTML = "";
     };
     drawBanner(r.pickup);
     const nav0 = S.nav;
     if (r.pickup.state === "running"){
       S.timer = setInterval(async () => {
-        try{ const r2 = await api("run/" + encodeURIComponent(run)); if (nav0 !== S.nav) return; if (r2.pickup.state !== "running"){ stopTimer(); viewResult(run); if (r2.pickup.state === "done") toast("New cut ready, with the pickups."); } else drawBanner(r2.pickup); }catch(e){}
+        try{ const r2 = await api("run/" + encodeURIComponent(run)); if (nav0 !== S.nav) return; if (r2.pickup.state !== "running"){ stopTimer(); viewResult(run); if (r2.pickup.state === "done") toast("New cut ready, with the fixes."); } else drawBanner(r2.pickup); }catch(e){}
       }, DEMO ? 1000 : 5000);
     }
   }
