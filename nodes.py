@@ -217,8 +217,7 @@ class FVDirector:
                                        "shots than images."}),
             "image_fit": (list(fv_world_images.FITS), {"default": "crop",
                           "tooltip": "World images that aren't the video's shape. crop: cut around the face. "
-                                     "extend: keep the whole image while Qwen-Image 2.1 draws the missing sides (its "
-                                     "licence is reported to be research-only). With professional on, always crop."}),
+                                     "extend: keep the whole image while Qwen-Image 2.1 draws the missing sides."}),
             "cast": (["crowd", "single artist"], {"default": "crowd",
                      "tooltip": "crowd: a different invented person sings each line. single artist "
                                 "(experimental: the likeness varies from shot to shot): one person sings every "
@@ -236,12 +235,6 @@ class FVDirector:
             "models": (["auto", "24gb", "full"], {"default": "auto",
                        "tooltip": "24gb: fp8 files for 24 GB GPUs. full: bf16 files for 48 GB or more. auto: full "
                                   "on a 48 GB+ GPU when its files are installed, otherwise 24gb."}),
-            "professional": ("BOOLEAN", {"default": False,
-                             "tooltip": "For paid or client work: Single Artist uses Qwen-Image-Edit 2511 "
-                                        "(Apache-2.0) instead of Qwen-Image 2.1, whose licence is reported to be "
-                                        "research-only (2511 matches faces a little less closely), and World images "
-                                        "are always cropped. Check the other models' licences too (README, Models "
-                                        "and licences)."}),
             "preview_only": ("BOOLEAN", {"default": False,
                              "tooltip": "On: plan the video and list every shot in the summary, rendering nothing. "
                                         "Turn it off and queue again to render; the song analysis and the World are "
@@ -301,7 +294,7 @@ class FVDirector:
         return random.random()
 
     def run(self, audio, world, cast, seconds, start, format, quality, models, preview_only, world_images="",
-            image_order="in order", image_fit="crop", professional=False, seed=1, cuts_low=None, cuts_medium=None,
+            image_order="in order", image_fit="crop", seed=1, cuts_low=None, cuts_medium=None,
             cuts_high=None, audio_fx="subtle", crowd="auto", cast_order="as written", broll_share=0.125, qc_retries=2,
             run_name="", artist_photo=None, artist_description="", review_images=False):
         _reload()
@@ -329,7 +322,7 @@ class FVDirector:
                               crowd=crowd or "auto", models=models or "auto",
                               artist_path=artist_path, artist_description=described,
                               world_images=(world_images or "").strip(), image_order=image_order or "in order",
-                              image_fit=image_fit or "crop", professional=bool(professional),
+                              image_fit=image_fit or "crop",
                               review=bool(review_images), log=_stoppable_log())
         ui = {"text": [res["summary"]]}
         ui["text"].append(_file_ref(res["bundle"]))  # jobs.json as a job output (SDK clients)

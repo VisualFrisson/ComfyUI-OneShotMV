@@ -39,11 +39,11 @@ def _inputs(cls):
 def test_the_node_shows_song_world_and_settings(node):
     req, opt = _inputs(node)
     assert req == ["audio", "world", "world_images", "image_order", "image_fit", "cast", "seconds", "start", "format",
-                   "quality", "models", "professional", "preview_only"]
+                   "quality", "models", "preview_only"]
     assert {"artist_photo", "artist_description"} <= set(opt)
     gone = {"mode", "pack", "twins", "twin_editor", "guide_strength", "dance_video", "dance_video_path", "framing",
             "artist_image", "artist_image_path", "broll_style", "staged", "look_groups", "queue_assemble",
-            "queue_renders", "theme", "preset"}
+            "queue_renders", "theme", "preset", "professional"}
     assert not gone & set(req + opt)
     params = inspect.signature(node.run).parameters
     assert set(req + opt) == set(params) - {"self"}

@@ -357,11 +357,8 @@ def test_the_studio_sends_the_artist(monkeypatch):
     assert "3" not in g and g["2"]["inputs"]["artist_description"] == "a crooner in his sixties"
     assert studio._cant_start(dict(base, artist_mode="describe")) == ["Add a photo of the artist, or describe a new one."]
     assert studio._director_graph({"song": "a.mp3"})["2"]["inputs"]["cast"] == "crowd"
-    assert studio._director_graph(dict(base, artist_mode="describe", artist_description="x",
-                                       professional=True))["2"]["inputs"]["professional"] is True
-    # For professional use is a model setting now (the Models card), sent for any video
-    assert studio._director_graph({"song": "a.mp3", "professional": True})["2"]["inputs"]["professional"] is True
-    assert studio._director_graph({"song": "a.mp3"})["2"]["inputs"]["professional"] is False
+    # since 1.0.0 there is no For professional use: an old brief's flag isn't sent
+    assert "professional" not in studio._director_graph({"song": "a.mp3", "professional": True})["2"]["inputs"]
 
 
 def test_the_models_card_lists_what_a_video_loads(monkeypatch):
