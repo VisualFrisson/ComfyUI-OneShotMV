@@ -1038,8 +1038,8 @@ async function viewBrief(){
   drawFmt(); drawTiers();
 
   // the Models card. The set: 24 GB (fp8) or Full (bf16); until one is picked, the one that suits this GPU
-  // ("auto": the full set on a 48 GB+ GPU when its files are installed). For professional use: Qwen-Image-Edit
-  // 2511 for the artist and no extending. Then every model this video would load, with its license.
+  // ("auto": the full set on a 48 GB+ GPU when its files are installed). Then every model
+  // this video would load.
   const drawModels = () => {
     const r = S.models, picked = b.models === "24gb" || b.models === "full", cur = picked ? b.models : r ? r.auto : "";
     $("#mset").innerHTML = [["24gb", "24 GB", "fp8, 24 GB+ GPU"], ["full", "Full", "bf16, 48 GB+ GPU"]].map(([k, n, d]) =>
@@ -1398,7 +1398,7 @@ function drawFit(){
   box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
     `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}"${k === "extend" && pro ? " disabled" : ""}>${n}</button>`).join("");
   $("#wfitnote").textContent = pro ? "Cropped around the face: Extend is off for professional use, since it draws with Qwen-Image 2.1."
-    : cur === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its license is reported to be research-only."
+    : cur === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes."
     : "Each image is cropped to the video's shape around the face. Nothing is drawn in.";
   box.querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
     const f = el.dataset.f;

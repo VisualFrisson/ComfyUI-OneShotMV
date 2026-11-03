@@ -462,8 +462,7 @@ def _director_graph(b: dict) -> dict:
 
 
 def _extends(b: dict) -> bool:
-    """Whether a brief's World images are extended: Extend chosen, and not For professional use (Extend
-    uses Qwen-Image 2.1, reported to be research-only, so professional runs crop)."""
+    """Whether a brief's World images are extended (Extend draws the missing sides with Qwen-Image 2.1)."""
     return b.get("image_fit") == "extend"
 
 
