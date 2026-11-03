@@ -6,7 +6,7 @@ Give OneShot MV a song and one line about the world it lives in, it listens to t
 
 > Made for Comfy's Open Source Higgsfield challenge. Every face in this repo is invented, and so is
 > everyone in the videos, unless you give Single Artist a photo of yourself or of someone who agreed
-> to it. Use music you have the rights to.
+> to it.
 
 ## What it does
 
