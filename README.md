@@ -31,9 +31,9 @@ models.
    another person or place, bad framing, and weak lip sync (scored with SyncNet).
 8. A few shots become cutaways: a World character in a candid moment, or for Single Artist, the
    World's places with nobody in them.
-9. It cuts everything on the beat and adds audio-reactive FX driven by the drums. You pick the
-   color grade, grain and vignette, and can change them later without re-rendering anything. You
-   get an MP4, an EDL and a Final Cut Pro XML.
+9. It cuts everything on the beat and adds audio-reactive FX driven by the drums. On the Result
+   screen you pick the FX for each energy level, the color grade, grain and vignette, as often as
+   you like, without re-rendering anything. You get an MP4, an EDL and a Final Cut Pro XML.
 
 ## Three ways to run it
 
