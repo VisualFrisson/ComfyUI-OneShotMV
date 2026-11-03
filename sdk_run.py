@@ -13,7 +13,7 @@ local ComfyUI the same API. This script starts the proxy for you if it isn't run
 Another deployment that runs the OneShot MV nodes: set COMFY_BASE_URL (and COMFY_API_KEY).
 
 What happens:
-  1. The song goes up as an asset, and a Director job analyses it (beats, sections, energy,
+  1. The song goes up as an asset, and a Director job analyzes it (beats, sections, energy,
      stems), writes the World, casts the performers and plans every shot. The plan
      prints here. With --preview it stops there and renders nothing.
   2. The Director queues the run's own stages in ComfyUI (they jump the queue): portraits and
@@ -204,7 +204,7 @@ def main() -> int:
                      ("broll_share", a.broll), ("qc_retries", a.qc),
                      ("run_name", a.run_name), ("preview_only", a.preview)):
             wf.set_input(d, k, v)
-        say("Director: analysing the song, writing the World, planning the shots")
+        say("Director: analyzing the song, writing the World, planning the shots")
         job = wait(client.submit(wf), "Director", t0, timeout)
         say()
         if job.status != "succeeded":

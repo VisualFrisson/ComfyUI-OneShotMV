@@ -230,7 +230,7 @@ select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,va
 
 /* ================================================================ the Neon layout: the condensed type,
    gradient accents and dark surfaces. The rules above are the base styles; this block overrides them,
-   and the palettes further down swap its colours. */
+   and the palettes further down swap its colors. */
 html[data-look="neon"]{
   --bg:#0d1015;--chrome:#0a0d11;--panel:#12161c;--panel2:#181d24;--panel3:#212731;--line:#222832;--line2:#323a46;--line3:#3c4552;
   --text:#eef0f4;--muted:#a3acb8;--dim:#7a8491;
@@ -605,7 +605,7 @@ const WORLDS = [
   {id:"rome", img:true, title:"Gladiator Games", sub:"Fighters first, then the crowd", sw:["#C9A15B","#8E3B22","#E8D3A9","#5C4630","#2B1C12"],
    text:"The gladiator games in ancient Rome, a blood-and-bronze spectacle on the sand of the packed Colosseum, played completely straight like an epic historical film, all invented adults: a champion murmillo gladiator in a bronze fish-crested helmet with the visor up, a short sword and a tall curved shield, a retiarius gladiator with a weighted net and a bronze trident, a thraex gladiator with his griffin-crested helmet under his arm, a gladiatrix in bronze greaves and a leather breastband with a short sword, the emperor in a purple toga and gold laurel wreath in the imperial box, a beautiful young noblewoman in fine dyed silk and gold earrings cheering in the stands, a rich senator in a white toga with a purple stripe betting gold in the front-row seats; the sand floor of the Colosseum in front of the roaring stands, the arena gate, the imperial box draped in purple; hard midday sun on the sand, the colored shade of the awning over the stands"},
   {id:"night", img:true, title:"Night Shift", sub:"Cooks, nurses, guards and cabbies at 3 a.m.", sw:["#E08A2E","#8FBF6A","#1B2433","#C2373A","#0B0B0B"],
-   text:"Night-shift workers you recognise at a glance, played straight and cinematic: a short-order cook in a paper hat and grease-spotted apron at a 24-hour diner, a nurse in scrubs with a stethoscope in a hospital corridor, a security guard in a navy uniform with a flashlight, a cab driver behind the wheel, a baker in flour-dusted whites at the ovens, a janitor with a mop cart, a gas station attendant, a firefighter in turnout gear at the station, a trucker at a truck stop; each in their own workplace at 3 a.m.; sodium-orange streetlight and buzzing fluorescent green"},
+   text:"Night-shift workers you recognize at a glance, played straight and cinematic: a short-order cook in a paper hat and grease-spotted apron at a 24-hour diner, a nurse in scrubs with a stethoscope in a hospital corridor, a security guard in a navy uniform with a flashlight, a cab driver behind the wheel, a baker in flour-dusted whites at the ovens, a janitor with a mop cart, a gas station attendant, a firefighter in turnout gear at the station, a trucker at a truck stop; each in their own workplace at 3 a.m.; sodium-orange streetlight and buzzing fluorescent green"},
   {id:"florida", img:true, title:"Florida Retirement", sub:"Velour, visors and early-bird dinners", sw:["#F29BB2","#9ED9C3","#4FB3D9","#EAD7A8","#F6F3EA"],
    text:"A 1980s Florida retirement community, played completely straight and over the top: seniors in their seventies and eighties with big attitude, in velour tracksuits, sun visors, pearls, gold chains and oversized sunglasses, at aqua aerobics in the condo pool, the bingo hall, the shuffleboard court, the early-bird buffet and rows of golf carts; harsh Florida sun and sun-faded pastel color"},
   {id:"y2k", img:true, title:"Y2K Pop Star", sub:"1999–2002, shot on a point-and-shoot", sw:["#F2A65A","#E86FA0","#3FA7C9","#C8B48A","#1E1A16"],
@@ -664,7 +664,7 @@ async function demoApi(path, body){
   const parts = path.split("?")[0].split("/"), what = parts[0], arg = decodeURIComponent(parts.slice(1).join("/"));
   if (what === "start"){
     const run = await demoSource(body), render = !!body.render;
-    return demoJob(render ? 6000 : 5000, run, ["Analysing the song", body.world_mode === "images" ? "Looking at your images" : "Writing the World", "Planning every shot", render ? "Queueing every shot" : "Writing the shot list"],
+    return demoJob(render ? 6000 : 5000, run, ["Analyzing the song", body.world_mode === "images" ? "Looking at your images" : "Writing the World", "Planning every shot", render ? "Queueing every shot" : "Writing the shot list"],
       () => { DM.phase[run] = render ? "render" : "preview"; DM.t0[run] = Date.now(); DM.stop[run] = 0; });
   }
   if (what === "job"){
@@ -774,7 +774,7 @@ function toast(msg, ms=4200){ const t = $("#toast"); t.textContent = msg; t.clas
 // a full-screen "working" box; onCancel adds a Cancel button (the work it stops is the caller's)
 function overlay(title, sub, onCancel){ const o = $("#overlay"), c = $("#ovcancel"); if (!title){ o.classList.add("hide"); c.onclick = null; return; } $("#ovt").textContent = title; $("#ovs").textContent = sub || ""; $("#ovbar").classList.add("hide"); $("#ovt2").classList.add("hide");
   c.classList.toggle("hide", !onCancel); c.disabled = false; c.textContent = "Cancel";
-  c.onclick = onCancel ? () => { c.disabled = true; c.textContent = "Cancelling…"; onCancel(); } : null;
+  c.onclick = onCancel ? () => { c.disabled = true; c.textContent = "Canceling…"; onCancel(); } : null;
   o.classList.remove("hide"); if (onCancel) c.focus(); }
 function overlayProgress(elapsed, left){
   const tot = Math.max(1, elapsed + left), pct = Math.min(98, Math.round(100 * elapsed / tot));
@@ -814,7 +814,7 @@ function askName(){
 function stopTimer(){ if (S.timer){ clearInterval(S.timer); S.timer = null; } }
 // run, stage: the video on screen (and how far it is), so its other steps are links: the Brief it was
 // made from, its plan, its render (while it runs and after), its result once it's made. Going back only
-// shows what was picked: changes are greyed out until "Restart from this stage", and a restart makes a
+// shows what was picked: changes are grayed out until "Restart from this stage", and a restart makes a
 // new video (this one stays in Your videos).
 function setSteps(cur, run, stage){
   const names = ["The Brief","The Plan","Rendering","Result"];
@@ -866,7 +866,7 @@ async function openBrief(run){
   let b = store.get("briefs", {})[run], st = null;
   try{ st = await api("run/" + encodeURIComponent(run)); }catch(e){}
   if (!b && st) b = st.form;
-  // a video already being made (or made) shows its brief greyed out until Restart from this stage
+  // a video already being made (or made) shows its brief grayed out until Restart from this stage
   const viaSteps = S.showBrief === run; S.showBrief = null;
   S.lockedRun = st && viaSteps && !S.unlocked[run + ":brief"] ? st : null;
   if (b && (b.theme || b.song || b.world_images)){
@@ -1039,7 +1039,7 @@ async function viewBrief(){
 
   // the Models card. The set: 24 GB (fp8) or Full (bf16); until one is picked, the one that suits this GPU
   // ("auto": the full set on a 48 GB+ GPU when its files are installed). For professional use: Qwen-Image-Edit
-  // 2511 for the artist and no extending. Then every model this video would load, with its licence.
+  // 2511 for the artist and no extending. Then every model this video would load, with its license.
   const drawModels = () => {
     const r = S.models, picked = b.models === "24gb" || b.models === "full", cur = picked ? b.models : r ? r.auto : "";
     $("#mset").innerHTML = [["24gb", "24 GB", "fp8, 24 GB+ GPU"], ["full", "Full", "bf16, 48 GB+ GPU"]].map(([k, n, d]) =>
@@ -1116,7 +1116,7 @@ async function viewBrief(){
   drawSong();
   if (!b.song) refreshEstimate();  // the line under Preview follows the World even before a song
   if (!S.sys) loadSystem().then(drawTiers);
-  // the brief of a video being made, or made: what was picked, greyed out, with Restart from this stage
+  // the brief of a video being made, or made: what was picked, grayed out, with Restart from this stage
   const L = S.lockedRun;
   if (L && L.run === S.fromRun && !S.unlocked[L.run + ":brief"]){
     setSteps(0, L.run, L.stage);
@@ -1157,7 +1157,7 @@ async function drawSong(){
   }
   pick.innerHTML = "";
   $("#songname").textContent = b.song.split("/").pop();
-  $("#songmeta").textContent = "analysing…";
+  $("#songmeta").textContent = "analyzing…";
   $("#replace").classList.remove("hide");
   try{
     const a = S.analysis = await api(`analyze?song=${encodeURIComponent(b.song)}&seconds=${b.seconds}&start=${b.start}`);
@@ -1227,9 +1227,9 @@ function refreshEstimate(){
       ep.textContent = "about " + dur(e.total_s);
       ea.textContent = "about " + mins(e.total_s / 60 + e.render_min) + " in all";
       const chars = e.parts.find(x => x.id === "cast");
-      why.textContent = imgs ? `About ${dur(e.total_s)}: the song is analysed and each image checked for a face.`
-        : !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
-        : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analysed.`
+      why.textContent = imgs ? `About ${dur(e.total_s)}: the song is analyzed and each image checked for a face.`
+        : !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analyzed and the shots planned in the house look.`
+        : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analyzed.`
         : c.cast === "single artist" ? `About ${dur(e.total_s)}: Gemma writes the World the artist sings in. A second preview with the same line and seed is quick.`
         : `About ${dur(e.total_s)}: Gemma writes the World and a character for each of the ${e.shots} shots${chars ? ", 8 at a time" : ""}. A second preview with the same line and seed is quick.`;
     }catch(err){ if (n === _estN){ ep.textContent = ""; ea.textContent = ""; } }
@@ -1316,9 +1316,9 @@ function drawCast(){
         <div style="font-weight:700;font-size:16px">Drop a photo here, or click to upload</div>
         <div class="muted" style="font-size:13px">JPG, PNG or WebP. It goes into ComfyUI's input folder.</div></div>`)
     + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
-      <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewellery in the photo tend to carry over into the video.</p>
+      <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewelry in the photo tend to carry over into the video.</p>
       <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>
-      <p class="note"><b>Experimental:</b> the likeness varies from shot to shot, and the photo's clothes or jewellery can carry over. Generate images and review lets you fix any that miss.</p>`;
+      <p class="note"><b>Experimental:</b> the likeness varies from shot to shot, and the photo's clothes or jewelry can carry over. Generate images and review lets you fix any that miss.</p>`;
   const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
   if (img){
     $("#areplace").onclick = pick;
@@ -1398,7 +1398,7 @@ function drawFit(){
   box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
     `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}"${k === "extend" && pro ? " disabled" : ""}>${n}</button>`).join("");
   $("#wfitnote").textContent = pro ? "Cropped around the face: Extend is off for professional use, since it draws with Qwen-Image 2.1."
-    : cur === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its licence is reported to be research-only."
+    : cur === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides around it. Adds a few minutes. Its license is reported to be research-only."
     : "Each image is cropped to the video's shape around the face. Nothing is drawn in.";
   box.querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
     const f = el.dataset.f;
@@ -1541,13 +1541,13 @@ async function start(render, briefOverride, review){
   try{
     const what = imgs ? "looking at your images" : "writing the World";
     overlay(b.review ? "Making the images" : render ? "Starting the video" : "Writing the plan",
-      b.review ? `Analysing the song, ${what} and queueing the images. The video waits until you've checked them.`
-      : render ? `Analysing the song, ${what} and queueing every shot.` : `Analysing the song, ${what} and planning every shot. Nothing renders yet.`);
+      b.review ? `Analyzing the song, ${what} and queueing the images. The video waits until you've checked them.`
+      : render ? `Analyzing the song, ${what} and queueing every shot.` : `Analyzing the song, ${what} and planning every shot. Nothing renders yet.`);
     const {prompt_id} = await api("start", b);
     overlay($("#ovt").textContent, $("#ovs").textContent, async () => {
       cancelled = true;
       try{ await api("cancel_job", {prompt_id}); }catch(e){}
-      overlay(); toast(render ? "Cancelled. Nothing of this video was queued." : "Cancelled. No plan was written.");
+      overlay(); toast(render ? "Canceled. Nothing of this video was queued." : "Canceled. No plan was written.");
     });
     const brief = Object.assign({}, b); delete brief.render; delete brief.review;
     const t0 = Date.now();
@@ -1559,7 +1559,7 @@ async function start(render, briefOverride, review){
       const el = Math.round((Date.now() - t0) / 1000);
       if (j.state === "queued") $("#ovs").textContent = `Waiting in ComfyUI's queue (${j.ahead} ahead) · ${el} s`;
       else if (j.state === "running"){
-        $("#ovs").textContent = j.step ? j.step + "…" : (render ? `Analysing the song, ${what} and queueing every shot` : `Analysing the song, ${what} and planning every shot`);
+        $("#ovs").textContent = j.step ? j.step + "…" : (render ? `Analyzing the song, ${what} and queueing every shot` : `Analyzing the song, ${what} and planning every shot`);
         if (j.elapsed_s != null && j.left_s != null) overlayProgress(j.elapsed_s, j.left_s);
       }
       else if (j.state === "error") throw new Error(j.error);
@@ -1572,7 +1572,7 @@ async function start(render, briefOverride, review){
   }catch(e){ if (cancelled) return; overlay(); const m = e.message || ""; toast(/^(It can't|ComfyUI refused)/.test(m) ? m : "It didn't start: " + m, Math.max(9000, 70 * m.length)); }
 }
 
-// A step you went back to: the page stays readable but greyed out and not editable, with "Restart
+// A step you went back to: the page stays readable but grayed out and not editable, with "Restart
 // from this stage" next to the heading (actions: what the button offers once pressed, or none).
 function lockPage(onRestart, why){
   const app = $("#app"), head = app.querySelector(".head");
@@ -1687,7 +1687,7 @@ async function viewRender(run){
     renderUpdate(r);
     if (r.stage === "done"){
       stopTimer();
-      // went back from the Result: how it was made, greyed out, with Restart from this stage
+      // went back from the Result: how it was made, grayed out, with Restart from this stage
       if (first) lockPage(() => restartRender(r), "How this video was made. Restarting makes it again from the same plan, as a new video; this one stays in Your videos.");
     }
   };
@@ -2118,7 +2118,7 @@ async function viewResult(run){
       let cancelled = false;
       overlay($("#ovt").textContent, $("#ovs").textContent, async () => { cancelled = true;
         let j = {}; try{ j = await api("cancel_job", {prompt_id}); }catch(e){}
-        overlay(); toast(j.removed ? "Cancelled. The cut you have stays." : "Cancelled. If it was already cutting, the new cut may still appear.", 7000); });
+        overlay(); toast(j.removed ? "Canceled. The cut you have stays." : "Canceled. If it was already cutting, the new cut may still appear.", 7000); });
       const t0 = Date.now();
       for (;;){ await new Promise(res => setTimeout(res, 2000)); if (cancelled) return; const j = await api("job/" + prompt_id); if (cancelled) return; if (j.state === "error") throw new Error(j.error); if (j.state === "done") break;
         $("#ovs").textContent = `${j.state === "queued" ? "Waiting in the queue" : "Cutting"} · ${clock((Date.now() - t0) / 1000)}`; }
@@ -2194,12 +2194,12 @@ const LOGO = id => `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
   [[11.6, 4.5], [14.2, 9], [16.8, 12], [19.4, 6.5]].map(([x, h]) => `<rect x="${x - 1}" y="${16 - h / 2}" width="2" height="${h}" rx="1" fill="#0b0d10"/>`).join("") + `</svg>`;
 function drawIcon(){
   $("#mark").innerHTML = LOGO("lg");
-  // a favicon can't read the page's CSS variables, so it gets the palette's colours written in
+  // a favicon can't read the page's CSS variables, so it gets the palette's colors written in
   const cs = getComputedStyle(document.documentElement);
   $("#fav").href = "data:image/svg+xml," + encodeURIComponent(LOGO("fg").replace(/var\((--[a-z0-9]+)\)/g, (m, v) => cs.getPropertyValue(v).trim() || "#000"));
 }
 
-// the palettes, with the surface and gradient colours the menu previews
+// the palettes, with the surface and gradient colors the menu previews
 const PALS = [["neon","Neon","#0d1015",["#d7ff3d","#19e6b0","#3a86ff","#b44dff"]],["sunset","Sunset","#130e13",["#ffd166","#ff8a5b","#ff4f8b","#b14dff"]],
               ["aurora","Aurora","#0a1218",["#a8ffe0","#4fd8ff","#6a86ff","#c38bff"]],["ember","Ember","#120f0c",["#ffe27a","#ffb347","#ff7a45","#ff4d6d"]]];
 function drawLook(){

@@ -1,6 +1,6 @@
 # OneShot MV
 
-Give OneShot MV a song and one line about the world it lives in, it listens to the song, invents a cast for that world, plans every shot around the song's energy, and renders a lip-synced music video where a different invented person sings each line, or one singer sings them all (Single Artist). Then it edits the whole video for you: every shot cut to the music, audio-reactive FX on the drums, and a finished MP4 at the end, with no timeline work. LTX-2.3 is the core video model: every clip in the video is made by LTX-2.3. Everything runs locally in ComfyUI on open-weights models.
+Give OneShot MV a song and one line about the world it lives in. It listens to the song, invents a cast for that world, plans every shot around the song's energy, and renders a lip-synced music video where a different invented person sings each line, or one singer sings them all (Single Artist). Then it edits the whole video for you: every shot cut to the music, audio-reactive FX on the drums, and a finished MP4 at the end, with no timeline work. LTX-2.3 is the core video model: every clip in the video is made by LTX-2.3. Everything runs locally in ComfyUI on open-weights models.
 
 ![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
 
@@ -10,7 +10,7 @@ Give OneShot MV a song and one line about the world it lives in, it listens to t
 
 ## What it does
 
-1. It analyses the song: beats, bars, sections, loudness, the drop, and the vocal and drum stems.
+1. It analyzes the song: beats, bars, sections, loudness, the drop, and the vocal and drum stems.
 2. It turns your line into a World: who the people are, what they wear, where each scene happens,
    the light and the camera.
 3. It plans the cut by energy. Each part of the song is low, medium or high energy, and each level
@@ -99,7 +99,7 @@ ComfyUI's top bar. ComfyUI serves the page itself, so there is nothing else to i
 5. **Your videos** lists every run, whether it came from the Studio, the workflow or the SDK.
 
 While it works there is a **Cancel** or **Stop** button; it removes only this video's jobs from
-ComfyUI's queue. The steps at the top stay clickable: an earlier step is greyed out but readable,
+ComfyUI's queue. The steps at the top stay clickable: an earlier step is grayed out but readable,
 with **Restart from this stage** next to its heading. Restarting makes a new video, and the old one
 stays in Your videos. In the workflow, the Director's `review_images` does the same as Generate
 images and review.
@@ -187,7 +187,7 @@ World; the more you say, the closer it sticks:
 - What you say about the cast is a rule. "No men" or "all women" makes every character a woman
   ("men only" the reverse), and "modern", "present day" or "2020s" keeps earlier decades out.
 - A character you describe keeps your words. "A net mender in her seventies with a weathered face
-  and a grey bun" is drawn as written; whatever you leave open (an age, a face, an outfit) is
+  and a gray bun" is drawn as written; whatever you leave open (an age, a face, an outfit) is
   filled in for you.
 - Creatures instead of people: say "no people", or "all creatures", "all animals" or "all
   robots", and describe each one, with the eyes and the mouth it sings with. They get their own
@@ -217,8 +217,8 @@ own image stage and animates yours:
 - **In order** plays them by file name; **Random order** shuffles them, never showing the same
   image twice in a row. Images repeat when there are more shots than images.
 - Images that aren't the video's shape are cropped or extended:
-  - **Crop** (the default) cuts each image to the shape around the face: the face is centred across
-    the frame and sits a little above the middle (with two people, the crop centres between them).
+  - **Crop** (the default) cuts each image to the shape around the face: the face is centered across
+    the frame and sits a little above the middle (with two people, the crop centers between them).
     Nothing is drawn in. A close-up too big for the frame (a tall image in a 16:9 video) keeps the
     eyes, mouth and chin, and loses the forehead first.
   - **Extend** keeps the whole image. One far off the shape (a 2:3 portrait in a 16:9 video) goes on
@@ -243,7 +243,7 @@ light (true to its period, as for Crowd), with quick costume changes on the drop
   yourself or of someone who agreed to it. One photo is enough, and the best one is sharp, of
   just them, facing the camera with the head straight, in soft even light, with the whole face
   showing (no sunglasses, hat brim or hair across it); head and shoulders is ideal. Makeup and
-  jewellery in the photo tend to carry over.
+  jewelry in the photo tend to carry over.
 - **A new artist:** describe them in a sentence ("a singer in her late twenties with a shaved
   head and gold hoops"). The tool makes their studio headshot first and keeps them the same in
   every shot, so no real person's photo is needed.
@@ -254,7 +254,7 @@ to `on`.
 
 Each main image is an edit of the photo that keeps only the face: the hairstyle, outfit, light and
 place come from the World. Single Artist is experimental: the likeness varies from shot to shot,
-and the photo's clothes or jewellery can carry over into some shots. Check the images with
+and the photo's clothes or jewelry can carry over into some shots. Check the images with
 **Generate images and review** and fix any that miss.
 
 Qwen-Image 2.1 makes the artist's portraits and looks; it kept the face best in our tests.
@@ -274,12 +274,12 @@ the model tables). The Brief says if anything is missing.
 | Cast order | as written, mixed | as written |
 | Crowd behind singers | auto, on, off | auto |
 | Images not in the video's shape (World images) | crop (around the face), extend (Qwen-Image 2.1 draws the missing sides) | crop |
-| B-roll share | 0 to 0.5 of the shots | 0.125 |
+| Cutaway share | 0 to 0.5 of the shots | 0.125 |
 | Take-check rounds | 0 to 3 | 2 |
 | Seed | any number | 1 |
 | Models | 24gb (fp8), full (bf16, 48 GB+ GPUs); auto picks one for your GPU | auto |
 
-Both are upscaled to 1080p (1920×1080, 1080×1920 or 1080×1080) and cut at 25 fps. Quality renders
+Quality and fast are both upscaled to 1080p (1920×1080, 1080×1920 or 1080×1080) and cut at 25 fps. Quality renders
 the clips at 50 fps, which gives the mouths smoother timing; 9:16 and 1:1 use the same sizes turned
 or squared (768×1280 and 1024×1024 at quality, 512×896 and 768×768 at fast).
 
@@ -430,15 +430,15 @@ Each run has its own folder, `output/oneshot-mv/runs/<run>/`, with:
 `fv/packs/crowd.json` holds the casting rules, the edit and the effects of Crowd runs;
 `fv/packs/artist.json` those of Single Artist.
 
-## Models and licences
+## Models and licenses
 
 The code is MIT. The models are open weights, none are included here, and each has its own
-licence (listed in the tables below): check the ones that apply to your use.
+license (listed in the tables below): check the ones that apply to your use.
 
 ### Two model sets
 
 The 24 GB set (the default) uses fp8 files and one Krea 2 Turbo model for both passes of every
-still. The full set uses the original bf16 files, with Krea 2 Raw and the Turbo LoRA for the second
+image. The full set uses the original bf16 files, with Krea 2 Raw and the Turbo LoRA for the second
 pass. Both use the same LTX LoRAs, upscaler and VAE.
 
 | Model | 24 GB set (default) | Full set (48 GB+) | Download |
@@ -459,25 +459,25 @@ keep one copy).
 
 Every run uses:
 
-| Model | Used for | Licence | Download |
+| Model | Used for | License | Download |
 |---|---|---|---|
 | Krea 2 Turbo, the Qwen3-VL 4B text encoder and the Qwen-Image VAE (full set: also Krea 2 Raw and the Turbo LoRA) | Every portrait and cutaway image | Krea 2 Community License: commercial use of the model and its images only for companies under US$1M annual revenue (Qwen3-VL and the VAE are Apache-2.0 upstream) | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2) |
-| LTX-2.3 22B dev, the distilled LoRA 384 v1.1 and the spatial upscaler x2 v1.1 | Every clip: lip sync and b-roll | LTX-2 Community License: free under US$10M annual revenue; label output as machine-generated; no impersonation without consent | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
+| LTX-2.3 22B dev, the distilled LoRA 384 v1.1 and the spatial upscaler x2 v1.1 | Every clip: lip sync and cutaways | LTX-2 Community License: free under US$10M annual revenue; label output as machine-generated; no impersonation without consent | [Lightricks/LTX-2.3](https://huggingface.co/Lightricks/LTX-2.3) |
 | LTX-2 19B IC-LoRA Detailer | Fine detail in every clip | LTX-2 Community License | [Lightricks/LTX-2-19b-IC-LoRA-Detailer](https://huggingface.co/Lightricks/LTX-2-19b-IC-LoRA-Detailer) |
-| LTX2.3 Crisp Enhance and Soft Enhance (community LoRAs by vrgamedevgirl84) | Sharpness and detail in every clip | No licence stated by the author. To run without them, remove them from `ltx23_loras` in `fv/models.json` | [CivitAI: LTX 2.3 Enhancers](https://civitai.com/models/2535622/ltx-23-enhancers) |
-| Gemma 3 12B IT | LTX-2.3's text encoder; it also writes the World and the b-roll prompts and runs the vision check | Gemma Terms of Use and Prohibited Use Policy | [Comfy-Org/ltx-2](https://huggingface.co/Comfy-Org/ltx-2/tree/main/split_files/text_encoders) |
-| Hybrid Demucs (`HDEMUCS_HIGH_MUSDB_PLUS`) | Vocal and drum stems | Code MIT; no separate weights licence is published | Downloaded by torchaudio on first use |
+| LTX2.3 Crisp Enhance and Soft Enhance (community LoRAs by vrgamedevgirl84) | Sharpness and detail in every clip | No license stated by the author. To run without them, remove them from `ltx23_loras` in `fv/models.json` | [CivitAI: LTX 2.3 Enhancers](https://civitai.com/models/2535622/ltx-23-enhancers) |
+| Gemma 3 12B IT | LTX-2.3's text encoder; it also writes the World and the cutaway prompts and runs the vision check | Gemma Terms of Use and Prohibited Use Policy | [Comfy-Org/ltx-2](https://huggingface.co/Comfy-Org/ltx-2/tree/main/split_files/text_encoders) |
+| Hybrid Demucs (`HDEMUCS_HIGH_MUSDB_PLUS`) | Vocal and drum stems | Code MIT; no separate weights license is published | Downloaded by torchaudio on first use |
 
 The optional checks (Install, step 4):
 
-| Model | Used for | Licence | Download |
+| Model | Used for | License | Download |
 |---|---|---|---|
-| SyncNet v2 and the S3FD face detector | Lip-sync scores and each take's sync offset | Research use under CC-BY (Oxford VGG); no licence stated for S3FD | [VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/) |
+| SyncNet v2 and the S3FD face detector | Lip-sync scores and each take's sync offset | Research use under CC-BY (Oxford VGG); no license stated for S3FD | [VGG SyncNet page](https://www.robots.ox.ac.uk/~vgg/software/lipsync/) |
 | insightface buffalo_l (`det_10g`, `w600k_r50`) | Framing and identity checks | Non-commercial research use only | [insightface model zoo](https://github.com/deepinsight/insightface/tree/master/model_zoo) |
 
 Single Artist also uses (Crowd runs never load them):
 
-| Model | Used for | Licence | Download |
+| Model | Used for | License | Download |
 |---|---|---|---|
 | Qwen-Image 2.1, its VAE and the Qwen3-VL 8B text encoder | The artist's portraits and looks (also World images with Extend) | Reported as the Qwen Research License (research use); check the model page before any commercial use | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
 | LTX-2.3 IC-LoRA Union Control (ref0.5) | Pose-matched looks | LTX-2 Community License | [Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control](https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control) |
@@ -485,9 +485,9 @@ Single Artist also uses (Crowd runs never load them):
 
 File names are set in `fv/models.json` and `fv/models_full.json`.
 
-## Licence
+## License
 
-The code is MIT (see `LICENSE`). Vendored code keeps its own licence (`fv/syncnet/`, see its
-NOTICE file). The models are under their own licences, listed above, and are not included. Only
+The code is MIT (see `LICENSE`). Vendored code keeps its own license (`fv/syncnet/`, see its
+NOTICE file). The models are under their own licenses, listed above, and are not included. Only
 publish videos made with music you have the rights to, label them as AI-generated, and only cast
 invented people or people who have agreed to it.

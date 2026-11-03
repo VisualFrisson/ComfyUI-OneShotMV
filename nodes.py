@@ -192,7 +192,7 @@ class FVLoadAudioPath:
 
 # ------------------------------------------------------------------ the app
 class FVDirector:
-    """OneShot MV in one press: a song and a World line in, a music video out. Analyses the song,
+    """OneShot MV in one press: a song and a World line in, a music video out. Analyzes the song,
     writes the World's cast, plans the cut and queues every render plus the final assembly."""
     DESCRIPTION = ("A song and a World line (or a folder of your images) in, a lip-synced music video out: "
                    "plans, casts and queues the whole run.")
@@ -330,7 +330,7 @@ class FVDirector:
 
 
 def _stoppable_log():
-    """The Director's log, which also stops it when the job is cancelled (the Studio's Cancel, or
+    """The Director's log, which also stops it when the job is canceled (the Studio's Cancel, or
     ComfyUI's): every step logs a line, and once ComfyUI's interrupt flag is up each later line raises
     again, so a step that catches errors to carry on can't swallow the stop. The flag is left up for
     ComfyUI to clear when the next prompt starts."""
@@ -605,7 +605,7 @@ class FVFinish:
 class FVFitAspect:
     """An image brought to another shape without cropping: the short side is extended with its own
     edge pixels (Single Artist with Qwen-Image 2.1, whose output takes image 1's shape: a tall phone
-    photo would otherwise be centre-cropped to 16:9 and lose the head)."""
+    photo would otherwise be center-cropped to 16:9 and lose the head)."""
     DESCRIPTION = "Brings an image to the video's shape without cropping, so a tall photo keeps its head."
 
     @classmethod
@@ -634,7 +634,7 @@ class FVFitAspect:
 
 class FVExtendCanvas:
     """World images with fit "extend": an image on a canvas of the video's shape. The image is fitted
-    inside width x height and centred, the new edges are plain grey; `fill` marks the new edges (reaching
+    inside width x height and centered, the new edges are plain gray; `fill` marks the new edges (reaching
     a little into the image) and `keep` is the image with a soft edge, to paste the original pixels back
     over the redrawn canvas."""
     DESCRIPTION = ("Puts an image on a canvas of the video's shape, with masks to paste the original back (World "
@@ -748,7 +748,7 @@ class FVKeep:
 
 class FVTheme:
     """Preview what a World line turns into before a run: the characters, outfits, places, light,
-    in-scene actions and colour grade the Director will cast from (Gemma 3, the LTX-2.3 text
+    in-scene actions and color grade the Director will cast from (Gemma 3, the LTX-2.3 text
     encoder). The result is cached, so a Director run with the same theme and seed reuses it."""
     DESCRIPTION = ("Shows what a World line turns into (characters, outfits, places, light, grade) before you "
                    "spend a run on it.")

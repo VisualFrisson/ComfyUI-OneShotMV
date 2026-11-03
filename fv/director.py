@@ -115,7 +115,7 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         image_fit = image_fit if image_fit in wi.FITS else "crop"
         if professional and image_fit == "extend":  # Extend draws with Qwen-Image 2.1 (reported research-only)
             log("[OneShotMV] For professional use: the World images are cropped, not extended (Extend uses "
-                "Qwen-Image 2.1, whose licence is reported to be research-only)")
+                "Qwen-Image 2.1, whose license is reported to be research-only)")
             image_fit = "crop"
         imgs = wi.inspect(wi.list_images(world_images), *formats.portrait_size(fmt)[1], log=log, fit=image_fit)
         if not imgs:
