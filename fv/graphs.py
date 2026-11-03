@@ -412,18 +412,48 @@ EXTEND = ("Fill the plain grey areas at the edges by extending the photograph ou
 EXTEND_KEYS = ("qwen21_unet", "qwen21_te", "qwen21_vae")  # World images with fit "extend": Qwen-Image 2.1
 
 
-def world_image(*, path, prefix, size, crop=None, extend=False, seed=7):
+# Single Artist in a World from the user's images: the artist goes into each image with one person.
+# Face and hair when the image's person could be the artist; the whole person, newly dressed for the
+# place, when not (another gender, a child, much older: director._swap_plan asks the vision model).
+SWAP_FACE = ("Recreate image 1 with the person from image 2 in it. Keep image 1 exactly as it is: the camera angle, "
+             "framing, distance, pose, head position, head tilt, mouth shape and facial expression, the clothes, the "
+             "place and the light. Give the person image 2's identity: their face, eyes, nose, lips, jawline, skin "
+             "tone, age and hair. The only person in the picture. Photorealistic, natural skin texture. No text or "
+             "lettering anywhere.")
+SWAP_BODY = ("Recreate image 1 with the person from image 2 in place of the person in it: the same camera angle, "
+             "framing, distance, pose, head position, head tilt, mouth shape and facial expression, in the same "
+             "place and light. Use image 2's identity: their face, eyes, nose, lips, jawline, skin tone, age, hair "
+             "and build. Dress them in {outfit}. The only person in the picture. Photorealistic, natural skin "
+             "texture. No text or lettering anywhere.")
+SWAP_OUTFIT = "clothes that suit this place"
+
+
+def swap_prompt(how: str = "face", outfit: str = "") -> str:
+    """The swap edit's prompt: "face" (face and hair) or "body" (the whole person, in `outfit`)."""
+    if how != "body":
+        return SWAP_FACE
+    outfit = " ".join(str(outfit or "").split()).rstrip(".") or SWAP_OUTFIT
+    if SWAP_OUTFIT not in outfit:
+        outfit += ", " + SWAP_OUTFIT
+    return SWAP_BODY.format(outfit=outfit)
+
+
+def world_image(*, path, prefix, size, crop=None, extend=False, seed=7, artist=None, swap=None, editor=None):
     """World from images: one of the user's images brought to the video's shape. A crop (x, y, w, h in
     the image's pixels, placed by fv/world_images.py around the face), then scaled; nothing drawn in.
     extend: the whole image on a canvas of the video's shape (Extend Canvas), Qwen-Image 2.1 redraws it
     with the grey edges filled, and the original pixels go back over the middle with a soft seam (the
     Oct 31 editor test: Qwen 2.1, Klein and 2511 at 40 steps each left 1 bad frame in 6; 2511 with its
-    4-step LoRA 3 or 4)."""
+    4-step LoRA 3 or 4).
+    artist + swap (Single Artist): then the artist's photo as image 2 and the swap prompt (swap_prompt)
+    put the artist into the finished frame, by the run's image editor; the face goes back where the
+    image had it (Face Match). An extended image's two edits share one Qwen-Image 2.1 load."""
     g = Graph()
     img = O(g.add("FVLoadImagePath", path=path))
+    shared = {}
     if extend:
         ext = g.add("FVExtendCanvas", image=img, width=size[0], height=size[1])
-        filled = _qwen21(g, O(ext, 0), EXTEND, seed=seed)
+        filled = _qwen21(g, O(ext, 0), EXTEND, seed=seed, shared=shared)
         up = O(g.add("ImageScale", image=filled, upscale_method="lanczos", width=size[0], height=size[1],
                      crop="disabled"))
         out = O(g.add("ImageCompositeMasked", destination=up, source=O(ext, 0), x=0, y=0, resize_source=False,
@@ -434,6 +464,17 @@ def world_image(*, path, prefix, size, crop=None, extend=False, seed=7):
             img = O(g.add("ImageCrop", image=img, width=w, height=h, x=x, y=y))
         out = O(g.add("ImageScale", image=img, upscale_method="lanczos", width=size[0], height=size[1],
                       crop="center"))
+    if artist and swap:
+        ref = O(g.add("FVLoadImagePath", path=artist))
+        if (editor or artist_editor()) == "qwen_edit":
+            edited = _qwen_edit(g, out, swap, refs=[ref], seed=seed + 11)
+        else:
+            edited = _qwen21(g, out, swap, [ref], seed=seed + 11, shared=shared)
+        edited = O(g.add("ImageScale", image=edited, upscale_method="lanczos", width=size[0], height=size[1],
+                         crop="center"))
+        if _has_node("FVFaceMatch"):  # an edit can pull the camera back: the face back where the image had it
+            edited = O(g.add("FVFaceMatch", image=edited, reference=out, max_scale=2.2))
+        out = edited
     g.add("SaveImage", images=out, filename_prefix=prefix)
     return g
 
@@ -648,11 +689,18 @@ def _qwen_edit(g, image_ref, prompt, refs=(), seed=7):
     return O(g.add("VAEDecode", samples=O(ks), vae=vae))
 
 
-def _qwen21(g, image_ref, prompt, refs=(), seed=7, steps=25, resolution=1024):
-    unet = g.add("UNETLoader", unet_name=M["qwen21_unet"], weight_dtype="default")
-    cache = g.add("QwenImage21Cache", model=O(unet), device="auto", dtype="default")
-    clip = g.add("CLIPLoader", clip_name=M["qwen21_te"], type="qwen_image", device="default")
-    vae = g.add("VAELoader", vae_name=M["qwen21_vae"])
+def _qwen21(g, image_ref, prompt, refs=(), seed=7, steps=25, resolution=1024, shared=None):
+    """shared: a dict that keeps this graph's Qwen-Image 2.1 loaders, so a second edit in the same graph
+    (an extended World image, then the artist put into it) loads the model once."""
+    if shared is not None and "q21" in shared:
+        cache, clip, vae = shared["q21"]
+    else:
+        unet = g.add("UNETLoader", unet_name=M["qwen21_unet"], weight_dtype="default")
+        cache = g.add("QwenImage21Cache", model=O(unet), device="auto", dtype="default")
+        clip = g.add("CLIPLoader", clip_name=M["qwen21_te"], type="qwen_image", device="default")
+        vae = g.add("VAELoader", vae_name=M["qwen21_vae"])
+        if shared is not None:
+            shared["q21"] = (cache, clip, vae)
     imgs = {"images.image_1": image_ref}
     for i, r in enumerate(refs):
         imgs[f"images.image_{i + 2}"] = r

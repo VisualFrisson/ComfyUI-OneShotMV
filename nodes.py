@@ -191,6 +191,7 @@ class FVLoadAudioPath:
 class FVDirector:
     """OneShot MV in one press: a song and a World line in, a music video out. Analyses the song,
     writes the World's cast, plans the cut and queues every render plus the final assembly."""
+    ARTIST_IN_IMAGES = True  # Single Artist with world_images: the Studio asks for a restart until this loads
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -208,7 +209,8 @@ class FVDirector:
                                         "image stage is skipped: images with a face sing, the rest become cutaways, "
                                         "and images that aren't the video's shape are cropped around the face "
                                         "(or extended, see image_fit). "
-                                        "The World line and cast are then not used."}),
+                                        "The World line is then not used. With cast 'single artist' and an "
+                                        "artist_photo, the artist goes into every image with one person."}),
             "image_order": (["in order", "random order"], {"default": "in order",
                             "tooltip": "World images: by file name, or shuffled. Images repeat when there are more "
                                        "shots than images."}),
@@ -222,7 +224,9 @@ class FVDirector:
                      "tooltip": "crowd: a different invented person sings each line. single artist: one person "
                                 "sings every line, in the World's outfits and places: connect a photo of them to "
                                 "artist_photo (only of yourself or someone who agreed), or describe a new one in "
-                                "artist_description"}),
+                                "artist_description. With world_images, a photo puts the artist into your images: "
+                                "their face and hair, or their whole self in a new outfit where the image's "
+                                "person doesn't match them"}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
                                   "tooltip": "Length of the video; 0 = the whole song"}),
             "start": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 3600.0, "step": 0.01,
@@ -305,8 +309,8 @@ class FVDirector:
             run_name="", artist_photo=None, artist_description="", review_images=False):
         _reload()
         artist_path, described = "", ""
-        if (world_images or "").strip():
-            cast = "crowd"  # the images are the cast
+        if (world_images or "").strip() and cast == "single artist" and artist_photo is None:
+            cast = "crowd"  # the images are the cast; with a photo, the artist goes into them
         if cast == "single artist":
             if artist_photo is not None:
                 artist_path = _save_image_input(artist_photo)

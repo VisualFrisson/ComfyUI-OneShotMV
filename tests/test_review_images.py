@@ -172,7 +172,7 @@ def _faces(monkeypatch):
     monkeypatch.setattr(faces, "detect_all", lambda rgb, size=320: [[0.5, 0.4, 0.3]] if rgb[0, 0, 0] > 60 else [])
 
 
-def _own_images(monkeypatch, fit="crop"):
+def _own_images(monkeypatch, fit="crop", **kw):
     """Three faces that sing and a dark place picture (a cutaway)."""
     from PIL import Image
     folder = tempfile.mkdtemp()
@@ -180,7 +180,7 @@ def _own_images(monkeypatch, fit="crop"):
         Image.new("RGB", (2016, 1152), (120 + i, 110, 100)).save(os.path.join(folder, f"face_{i}.png"))
     Image.new("RGB", (2016, 1152), (10, 10, 10)).save(os.path.join(folder, "place_0.png"))
     _faces(monkeypatch)
-    return folder, _direct(world_images=folder, image_fit=fit, review=True)
+    return folder, _direct(world_images=folder, image_fit=fit, review=True, **kw)
 
 
 def test_a_new_image_of_your_own_for_one_shot(studio, monkeypatch):
@@ -275,6 +275,30 @@ def test_a_new_image_crops_around_the_face_or_extends(studio, monkeypatch):
     json.dump(p, open(os.path.join(d, "plan.json"), "w"))
     assert st._review_fit(name, "added", "tall.png", "extend")["fit"] == "crop"
     assert st._review_images(name)["extend"] is False
+
+
+def test_the_artist_goes_into_a_new_image_too(studio, monkeypatch):
+    """Single Artist in your images: every swapped image can be fixed, and a new image gets the artist,
+    face and hair by default, or the whole artist in a new outfit when asked."""
+    st, q, posted = studio
+    from fv import critic
+    monkeypatch.setattr(critic, "ask", lambda *a, **k: None)  # no vision model: face and hair everywhere
+    folder, res = _own_images(monkeypatch, artist_path=_photo())
+    d, name = res["run_dir"], os.path.basename(res["run_dir"])
+    run = st._run(name)
+    sung = [s["n"] for s in run["shots"] if s["kind"] == "sing"]
+    assert set(sung) <= set(run["review"]["remake"])  # the artist was drawn in: Fix image works
+    _faces(monkeypatch)
+    assert st._review_images(name)["artist"] is True
+    assert st._review_fit(name, "world", "face_1.png", "crop")["artist"] is True
+    assert st._review_fit(name, "world", "place_0.png", "crop")["artist"] is False  # nobody to swap
+    posted.clear()
+    st._remake(name, [{"n": sung[0], "image": "face_2.png", "src": "world", "swap": "body"}])
+    g = next(g for g in posted if "SaveImage" in _types(g))
+    enc = [n["inputs"]["prompt"] for n in g.values() if n["class_type"] == "TextEncodeQwenImage21"]
+    assert len(enc) == 1 and "Dress them in clothes that suit this place." in enc[0]
+    p = json.load(open(os.path.join(d, "plan.json")))
+    assert p["review"]["rounds"][0]["items"][0]["swap"] == "body"
 
 
 def test_cancel_a_director_still_planning(studio, monkeypatch):
