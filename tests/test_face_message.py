@@ -1,5 +1,5 @@
 """When the cut can't face-align its flashes, it says why, and the take check runs without OpenCV's
-face files. Reported Oct 31 by pxl-pshr: in a run
+face files. Reported Oct 31 by a tester: in a run
 whose clips all failed (SageAttention), the console said "this OpenCV build has no Haar cascades
 ... pip install opencv-python<5", though OpenCV 4.13 was fine, and sent them the wrong way.
 

@@ -387,7 +387,7 @@ def _progress(pid: str, rec: dict) -> dict:
             done.add("listen"); done.add("load"); last_t = ts
         if "[OneShotMV] World images:" in m:
             done.update({"listen", "images"}); last_t = ts
-        if "[OneShotMV] Theme:" in m:
+        if "[OneShotMV] World: " in m or "[OneShotMV] Theme:" in m:  # older Directors logged "Theme:"
             done.update({"listen", "load", "world"}); last_t = ts
         if "new roles:" in m:
             done.update({"listen", "load", "world", "roles"}); last_t = ts

@@ -486,7 +486,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             log(f"[OneShotMV] images first: {len(first)} jobs queued, {len(p['review']['held'])} held for your review")
         log(f"[OneShotMV] queueing {len(first)} jobs")
         ids = queue_chain_front([g for _, g in first], server_url())
-    summary = (f"OneShot MV run '{run_id}': {pack} / {fmt} / {label}\n"
+    who_sings = "your images" if imgs is not None else ("Single Artist" if pack == "artist" else "Crowd")
+    summary = (f"OneShot MV run '{run_id}': {who_sings} / {fmt} / {label}\n"
                + (themes.summary(bible) + "\n" if bible else "") + emap +
                f"window {p['song_t0']:.2f}-{p['song_t1']:.2f}s at {p['tempo']} BPM, "
                f"{len(p.get('shots', []))} shots, {len(p['renders'])} renders, {len(jobs)} jobs "
@@ -578,19 +579,28 @@ def plan_preview(p: dict, queued: bool = True) -> str:
                 used.add(c["char"])
             ga = ", ".join(x for x in (ck.get("gender", ""), str(ck.get("age", "") or "")) if x)
             who = f"{ck.get('role') or c.get('who', '')}" + (f" ({ga})" if ga else "") if ck else c.get("who", "")
+            if c.get("artist_edit"):
+                who = "the artist"
             where, wear = ck.get("place", ""), ck.get("wear", "")
         else:
             who, where, wear = "?", "", ""
         lines.append(f"{head}  {who}" + (f" | {wear}" if wear else "") + (f" | {where}" if where else ""))
-    chars = th.get("characters") or []
+    artist = any(c.get("artist_edit") for c in cast.values())
+    chars = [] if artist else th.get("characters") or []  # a Single Artist sings every shot
     left = [str(ch.get("role") or ch.get("who", "").split(",")[0]) for i, ch in enumerate(chars) if i not in used]
     if left:
         lines.append("")
         lines.append(f"In the World but not in this video ({len(left)}): " + ", ".join(left[:30]))
     lines.append("")
-    lines.append("To change it: edit the World line (theme). The characters it names are cast first, in the order "
-                 "it names them; say who leads, where and in what. The same seed keeps this cast; a new seed "
-                 "re-casts.")
+    if p.get("world_images"):
+        lines.append("To change it: change the images or image_order; a new seed changes the order and the cut.")
+    elif artist:
+        lines.append("To change it: a new seed changes the outfits and places; the artist comes from artist_photo "
+                     "or artist_description.")
+    else:
+        lines.append("To change it: edit the World line. The characters it names are cast first, in the order it "
+                     "names them; say who leads, where and in what. The same seed keeps this cast; a new seed "
+                     "re-casts.")
     return "\n".join(lines)
 
 

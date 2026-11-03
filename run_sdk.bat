@@ -19,8 +19,9 @@ if errorlevel 1 goto :failed
 if not "%~1"=="" goto :withargs
 set "SONG="
 set /p "SONG=Song file (drag it into this window, then Enter): "
+if not defined SONG goto :nosong
 set "SONG=%SONG:"=%"
-if "%SONG%"=="" goto :failed
+if "%SONG%"=="" goto :nosong
 set "THEME="
 set /p "THEME=World line (Enter for none): "
 set "SECS=30"
@@ -30,6 +31,11 @@ goto :end
 
 :withargs
 "%PY%" sdk_run.py %*
+goto :end
+
+:nosong
+echo.
+echo No song given: drag a song file into this window next time.
 goto :end
 
 :failed

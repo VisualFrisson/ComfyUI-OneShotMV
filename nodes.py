@@ -76,6 +76,7 @@ def _save_image_input(image) -> str:
 class FVLoadImagePath:
     """Load an image from a path. Unlike Load Image it does not check the file when the job is
     queued, so it can read a file an earlier job in the same queue will write."""
+    DESCRIPTION = "Loads an image from a path (for the Director's jobs)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -99,6 +100,7 @@ class FVLoadImagePath:
 class FVLoadVideoPath:
     """Frames of a video from a path (no check at queue time). Center-cropped to width x height
     (0 = keep), resampled to force_fps (0 = keep), starting at start_seconds."""
+    DESCRIPTION = "Loads a video from a path (for the Director's jobs)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -163,6 +165,7 @@ class FVLoadVideoPath:
 
 class FVLoadAudioPath:
     """Audio from a WAV path (seek + duration; silence past the end)."""
+    DESCRIPTION = "Loads audio from a path (for the Director's jobs)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -191,104 +194,99 @@ class FVLoadAudioPath:
 class FVDirector:
     """OneShot MV in one press: a song and a World line in, a music video out. Analyses the song,
     writes the World's cast, plans the cut and queues every render plus the final assembly."""
+    DESCRIPTION = ("A song and a World line (or a folder of your images) in, a lip-synced music video out: "
+                   "plans, casts and queues the whole run.")
 
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
             "audio": ("AUDIO",),
             "world": ("STRING", {"default": "", "multiline": True,
-                      "tooltip": "The world of the video in a line or two, e.g. 'a 1965 airline: pilots, "
-                                 "stewardesses and passengers, warm cabin light'. It sets who sings, what they "
-                                 "wear, the places, the light and the grade. Characters you describe keep your "
-                                 "words; 'no men', 'present day' or 'no people, all robots' are rules. Empty = "
-                                 "invented people in close-ups. Written once by Gemma 3 and cached."}),
+                      "tooltip": "The World in a line or two, e.g. 'a 1965 airline: pilots, stewardesses and "
+                                 "passengers, warm cabin light'. It sets the people, what they wear, the places, "
+                                 "the light and the grade. People you describe keep your words, and rules like "
+                                 "'no men', 'present day' or 'no people, all robots' are kept. Empty: invented "
+                                 "people in close-ups."}),
             "world_images": ("STRING", {"default": "",
-                             "tooltip": "Instead of a World line: a folder of your own finished images (a path on "
-                                        "this computer, or a folder inside ComfyUI's input or output folder). The "
-                                        "image stage is skipped: images with a face sing, the rest become cutaways, "
-                                        "and images that aren't the video's shape are cropped around the face "
-                                        "(or extended, see image_fit). "
-                                        "The World line and cast are then not used."}),
+                             "tooltip": "Instead of a World line: a folder of your own images (a path on this "
+                                        "computer, or a folder inside ComfyUI's input or output folder). Images "
+                                        "with a face sing, the rest become cutaways. The World line and cast are "
+                                        "then not used."}),
             "image_order": (["in order", "random order"], {"default": "in order",
                             "tooltip": "World images: by file name, or shuffled. Images repeat when there are more "
                                        "shots than images."}),
             "image_fit": (list(fv_world_images.FITS), {"default": "crop",
-                          "tooltip": "World images that aren't the video's shape. crop: cut to the shape around the "
-                                     "face, nothing drawn in. extend: the whole image kept; one far off the shape "
-                                     "(a 2:3 photo in 16:9) gets new edges drawn by Qwen-Image 2.1 (its licence is "
-                                     "reported to be research-only), one close to it is cropped a little. With "
-                                     "professional on, images are always cropped."}),
+                          "tooltip": "World images that aren't the video's shape. crop: cut around the face. "
+                                     "extend: keep the whole image while Qwen-Image 2.1 draws the missing sides (its "
+                                     "licence is reported to be research-only). With professional on, always crop."}),
             "cast": (["crowd", "single artist"], {"default": "crowd",
                      "tooltip": "crowd: a different invented person sings each line. single artist: one person "
-                                "sings every line, in the World's outfits and places: connect a photo of them to "
-                                "artist_photo (only of yourself or someone who agreed), or describe a new one in "
-                                "artist_description"}),
+                                "sings every line, in the World's outfits and places, from a photo (artist_photo) "
+                                "or a description (artist_description)."}),
             "seconds": ("FLOAT", {"default": 30.0, "min": 0.0, "max": 600.0, "step": 0.5,
                                   "tooltip": "Length of the video; 0 = the whole song"}),
             "start": ("FLOAT", {"default": -1.0, "min": -1.0, "max": 3600.0, "step": 0.01,
                                 "tooltip": "Song time to start at; -1 = pick the strongest stretch"}),
-            "format": (formats.FORMAT_NAMES, {"default": "16:9"}),
+            "format": (formats.FORMAT_NAMES, {"default": "16:9",
+                       "tooltip": "16:9 (1920×1080), 9:16 for phones (1080×1920) or 1:1 (1080×1080)"}),
             "quality": (formats.PRESET_NAMES, {"default": "quality",
                         "tooltip": "quality: 50 fps clips, the sharpest detail and the best lip sync. fast: "
                                    "smaller 25 fps clips in fewer steps, for checking the cast and the cut"}),
             "models": (["auto", "24gb", "full"], {"default": "auto",
-                       "tooltip": "Which model files to use. 24gb: the fp8 set (models.json), made for 24 GB GPUs. "
-                                  "full: the bf16 set (models_full.json), for 48 GB or more. auto: the full set on "
-                                  "a 48 GB+ GPU when its files are installed, otherwise the 24 GB set."}),
+                       "tooltip": "24gb: fp8 files for 24 GB GPUs. full: bf16 files for 48 GB or more. auto: full "
+                                  "on a 48 GB+ GPU when its files are installed, otherwise 24gb."}),
             "professional": ("BOOLEAN", {"default": False,
-                             "tooltip": "For professional use: Single Artist's portraits and looks are made by "
-                                        "Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1, whose licence "
-                                        "is reported to be research-only (faces match a little less closely), and "
-                                        "World images are cropped, never extended. Other models keep their own "
-                                        "licences: check each for your use (README, Models and licences)."}),
+                             "tooltip": "For paid or client work: Single Artist uses Qwen-Image-Edit 2511 "
+                                        "(Apache-2.0) instead of Qwen-Image 2.1, whose licence is reported to be "
+                                        "research-only (2511 matches faces a little less closely), and World images "
+                                        "are always cropped. Check the other models' licences too (README, Models "
+                                        "and licences)."}),
             "preview_only": ("BOOLEAN", {"default": False,
-                             "tooltip": "On: plan the video and list every shot (time, energy, who, wearing what, "
-                                        "where) in the summary, rendering nothing. Check it, edit the World line if "
-                                        "needed, then turn this off and queue again (the song analysis and the World "
-                                        "are cached, so it starts faster)"}),
+                             "tooltip": "On: plan the video and list every shot in the summary, rendering nothing. "
+                                        "Turn it off and queue again to render; the song analysis and the World are "
+                                        "cached."}),
         }, "optional": {
-            "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1}),
+            "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1,
+                     "tooltip": "Same seed, same cast and shots; change it for new ones"}),
             "cuts_low": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["low"],
                          "tooltip": "How low-energy sections (intro, breaks, a quiet outro) are cut"}),
             "cuts_medium": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["medium"],
                             "tooltip": "How medium-energy sections (verses, the build into a drop) are cut"}),
             "cuts_high": (plan.CUT_CHOICES, {"default": plan.CUT_DEFAULTS["high"],
                           "tooltip": "How high-energy sections (choruses, drops) are cut. 'To the music' cuts "
-                                     "on the beat to a new face in the same spot: subtle about every half bar, "
-                                     "intense about every beat"}),
+                                     "on the beat to a new face (Single Artist: a new look) in the same spot: subtle "
+                                     "about every half bar, intense about every beat"}),
             "audio_fx": (["none", "subtle", "intense"], {"default": "subtle",
-                         "tooltip": "Effects that hit with the drums: flash, zoom punch, glow, colour split. "
-                                    "subtle tones them down; intense is stronger and adds a twitch (jumps of up "
-                                    "to 8 px with motion blur) on the big hits; none leaves the picture alone "
-                                    "(the colour grade and film grain still apply)"}),
+                         "tooltip": "Effects on the drum hits: flash, zoom punch, glow, color split. subtle: "
+                                    "gentle. intense: stronger, with a shake on the big hits. none: off (the color "
+                                    "grade and grain stay)"}),
             "crowd": (["auto", "on", "off"], {"default": "auto",
                       "tooltip": "People behind the singers. auto: a soft-focus crowd when the World is a packed "
-                                 "spectacle (arena, stadium, crowded stands), otherwise nobody else in frame; "
-                                 "on / off: always / never"}),
+                                 "spectacle (arena, stadium, crowded stands), otherwise nobody else in frame "
+                                 "(Single Artist: only with on). on / off: always / never"}),
             "cast_order": (["as written", "mixed"], {"default": "as written",
                            "tooltip": "as written: the characters the World line names are cast first, in the "
                                       "order it names them (write who leads first); mixed: shuffled"}),
             "broll_share": ("FLOAT", {"default": 0.125, "min": 0.0, "max": 0.5, "step": 0.025,
-                            "tooltip": "Share of shots replaced by cutaways (nobody singing): first where lip sync "
-                                       "stayed weak, then in instrumental gaps; never on the drop. 0 = off"}),
+                            "tooltip": "Share of shots that become cutaways with nobody singing: first where lip "
+                                       "sync stayed weak, then in instrumental gaps, never on the drop. 0 = none"}),
             "qc_retries": ("INT", {"default": 2, "min": 0, "max": 3,
-                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, a cut or drift away "
-                                      "from the shot, and lip sync with SyncNet if its weights are installed) and "
-                                      "re-roll bad ones, up to this many rounds and at most doubling the render time; "
-                                      "0 = off"}),
+                           "tooltip": "Check every take (missing, frozen, blown out, dead mouth, drifting off the "
+                                      "shot, and lip sync if the SyncNet weights are installed) and shoot bad ones "
+                                      "again, up to this many rounds; at most doubles the render time. 0 = off, which "
+                                      "also turns off the cutaways, the vision check and review_images"}),
             "run_name": ("STRING", {"default": "", "tooltip": "Folder name for the run; empty = made from the settings"}),
-            "artist_photo": ("IMAGE", {"tooltip": "Single artist: a photo of the singer (a Load Image node). Use "
-                                                  "only a photo of yourself or of someone who agreed to it. Best: one "
-                                                  "sharp photo of just them, facing the camera, in soft even light, "
-                                                  "the whole face showing"}),
+            "artist_photo": ("IMAGE", {"tooltip": "Single artist: a photo of the singer, only of yourself or of "
+                                                  "someone who agreed to it. Best: one sharp photo of just them, "
+                                                  "facing the camera in soft even light, the whole face showing"}),
             "artist_description": ("STRING", {"default": "", "multiline": True,
                                    "tooltip": "Single artist without a photo: describe a new person, e.g. 'a singer "
-                                              "in her late twenties with a shaved head and gold hoops'. The tool "
-                                              "invents them and keeps them the same in every shot"}),
+                                              "in her late twenties with a shaved head and gold hoops'. They look "
+                                              "the same in every shot"}),
             "review_images": ("BOOLEAN", {"default": False,
-                              "tooltip": "Make the images first: the run stops once every still is made, so you can "
-                                         "check them. The Studio's Rendering screen re-makes any you pick, with a "
-                                         "note, then makes the video."}),
+                              "tooltip": "Stop once every image is made, so you can check them. Then open the video "
+                                         "in the Studio (the OneShot MV button, then Your videos) to fix any image "
+                                         "and make the video. Needs qc_retries above 0."}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -308,6 +306,8 @@ class FVDirector:
         _reload()
         artist_path, described = "", ""
         if (world_images or "").strip():
+            if cast == "single artist":
+                print("[OneShotMV] World images: Single Artist is off; your images are the cast")
             cast = "crowd"  # the images are the cast
         if cast == "single artist":
             if artist_photo is not None:
@@ -315,8 +315,9 @@ class FVDirector:
             elif (artist_description or "").strip():
                 described = artist_description.strip()
             else:
-                raise ValueError("Single artist needs a photo of the artist (connect a Load Image to artist_photo) "
-                                 "or a description of a new one in artist_description.")
+                raise ValueError("Single artist needs a photo or a description: un-bypass the Artist photo node "
+                                 "(or connect a Load Image to artist_photo), or describe a new person in "
+                                 "artist_description.")
         wf = audio["waveform"][0].detach().cpu().float().numpy()
         res = director.direct(audio=wf, sr=int(audio["sample_rate"]), out_root=folder_paths.get_output_directory(),
                               theme=world or "", fmt=format, preset=quality, seconds=seconds, start=start,
@@ -354,15 +355,23 @@ def _stoppable_log():
 class FVAssemble:
     """Cuts a OneShot MV run together on the beat, with audio-reactive FX and the finish.
     Queued automatically as the last job of a run; queue it again to re-cut."""
+    DESCRIPTION = "Cuts a run together with FX and the finish. Run it again to re-cut; nothing re-renders."
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"run_dir": ("STRING", {"default": ""}),
-                             "filename_prefix": ("STRING", {"default": "oneshot-mv/final"})},
-                "optional": {"fx_intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.05}),
+        return {"required": {"run_dir": ("STRING", {"default": "",
+                                         "tooltip": "The run folder, e.g. oneshot-mv/runs/<run> (the Director "
+                                                    "prints it)"}),
+                             "filename_prefix": ("STRING", {"default": "oneshot-mv/final",
+                                                 "tooltip": "Not used for the file name: the new cut replaces "
+                                                            "final_<format>.mp4 in the run folder"})},
+                "optional": {"fx_intensity": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 3.0, "step": 0.05,
+                                              "tooltip": "Scales every effect: 0 none, 1 normal, up to 3"}),
                              "audio_fx": (["from the run", "none", "subtle", "intense"], {"default": "from the run",
-                                          "tooltip": "Re-assemble with another audio-reactive FX level"}),
-                             "finish": ("BOOLEAN", {"default": True})}}
+                                          "tooltip": "Cut again with another audio-reactive FX level"}),
+                             "finish": ("BOOLEAN", {"default": True,
+                                        "tooltip": "The color grade, grain and vignette; off keeps the clips' own "
+                                                   "colors"})}}
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("preview", "video_path")
@@ -402,6 +411,8 @@ class FVQC:
     """Checks every take of a run (missing, frozen, blown exposure, dead mouth), re-rolls the bad
     ones with new seeds and queues itself again; when everything passes (or retries run out) it
     keeps the best take of each shot and queues the final Assemble."""
+    DESCRIPTION = ("Checks every take, lip sync included, shoots bad ones again, then queues the cut (the "
+                   "Director queues it).")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -450,6 +461,7 @@ class FVRunResult:
     """Where a run is, and its final video once it is finished, as job outputs. For API and
     Comfy SDK clients (sdk_run.py): queued after a Director, it runs once the run's own stages
     (which jump the queue) are done."""
+    DESCRIPTION = "Where a run is, and its finished video once it's done (the SDK uses it)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -495,6 +507,7 @@ class FVCritic:
     against what its character should be (gender, facial hair, glasses, other people, the head in
     frame, writing, anything from after the World's period, the outfit). Bad ones are re-made with
     new seeds and a line that says what to fix, and checked again; then the clips are queued."""
+    DESCRIPTION = "Checks every image of a run and makes the wrong ones again (the Director queues it)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -522,6 +535,7 @@ class FVLipSyncScore:
     """Scores a run's lip sync with SyncNet: per take, the confidence (higher = the mouth follows
     the words) and the offset (25 fps frames; negative = the mouth leads the voice). Writes
     <run>/lipsync.json; the run itself is not changed. Needs the SyncNet weights (see README)."""
+    DESCRIPTION = "Scores a finished run's lip sync with SyncNet, take by take."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -554,6 +568,7 @@ class FVFaceMatch:
     """Moves and scales an edited keyframe so its face sits where the reference frame's face is.
     Image edits asked for a new outfit tend to pull the camera back; a pose-matched look made
     from such a keyframe stays smaller and higher than the lead, so the cut doesn't match."""
+    DESCRIPTION = "Puts a look's face where its lead's face is (Single Artist's looks)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -572,6 +587,7 @@ class FVFaceMatch:
 class FVFinish:
     """The OneShot MV finish on any frames: learned grade, diffusion, halation, contrast,
     gate vignette, grain (the settings every run uses)."""
+    DESCRIPTION = "Applies the finish (color grade, grain, vignette) to any frames."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -596,6 +612,7 @@ class FVFitAspect:
     """An image brought to another shape without cropping: the short side is extended with its own
     edge pixels (Single Artist with Qwen-Image 2.1, whose output takes image 1's shape: a tall phone
     photo would otherwise be centre-cropped to 16:9 and lose the head)."""
+    DESCRIPTION = "Brings an image to the video's shape without cropping, so a tall photo keeps its head."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -626,6 +643,8 @@ class FVExtendCanvas:
     inside width x height and centred, the new edges are plain grey; `fill` marks the new edges (reaching
     a little into the image) and `keep` is the image with a soft edge, to paste the original pixels back
     over the redrawn canvas."""
+    DESCRIPTION = ("Puts an image on a canvas of the video's shape, with masks to paste the original back (World "
+                   "images with Extend).")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -646,6 +665,8 @@ class FVOffloadToCPU:
     VRAM. With --highvram ComfyUI parks them on the GPU, which doubles a 22B LTX model's
     footprint once LoRAs are applied; on a 96 GB card that spills into shared memory and
     sampling runs ~30x slower."""
+    DESCRIPTION = ("Keeps LoRA weight backups in system RAM instead of on the GPU (a memory helper for the "
+                   "Director's jobs).")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -664,6 +685,7 @@ class FVOffloadToCPU:
 class FVFreeMemory:
     """Unloads every model and clears ComfyUI's cache after this job (asks the server through its
     own /free endpoint). The Director queues one between model groups so RAM stays bounded."""
+    DESCRIPTION = "Frees GPU memory between a run's stages (a memory helper for the Director's jobs)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -710,9 +732,10 @@ class FVFreeMemory:
 
 class FVKeep:
     """Keeps models loaded across jobs that don't use them. ComfyUI drops a cached model when a
-    job without its loader runs (a QC pass, a Klein edit), and LTX-2.3 then reloads from disk
+    job without its loader runs (a QC pass, an image edit), and LTX-2.3 then reloads from disk
     (5-9 min on a slow drive). The Director wires LTX's loaders in here in those jobs: they
     come from the cache instantly, and the model stays loaded for the next video job."""
+    DESCRIPTION = "Keeps a run's models loaded between jobs (a memory helper for the Director's jobs)."
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -730,14 +753,17 @@ class FVKeep:
 
 
 class FVTheme:
-    """Preview what a theme turns into before a run: the characters, outfits, places, light,
+    """Preview what a World line turns into before a run: the characters, outfits, places, light,
     in-scene actions and colour grade the Director will cast from (Gemma 3, the LTX-2.3 text
     encoder). The result is cached, so a Director run with the same theme and seed reuses it."""
+    DESCRIPTION = ("Shows what a World line turns into (characters, outfits, places, light, grade) before you "
+                   "spend a run on it.")
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"theme": ("STRING", {"default": "", "multiline": True}),
-                             "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1})}}
+        return {"required": {"theme": ("STRING", {"default": "", "multiline": True, "tooltip": "A World line"}),
+                             "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31 - 1,
+                                      "tooltip": "Same seed, same World (cached)"})}}
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("world",)
@@ -749,8 +775,8 @@ class FVTheme:
         _reload()
         b = fv_theme.expand(theme, seed=seed, out_root=folder_paths.get_output_directory())
         if not b:
-            return {"ui": {"text": ["(no theme)"]}, "result": ("",)}
-        lines = [f"Theme: {b['theme']}  ({b.get('source')}, grade: {b.get('grade')})"]
+            return {"ui": {"text": ["(no World line)"]}, "result": ("",)}
+        lines = [f"World: {b['theme']}  (grade: {b.get('grade')})"]
         if b.get("camera"):
             lines.append(f"camera: {b['camera']}")
         chars = b.get("characters") or []
@@ -805,5 +831,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FVLoadAudioPath": "OneShot MV: Load Audio (path)",
     "FVLipSyncScore": "OneShot MV: Lip Sync Score",
     "FVFaceMatch": "OneShot MV: Face Match",
-    "FVTheme": "OneShot MV: Theme Preview",
+    "FVTheme": "OneShot MV: World Preview",
 }

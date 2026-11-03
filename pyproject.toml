@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-oneshot-mv"
-description = "OneShot MV: one song, one prompt, one shot, a full music video. A song and a one-line World in, a beat-cut music video out, every line sung by a new invented person (Krea 2 + LTX, all local)."
-version = "0.1.0"
+description = "OneShot MV: a song and a one-line World in, a beat-cut, lip-synced music video out. A new invented singer for every line, one Single Artist from a photo or a description, or your own images brought to life. Krea 2, LTX-2.3 and Gemma 3, all local in ComfyUI."
+version = "1.0.0"
 license = { file = "LICENSE" }
 dependencies = ["numpy", "opencv-python", "imageio-ffmpeg"]
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""OneShot MV, driven by the Comfy SDK: one song and one World line in, a music video out.
+"""OneShot MV, driven by the Comfy SDK: one song and one World line (or a folder of your images) in, a
+music video out. The SDK makes Crowd videos and videos from your own images; Single Artist is in the
+Studio and the workflow.
 
 The Comfy SDK talks the Comfy API v2. Comfy Cloud doesn't install custom node packs yet,
 so point it at your own ComfyUI through Comfy's open-source comfy-api-proxy, which gives a
@@ -121,7 +123,8 @@ def main() -> int:
                     'stewardesses and passengers; the cabin, the tarmac; warm afternoon light"')
     ap.add_argument("--world-images", default="", help="instead of --world: a folder of your own images on the "
                     "ComfyUI machine (images with a face sing, the rest become cutaways)")
-    ap.add_argument("--image-order", default="in order", choices=["in order", "random order"])
+    ap.add_argument("--image-order", default="in order", choices=["in order", "random order"],
+                    help="world images by file name, or shuffled")
     ap.add_argument("--image-fit", default="crop", choices=["crop", "extend"],
                     help="world images not in the video's shape: crop around the face, or extend "
                     "(Qwen-Image 2.1 draws the missing sides)")
@@ -129,22 +132,24 @@ def main() -> int:
     ap.add_argument("--start", type=float, default=-1.0, help="song time to start at; -1 = the strongest stretch")
     ap.add_argument("--format", default="16:9", choices=["16:9", "9:16", "1:1"])
     ap.add_argument("--quality", "--preset", dest="quality", default="quality", choices=["quality", "fast"])
-    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=1, help="same seed, same cast and shots; change it for new ones")
     ap.add_argument("--fx", default="subtle", choices=["none", "subtle", "intense"],
-                    help="audio-reactive effects (flash, zoom punch, glow, colour split)")
+                    help="audio-reactive effects (flash, zoom punch, glow, color split)")
     ap.add_argument("--cuts-low", default=CUTS[0], choices=CUTS, help="cuts in low-energy sections")
     ap.add_argument("--cuts-medium", default=CUTS[1], choices=CUTS, help="cuts in medium-energy sections")
     ap.add_argument("--cuts-high", default=CUTS[2], choices=CUTS, help="cuts in high-energy sections")
-    ap.add_argument("--cast-order", default="as written", choices=["as written", "mixed"])
-    ap.add_argument("--crowd", default="auto", choices=["auto", "on", "off"])
+    ap.add_argument("--cast-order", default="as written", choices=["as written", "mixed"],
+                    help="the characters the World line names come first, in order; or shuffled")
+    ap.add_argument("--crowd", default="auto", choices=["auto", "on", "off"],
+                    help="people behind the singers; auto: only when the World is a packed spectacle")
     ap.add_argument("--models", default="auto", choices=["auto", "24gb", "full"],
                     help="24gb: the fp8 model set; full: the bf16 set (48 GB+ GPUs); auto picks by GPU memory")
     ap.add_argument("--professional", action="store_true",
-                    help="for professional use: Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1 for "
-                    "a single artist, and world images cropped, never extended")
-    ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become b-roll cutaways")
-    ap.add_argument("--qc", type=int, default=2, help="take-QC re-roll rounds (0 = off)")
-    ap.add_argument("--run-name", default="")
+                    help="for paid or client work: world images are cropped, never extended (no Qwen-Image 2.1)")
+    ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become cutaways, 0 to 0.5")
+    ap.add_argument("--qc", type=int, default=2,
+                    help="take-check rounds, 0 to 3 (0 = off, and no cutaways or vision check)")
+    ap.add_argument("--run-name", default="", help="folder name for the run; empty = made from the settings")
     ap.add_argument("--preview", action="store_true", help="plan and print the shot list; render nothing")
     ap.add_argument("--recut", default="", metavar="RUN_DIR", help="re-cut a finished run at --fx")
     ap.add_argument("--out", default="oneshot_mv_out", help="where the MP4 is saved")

@@ -26,7 +26,7 @@ ELEMENTS = ("A hidden northern valley at golden hour where the land itself has c
             "fringe, a glacier creature of clear blue ice with meltwater running down its sides, a moss creature with "
             "a back of ferns, a tide creature of sea foam and kelp with sea-glass eyes; a blue glacier edge, a mossy "
             "old-growth forest, a rocky tide line; low golden-hour sun, long blue shadows")
-NO_MEN = ("A sunny beach in modern time, on a hot day, every single character is a woman in a swimsuit. No men. "
+NO_MEN = ("A sunny beach in modern time, on a hot day, every single character is a woman. No men. "
           "All characters are from 2020s.")
 VILLAGE = ("A frozen fishing village in 1890, played straight: a net mender in her seventies with a weathered face and "
            "a grey bun, the harbour master in a brass-buttoned coat; the frozen harbour, the smokehouse; low winter sun")
@@ -95,9 +95,9 @@ def _cast(bible, n=6):
     ("A 1965 airline, nothing modern: pilots, stewardesses and passengers", {"cast": "people", "gender": "", "now": False}),
     ("a barbershop quartet contest in 1910, men only", {"cast": "people", "gender": "man", "now": False}),
     ("a car factory run entirely by robots, no humans", {"cast": "creatures", "gender": "", "now": False}),
-    # Oct 31: the author's own line came out 6 women and 6 men
-    ("A sunny beach in modern day, on a hot day. Only sexy females.", {"cast": "people", "gender": "woman", "now": True}),
-    ("only beautiful young women", {"cast": "people", "gender": "woman", "now": False}),
+    # "only" with a word or two before the gender (one such line once came out 6 women and 6 men)
+    ("A sunny beach in modern day, on a hot day. Only young females.", {"cast": "people", "gender": "woman", "now": True}),
+    ("only grey-haired older women", {"cast": "people", "gender": "woman", "now": False}),
     ("a boxing gym, all grown men", {"cast": "people", "gender": "man", "now": False}),
     ("A ball where all the men and women dance", {"cast": "people", "gender": "", "now": False}),
     ("all women and men", {"cast": "people", "gender": "", "now": False}),

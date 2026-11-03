@@ -121,7 +121,12 @@ def fixes(p: dict, model_set: str = "") -> list[str]:
                          f"{', '.join(cs)}. If it's installed, it didn't load: look for IMPORT FAILED next to "
                          "it in the ComfyUI console when ComfyUI starts.")
         else:
-            lines.append(f"Update ComfyUI: this one has no {', '.join(cs)} node.")
+            ours = [c for c in cs if c.startswith("FV")]  # OneShot MV's own: new nodes load only at startup
+            if ours:
+                lines.append(f"Restart ComfyUI: OneShot MV was updated, and its new {', '.join(ours)} "
+                             f"node{'s load' if len(ours) > 1 else ' loads'} only when ComfyUI starts.")
+            if len(ours) < len(cs):
+                lines.append(f"Update ComfyUI: this one has no {', '.join(c for c in cs if c not in ours)} node.")
     for ct, k, v in p.get("values") or []:
         if k == "sampler_name" and v in SAMPLER_PACKS:
             pack = SAMPLER_PACKS[v]
@@ -139,8 +144,9 @@ def fixes(p: dict, model_set: str = "") -> list[str]:
         which = {"24gb": " of the 24 GB set", "full": " of the full set"}.get(model_set, "")
         listed = ", ".join(f"{f} (models/{d})" if d else f for f, d in sorted(files.items()))
         lines.append(f"Download the model file{'s' if len(files) > 1 else ''}{which} that ComfyUI can't find: "
-                     f"{listed}. The README's model tables have the links. A file saved under another name counts "
-                     "as missing: rename it, or change its name in fv/models.json.")
+                     f"{listed}. The Models card (or the README's model tables) has the links. A file saved under "
+                     "another name counts as missing: rename it, or change its name in fv/models.json "
+                     "(fv/models_full.json for the full set).")
     return lines
 
 

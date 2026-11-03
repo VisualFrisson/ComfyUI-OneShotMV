@@ -79,9 +79,12 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
     leads: the performers with a lead shot of their own, cast first (themed runs), so the singers
     are all different characters before the looks on the drop take theirs."""
     out = _cast_voice(pack, n, seed, sizes, fmt, leads, phases)
-    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")
+    # the World: a Crowd's whole bible, or the line and camera a Single Artist's pack keeps (apply_theme)
+    world = (pack.get("casting") or {}).get("theme") or (pack.get("casting") or {}).get("world") or {}
+    camera = world.get("camera")
     from .critic import check_era
-    era = check_era(((pack.get("casting") or {}).get("theme") or {}).get("theme") or "")
+    era = check_era(world.get("theme") or "")
+    lock = era_line(world.get("theme") or "")  # "Hair, clothes and every object ... period-accurate for 1813"
     for c in out:
         creature = (c.get("check") or {}).get("kind") == "creature"
         c["portrait"] = finish_prompt(c["portrait"], c.get("size", "close"), camera=camera, creature=creature)
@@ -90,7 +93,12 @@ def cast_voice(pack: dict, n: int, seed: int, sizes: list[str] | None = None, fm
                 c[key] = finish_prompt(c[key], c.get("size", "close"), camera=camera)
         if creature:
             continue  # no crowd and no period-dressed people behind a creature
-        if c.get("artist_edit"):  # a Single Artist's crowd only when it's turned on (auto: the singer alone)
+        if c.get("artist_edit"):
+            if lock:  # the period lock a Crowd's portraits get (_cast_theme), on every image of the artist
+                for key in ("portrait", "draft", "portrait_a", "twin_prompt"):
+                    if c.get(key):
+                        c[key] = f"{c[key].rstrip()} {lock}"
+            # a Single Artist's crowd only when it's turned on (auto: the singer alone)
             if (pack.get("casting") or {}).get("crowd_mode") == "on":
                 for key in ("portrait", "draft", "portrait_a"):
                     if c.get(key):
@@ -807,6 +815,9 @@ def apply_theme(pack: dict, bible: dict) -> dict:
         c["places"] = bible["places"]
         c["background"] = [_place_noun(pl) + " behind" for pl in bible["places"]]
         c["actions"] = {"medium": SCENE_ACTIONS["medium"], "wide": bible["actions"]}
+        # the World's line and camera, for the period lock and the camera (cast_voice); not under "theme",
+        # which would cast the World's characters instead of the artist
+        c["world"] = {"theme": bible.get("theme", ""), "camera": bible.get("camera")}
     else:
         p["casting"] = {"theme": bible, "framing": c.get("framing"),
                         "framing_landscape": c.get("framing_landscape"), "negative": neg,

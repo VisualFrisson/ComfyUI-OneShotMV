@@ -250,7 +250,7 @@ def plan(p: dict, run_dir: str, pack: dict, log=print, candidates: bool = False)
         return ([], []) if candidates else []
     style = p.get("broll_style", "mix")
     creatures = ((((pack.get("casting") or {}).get("theme") or {}).get("rules") or {}).get("cast") == "creatures")
-    camera = ((pack.get("casting") or {}).get("theme") or {}).get("camera")  # the world's period camera
+    camera = ((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("camera")  # the world's period camera
     from .casting import era_line
     era = era_line(((pack.get("casting") or {}).get("theme") or p.get("theme") or {}).get("theme") or "")  # no modern cars at a 1977 rink
     drums = os.path.join(run_dir, "drums.wav")
