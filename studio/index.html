@@ -1230,7 +1230,8 @@ function refreshEstimate(){
       ep.textContent = "about " + dur(e.total_s);
       ea.textContent = "about " + mins(e.total_s / 60 + e.render_min) + " in all";
       const chars = e.parts.find(x => x.id === "cast");
-      why.textContent = imgs ? `About ${dur(e.total_s)}: the song is analysed and each image checked for a face.`
+      why.textContent = imgs ? `About ${dur(e.total_s)}: the song is analysed and each image checked for a face` +
+          (e.parts.some(x => x.id === "artist") ? ", then Gemma looks at who's in each image to see how the artist goes in." : ".")
         : !b.theme.trim() ? `About ${dur(e.total_s)}: the song is analysed and the shots planned in the house look.`
         : e.world_cached ? `About ${dur(e.total_s)}: this World is already written for this line and seed, so only the song is analysed.`
         : c.cast === "single artist" ? `About ${dur(e.total_s)}: Gemma writes the World the artist sings in. A second preview with the same line and seed is quick.`
@@ -1260,8 +1261,9 @@ const ICON_CROWD = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 
 const ICON_ONE = `<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20.5c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>`;
 // what a brief sends for who sings: only the tab that is showing counts, and none of it for a Crowd
 // or a World from images (the images are the cast)
+// with a World from your images, Single Artist goes in from a photo only (their face put into the images)
 function castOf(b){
-  const single = b.cast === SINGLE && b.world_mode !== "images", mode = b.artist_mode === "describe" ? "describe" : "photo";
+  const imgs = b.world_mode === "images", single = b.cast === SINGLE, mode = !imgs && b.artist_mode === "describe" ? "describe" : "photo";
   return {cast: single ? SINGLE : "crowd", artist_mode: mode,
           artist_image: single && mode === "photo" ? String(b.artist_image || "").trim() : "",
           artist_description: single && mode === "describe" ? String(b.artist_description || "").trim() : ""};
@@ -1285,15 +1287,17 @@ function setCast(c){
 }
 function drawCast(){
   const b = S.brief, box = $("#casts"); if (!box) return;
-  const single = b.cast === SINGLE, photo = b.artist_mode !== "describe";
-  box.innerHTML = [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line.", ICON_ONE]]
+  const single = b.cast === SINGLE, imgs = b.world_mode === "images", photo = imgs || b.artist_mode !== "describe";
+  box.innerHTML = (imgs ? [["crowd", "As they are", "The people in your images sing.", ICON_CROWD], [SINGLE, "Single Artist", "One person goes into your images and sings every line.", ICON_ONE]]
+    : [["crowd", "Crowd", "A different invented person sings each line.", ICON_CROWD], [SINGLE, "Single Artist", "One person sings every line.", ICON_ONE]])
     .map(([k, n, d, ic]) => `<button type="button" class="tier" data-c="${k}" aria-pressed="${(single ? SINGLE : "crowd") === k}"><span class="t">${ic}<b>${n}</b></span><small>${d}</small></button>`).join("");
   box.querySelectorAll(".tier").forEach(el => el.onclick = () => setCast(el.dataset.c));
   drawNotes();
   const art = $("#artist");
   art.classList.toggle("hide", !single);
   if (!single){ art.innerHTML = ""; return; }
-  art.innerHTML = `<div class="seg" role="group" aria-label="The artist" id="amode">${[["photo", "Upload a photo"], ["describe", "Describe a new artist"]].map(([k, n]) =>
+  art.innerHTML = imgs ? `<p class="note" style="margin:0 0 10px">A photo of the artist. Their face and hair go into each of your images with one person in it. Where that person is very different (another gender, a child, much older), the whole artist goes in, dressed for the place. Images with two people or nobody stay as they are.</p><div id="apane"></div>`
+    : `<div class="seg" role="group" aria-label="The artist" id="amode">${[["photo", "Upload a photo"], ["describe", "Describe a new artist"]].map(([k, n]) =>
       `<button type="button" class="opt" data-m="${k}" aria-pressed="${(photo ? "photo" : "describe") === k}">${n}</button>`).join("")}</div><div id="apane"></div>`;
   art.querySelectorAll("[data-m]").forEach(el => el.onclick = () => {
     const m = el.dataset.m;
@@ -1364,7 +1368,8 @@ function worldOf(b){
 function drawNotes(){
   const b = S.brief, wn = $("#worldnote"), rt = $("#rights"); if (!wn || !rt) return;
   if (b.world_mode === "images"){
-    wn.textContent = "Images with a face sing; the rest become cutaways.";
+    wn.textContent = b.cast === SINGLE ? "Images with a face sing, with the artist put into them; the rest become cutaways."
+      : "Images with a face sing; the rest become cutaways.";
     rt.textContent = "Use music and images you have the rights to.";
     return;
   }
@@ -1388,7 +1393,7 @@ function drawWorld(){
   $("#wdescribe").classList.toggle("hide", imgs);
   $("#wimages").classList.toggle("hide", !imgs);
   $("#wrights").classList.toggle("hide", !imgs);
-  $("#castcard").classList.toggle("hide", imgs);
+  drawCast();  // with your images: As they are, or Single Artist put into them
   drawNotes();
   if (imgs){ drawOrder(); drawFit(); lookWorld(); }
 }
@@ -1693,7 +1698,9 @@ async function viewRender(run){
 }
 // Images first is for drawn images: a described World's stills, or your own images when Extend draws their
 // missing sides (Qwen-Image 2.1; For professional use crops). Your own images only cropped are the stills.
-const reviewable = (im, brief) => !im || !!(brief && brief.image_fit === "extend" && !brief.professional);
+// images first: generated stills, extended images, or the artist put into your images (all drawn, so worth checking)
+const reviewable = (im, brief) => !im || !!(brief && ((brief.image_fit === "extend" && !brief.professional)
+  || (brief.cast === SINGLE && String(brief.artist_image || "").trim())));
 // Restart from Rendering (a made video): make it again from the same plan, straight or images first
 function restartRender(r){
   const brief = store.get("briefs", {})[r.run] || (r.form && r.form.song ? r.form : null);
@@ -1727,9 +1734,11 @@ function reviewView(r, fresh){
     const fit = im.fit === "extend" ? "the striped sides get drawn in"
       : im.face === false ? "it's cropped from the middle (no face found)"
       : im.asked === "extend" ? "it's cropped around the face (it's already close to the video's shape)" : "it's cropped around the face";
-    return `Not made yet: ${fit} when you press ${makeLabel(picked().length, swapped().length)} below.`;
+    const artist = im.swap === "body" ? ", and the whole artist goes in, newly dressed," : im.swap ? ", and the artist's face and hair go in," : "";
+    return `Not made yet: ${fit}${artist} when you press ${makeLabel(picked().length, swapped().length)} below.`;
   };
-  const hint = s => own ? "Like “keep the wall plain, no new people”"
+  const hint = s => own && r.form && r.form.cast === SINGLE && s.kind !== "broll" ? "Like “closer to the artist's face, keep the smile”"
+    : own ? "Like “keep the wall plain, no new people”"
     : s.kind === "broll" ? "Like “at dusk, wider, warmer light”" : "Like “older, in a raincoat, harder light”";
   const spares = r.shots.some(s => s.kind === "broll") ? " Some cutaways are spares: the take check keeps the ones it needs." : "";
   const how = can.size && sw.size ? "Fix any with a note or swap in another of your images"
@@ -1779,7 +1788,7 @@ function reviewView(r, fresh){
     $("#rvgo").disabled = busy; $("#rvgo").classList.toggle("primary", !(n + m)); };
   draw();
   $("#rvremake").onclick = async () => {
-    const items = picked().map(n => ({n, note: R.sel[n] || ""})).concat(swapped().map(n => ({n, image: R.img[n].name, src: R.img[n].src, fit: R.img[n].fit})));
+    const items = picked().map(n => ({n, note: R.sel[n] || ""})).concat(swapped().map(n => ({n, image: R.img[n].name, src: R.img[n].src, fit: R.img[n].fit, swap: R.img[n].swap || ""})));
     if (!items.length) return;
     try{ overlay("Changing the images", `${items.length} image${items.length > 1 ? "s" : ""}.`);
       const j = await api("review_remake", {run, items}); overlay(); store.set(reviewKey(run), {sel: {}, img: {}});
@@ -1808,11 +1817,12 @@ function imageChooser(run, shot, sung, back, done){
   ov.innerHTML = `<div class="pickbox" role="dialog" aria-modal="true" aria-labelledby="pkh">
     <div class="row"><h2 class="label" id="pkh" style="flex:1">A new image for shot ${shot}</h2><button class="btn sm ghost" id="pkx" type="button">Cancel</button></div>
     <div class="row" style="flex-wrap:wrap"><div class="seg mini" role="group" aria-label="How it fits the video" id="pkfit"></div><span class="tiny" id="pkfitnote" style="flex:1;min-width:220px"></span></div>
+    <div class="row hide" style="flex-wrap:wrap" id="pkswaprow"><div class="seg mini" role="group" aria-label="How the artist goes in" id="pkswap"></div><span class="tiny" id="pkswapnote" style="flex:1;min-width:220px"></span></div>
     <div class="pkgrid" id="pkg"><p class="muted">Loading your images…</p></div>
     <div class="row"><button class="btn sm" id="pkup" type="button">Upload an image</button><input type="file" id="pkf" accept=".png,.jpg,.jpeg,.webp" hidden><span class="tiny" id="pkmsg" role="status" style="flex:1"></span></div>
   </div>`;
   document.body.appendChild(ov);
-  let list = null, fit = "crop", busy = false;
+  let list = null, fit = "crop", swap = "face", busy = false;
   const msg = t => { ov.querySelector("#pkmsg").textContent = t; };
   const close = () => { ov.remove(); document.removeEventListener("keydown", key, true); if (back && back.isConnected) back.focus(); };
   const key = e => { if (e.key === "Escape"){ e.preventDefault(); close(); } };
@@ -1827,6 +1837,16 @@ function imageChooser(run, shot, sung, back, done){
       : fit === "extend" ? "Keeps the whole image: Qwen-Image 2.1 draws the missing sides. An image already close to the video's shape is cropped."
       : "Cropped to the video's shape around the face. Nothing is drawn in.";
     box.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { fit = b.dataset.f; drawFit(); const f = box.querySelector(`[data-f="${fit}"]`); if (f) f.focus(); });
+    // Single Artist in your images: the artist's face and hair, or the whole artist newly dressed
+    ov.querySelector("#pkswaprow").classList.toggle("hide", !list.artist);
+    if (!list.artist) return;
+    const sb = ov.querySelector("#pkswap");
+    sb.innerHTML = [["face", "Face and hair"], ["body", "Whole artist, new outfit"]].map(([k, n]) =>
+      `<button type="button" class="opt" data-s="${k}" aria-pressed="${swap === k}">${n}</button>`).join("");
+    ov.querySelector("#pkswapnote").textContent = swap === "body"
+      ? "For a person who's very different from the artist: the whole artist goes in, dressed for the place."
+      : "The artist's face and hair go in; the image's clothes and pose stay.";
+    sb.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { swap = b.dataset.s; drawFit(); const f = sb.querySelector(`[data-s="${swap}"]`); if (f) f.focus(); });
   };
   // what the job will make of it: the crop around the face, or the whole image with the sides to draw
   const choose = async (im, el) => {
@@ -1839,7 +1859,8 @@ function imageChooser(run, shot, sung, back, done){
         msg(`${im.name} has no face big enough to sing${f.fit === "extend" ? " with the whole image in the frame. Try Crop, or" : ":"} pick another image.`);
         return;
       }
-      close(); done({name: im.name, src: im.src, fit: f.fit, asked: fit, face: f.face, url: f.preview});
+      close(); done({name: im.name, src: im.src, fit: f.fit, asked: fit, face: f.face, url: f.preview,
+        swap: f.artist ? swap : ""});
     }catch(e){ msg(e.message); }
     finally{ busy = false; if (el && el.isConnected) el.classList.remove("busy"); }
   };
