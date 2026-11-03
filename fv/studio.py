@@ -228,8 +228,7 @@ def _analyze(name: str, seconds: float, start: float) -> dict:
 # 111 s window takes about 16 min, most of it writing 53 extra characters 8 at a time). A World
 # already written for the same line and seed is reused, so a second preview is quick.
 T = {"listen": 15, "load": 120, "world": 125, "roles": 85, "batch": 78, "first_chars": 12, "max_batches": 8,
-     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5, "images": 10, "per_image": 0.4,
-     "swap_load": 75, "swap_per": 8}  # Single Artist in your images: the vision model loads, then looks at each
+     "gender": 55, "stems": 5, "stems_per_s": 0.25, "crowd": 45, "finish": 5, "images": 10, "per_image": 0.4}
 
 
 def _bible(theme: str, seed: int) -> dict | None:
@@ -287,11 +286,6 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
-    swap_n = 0
-    if folder and _swaps(b):  # Single Artist in your images: who is in each image, against the artist
-        swap_n = min(n, p["performers"] + 2 * broll.slots(p, share)) if n else p["performers"]
-        parts.append({"id": "artist", "name": "Looking at who's in your images",
-                      "s": round(T["swap_load"] + T["swap_per"] * swap_n)})
     if theme and b.get("crowd", "auto") != "off" and not artist:
         from . import theme as themes
         if (b.get("crowd") == "on" or themes.crowd_world(theme)) and not (bible or {}).get("crowd_dress"):
@@ -301,9 +295,8 @@ def _estimate(b: dict) -> dict:
     return {"total_s": int(total), "parts": parts, "shots": len(p["shots"]), "need": need,
             "world_cached": bool(bible) and have >= need, "window": [round(p["song_t0"], 2), round(p["song_t1"], 2)],
             "render_min": round(6 + (2.0 if b.get("preset", "quality") == "quality" else 1.0) * win
-                                # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s);
-                                # the artist put into each image: the same load, and about 10 s an image
-                                + (4 if folder and (_extends(b) or swap_n) else 0) + round(swap_n / 6))}
+                                # extending images: Qwen-Image 2.1 loads (about 3 min) and draws each (about 10 s)
+                                + (4 if folder and _extends(b) else 0))}
 
 
 def _form(d: str, p: dict) -> dict:
@@ -323,8 +316,7 @@ def _form(d: str, p: dict) -> dict:
         wi = p["world_images"]
         form.update(world_mode="images", world_images=wi.get("folder", ""), image_order=wi.get("order", "in order"),
                     image_fit=wi.get("fit", "crop"), theme="")
-    if p.get("artist_path"):  # a Single Artist run, in a described World or your images (a photo saved
-        # elsewhere has to be picked again)
+    if p.get("artist_path"):  # a Single Artist run (a photo saved elsewhere has to be picked again)
         form.update(cast="single artist", artist_description=p.get("artist_description", ""),
                     artist_mode="describe" if p.get("artist_description") else "photo")
     form["professional"] = bool(p.get("professional")) or p.get("editor") == "qwen_edit"
@@ -403,8 +395,6 @@ def _progress(pid: str, rec: dict) -> dict:
             done.update({"listen", "images", "load", "world", "roles", "cast", "gender"}); last_t = ts
         if "[OneShotMV] stems:" in m or "lyrics:" in m or "lyrics skipped" in m:  # older runs logged lyrics
             done.update({"listen", "images", "load", "world", "roles", "cast", "gender", "stems"}); last_t = ts
-        if "Single Artist in your images:" in m:
-            done.update({"listen", "images", "stems", "artist"}); last_t = ts
     now = time.time()
     left, cur = 0.0, None
     for x in parts:
@@ -440,28 +430,19 @@ def _director_graph(b: dict) -> dict:
          else "in order", "image_fit": "extend" if b.get("image_fit") == "extend" else "crop",
          "review_images": bool(b.get("review")) and bool(b.get("render")),
          "professional": bool(b.get("professional"))}
-    if d["world_images"]:  # the images are the World and the cast; with an artist's photo, the artist goes in
-        d["world"] = ""
-        d["cast"] = "single artist" if _swaps(b) else "crowd"
+    if d["world_images"]:  # the images are the World and the cast
+        d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
     g = {"1": {"class_type": "LoadAudio", "inputs": {"audio": b["song"]}},
          "2": {"class_type": "FVDirector", "inputs": d}}
     if d["cast"] == "single artist":  # the artist: a photo in ComfyUI's input folder, or a new person described
         photo, text = _artist_of(b)
-        if d["world_images"]:
-            photo, text = str(b.get("artist_image") or "").strip(), ""
         if photo:
             g["3"] = {"class_type": "LoadImage", "inputs": {"image": photo}}
             d["artist_photo"] = ["3", 0]
         elif text:
             d["artist_description"] = text
     return g
-
-
-def _swaps(b: dict) -> bool:
-    """Whether a brief puts Single Artist into a World from the user's images: a folder, Single Artist
-    and a photo of the artist (a described artist can't go into the images yet)."""
-    return bool(_images_of(b)) and b.get("cast") == "single artist" and bool(str(b.get("artist_image") or "").strip())
 
 
 def _extends(b: dict) -> bool:
@@ -516,8 +497,7 @@ def _restart_needed() -> list:
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
         it = cls.INPUT_TYPES() if cls is not None else {}
         if cls is not None and ("professional" not in (it.get("required") or {})
-                                or "review_images" not in (it.get("optional") or {})
-                                or not getattr(cls, "ARTIST_IN_IMAGES", False)):
+                                or "review_images" not in (it.get("optional") or {})):
             return [RESTART]
     except Exception:
         pass
@@ -536,11 +516,8 @@ def _cant_start(b: dict) -> list:
         err = _images(folder).get("error")
         if err:
             return [err]
-    single = b.get("cast") == "single artist"
-    if single and folder and not _swaps(b):
-        return ["Add a photo of the artist: with your own images, the artist goes into them from a photo."]
-    artist = single and (not folder or _swaps(b))
-    if artist and not folder and not any(_artist_of(b)):
+    artist = b.get("cast") == "single artist" and not folder
+    if artist and not any(_artist_of(b)):
         return ["Add a photo of the artist, or describe a new one."]
     try:
         rep = _fv("setup_check").report(b.get("models") or "auto", b.get("preset") or "quality",
@@ -772,17 +749,6 @@ def _remakable(d: str, p: dict) -> dict:
 ADDED = "oneshot-mv/added"  # under ComfyUI's input folder: images added during a review, one folder per run
 
 
-def _swap_how(p: dict, info: dict, asked) -> str:
-    """How the artist goes into a new image of an artist run: "face" (face and hair, the default) or
-    "body" (the whole artist, newly dressed); "" when the run has no artist or the image doesn't have
-    exactly one person in it."""
-    if not ((p.get("world_images") or {}).get("swap") or {}).get("artist"):
-        return ""
-    if not info.get("face") or info.get("group"):
-        return ""
-    return "body" if asked == "body" else "face"
-
-
 def _pick_folders(p: dict, run: str) -> dict:
     """Where a review's new images can come from: the World's own folder, and the images added for this run."""
     wi = _fv("world_images")
@@ -830,7 +796,7 @@ def _review_images(name: str) -> dict:
             out.append({"name": os.path.basename(x), "src": src, "sings": bool(it.get("sings", True)),
                         "url": f"/oneshot-mv/api/review_thumb/{urllib.parse.quote(run)}?{q}"})
     return {"images": out, "added": f"{ADDED}/{run}", "fit": _fit_for(p, w.get("fit")),
-            "extend": not p.get("professional"), "artist": bool((w.get("swap") or {}).get("artist"))}
+            "extend": not p.get("professional")}
 
 
 def _fit_for(p: dict, fit) -> str:
@@ -857,7 +823,6 @@ def _review_fit(name: str, src: str, image: str, fit: str) -> dict:
     if info["crop"]:
         q["box"] = ",".join(str(int(v)) for v in info["crop"])
     return {"asked": fit, "fit": info["fit"], "face": bool(info["face"]), "sings": bool(info["sings"]),
-            "artist": bool(_swap_how(p, info, "face")),
             "preview": f"/oneshot-mv/api/review_thumb/{urllib.parse.quote(os.path.basename(d))}?{urllib.parse.urlencode(q)}"}
 
 
@@ -956,15 +921,12 @@ def _remake(name: str, items: list) -> dict:
                 raise ValueError(f"shot {n} is sung, and {info['name']} has no face big enough to sing: "
                                  "pick it for a cutaway, or another image")
             stag = f"pick{k}s{n:03d}"
-            how = _swap_how(p, info, it.get("swap"))
             g = graphs.world_image(path=src, prefix=f"{rel}/{stag}", size=(W, H), crop=info["crop"],
-                                   extend=info["fit"] == "extend", seed=701 + 17 * k + i,
-                                   artist=(w.get("swap") or {}).get("artist") if how else None,
-                                   swap=graphs.swap_prompt(how) if how else None, editor=p.get("editor")).nodes
+                                   extend=info["fit"] == "extend", seed=701 + 17 * k + i).nodes
             new = os.path.join(d, f"{stag}_00001_.png")
             picks.append((stag, g, v, new, info))
             done.append({"shot": n, "image": info["name"], "src": str(it.get("src") or "world"), "fit": info["fit"],
-                         **({"swap": how} if how else {}), "before": v["image"], "still": new})
+                         "before": v["image"], "still": new})
             continue
         note = str(it.get("note") or "")[:400]
         cur = can.get(n)

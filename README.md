@@ -208,26 +208,11 @@ own image stage and animates yours:
     adds a few minutes, and needs the Qwen-Image 2.1 files (see the model tables). With For
     professional use on, images are always cropped.
 - There is no World line, no cast and no vision check on stills; the take check runs as usual.
-- **Single Artist in your images:** choose Single Artist and upload a photo of the artist (only of
-  yourself or someone who agreed to it). Every image with one person gets the artist, by the image
-  editor (Qwen-Image 2.1, or Qwen-Image-Edit 2511 for professional use):
-  - their face and hair; the image's clothes, pose, camera and place stay;
-  - where the image's person is very different (another gender, a child, much older), the whole
-    artist, in a new outfit that suits the place. Gemma 3 looks at the photo and each image first,
-    about 7 s an image after it loads;
-  - images with two people side by side, or nobody, stay as they are; a small face in a cutaway
-    gets the artist too.
-
-  The take check then compares every sung face with the photo. Generate images and review shows
-  the results before any clip is made: Fix image redoes one with a note, and New image can bring
-  in another of your images with the artist's face and hair or the whole artist.
 
 In the Studio, choose **Use my images** on the World card, then upload a folder or type the path
-of a folder on this computer; the card below it then offers **As they are** or **Single Artist**.
-In the workflow, put the folder in the Director's `world_images` (a full path, or a folder inside
-ComfyUI's input or output folder) and pick `image_order` and `image_fit`; for Single Artist, set
-`cast` to `single artist` and connect the artist's photo to `artist_photo`. Use only images you
-made or have the rights to.
+of a folder on this computer. In the workflow, put the folder in the Director's `world_images`
+(a full path, or a folder inside ComfyUI's input or output folder) and pick `image_order` and
+`image_fit`. Use only images you made or have the rights to.
 
 ### Crowd or Single Artist
 
