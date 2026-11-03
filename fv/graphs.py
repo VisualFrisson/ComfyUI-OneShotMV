@@ -307,12 +307,6 @@ class Graph:
         self.nodes[str(self._n)] = {"class_type": class_type, "inputs": inputs}
         return str(self._n)
 
-    def save(self, path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.nodes, f, indent=1)
-        return path
-
 
 def O(nid, slot=0):
     return [nid, slot]
@@ -703,7 +697,7 @@ TWIN_TEXT = ("Change only the person into {who}. {detail} {wear} Light: {light}.
              "above the head, the same amount of shoulders and body in frame, the face the same size and in the "
              "same place. Keep the head position, head tilt and the open, mid-word mouth exactly as in the image. "
              "A completely different person. No text or lettering anywhere.")  # + casting.edit_realism()
-# no "the same tight crop" and no close-up skin brief: with them Klein redraws every look as a
+# no "the same tight crop" and no close-up skin brief: with them an image editor redrew every look as a
 # tight, mouth-shut face shot (in one test all 24 looks came out tighter than their lead's frame)
 
 

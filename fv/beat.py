@@ -572,6 +572,3 @@ def slice_timeline(tl: dict, t0: float, t1: float) -> dict:
                window=[t0, t1])
     return out
 
-
-def frame_of(t: float, fps: float) -> int:
-    return int(round(t * fps))

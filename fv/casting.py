@@ -1,18 +1,12 @@
-"""Style packs and casting: deterministic prompt combinatorics per performer."""
+"""Casting: every performer's image and singing prompts, from the pack and the World (deterministic per seed)."""
 from __future__ import annotations
 
-import glob
 import json
 import os
 import random
 import re
 
 PACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "packs")
-
-
-def list_packs() -> list[str]:
-    """The casting and edit configs in fv/packs: crowd (every run) and artist (one singer from a photo)."""
-    return [json.load(open(f, encoding="utf-8"))["name"] for f in sorted(glob.glob(os.path.join(PACK_DIR, "*.json")))]
 
 
 def load_pack(name_or_path: str) -> dict:
@@ -257,7 +251,7 @@ SCENE_MOVES = {
 # picture inside black bars)
 SCENE_SHOT = {"medium": ("Medium shot", "on a 35mm lens at chest height, filling the whole frame edge to edge"),
               "wide": ("Wide full-body shot", "on a 24mm lens a few meters away, filling the whole frame edge to edge")}
-# The realism brief, against the default AI look: every image prompt ends with REALISM, close-up
+# The realism brief, against the default AI look: every image prompt ends with it, close-up
 # portraits also with CLOSE_SKIN (finish_prompt). The templates themselves only say no text;
 # finish_prompt adds the photograph wording last.
 # no "fine facial hair": on every portrait it made the drop looks more likely to give women stubble
@@ -269,7 +263,6 @@ REALISM_LIGHT = ("Light comes from real sources with mixed colour temperatures a
 REALISM_LOOK = ("Muted, true-to-life colour, moderate depth of field, fine grain, slight lens softness toward the "
                 "edges, imperfect off-centre framing.")
 REALISM_CAMERA = REALISM_LIGHT + " " + REALISM_LOOK
-REALISM = REALISM_PERSON + " " + REALISM_CAMERA
 CLOSE_SKIN = ("Close-up skin detail: visible pores across the nose and cheeks, faint redness around the nostrils, "
               "fine lines at the corners of the eyes, a light natural sheen on the forehead, natural eye whites "
               "with tiny visible veins, a single soft catchlight, dry texture on the lips.")
@@ -377,7 +370,7 @@ def period_background(sing: str, era: str) -> str:
 def edit_realism(close: bool = True) -> str:
     """For image edits that must keep the frame (the looks on the drop): the skin and fabric part of
     the brief, without the framing and depth of field. Never CLOSE_SKIN: its pores-and-veins close-up
-    makes Klein zoom every look into a face shot. close is kept for callers."""
+    made an image editor zoom every look into a face shot. close is kept for callers."""
     return REALISM_PERSON
 SCENE_PORTRAIT = ("{shot} {lens} of {who}, {action}, singing toward the camera with the mouth open mid-word, "
                   "{attitude}. {wear}Setting: {place}. {light}. An invented person, the only person in frame. "

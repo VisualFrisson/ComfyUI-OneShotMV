@@ -1015,16 +1015,6 @@ def eyewear_ok(theme: str) -> bool:
     return bool(EYEWEAR.search(theme or ""))
 
 
-def _cast_line(chars: list[dict]) -> str:
-    out = []
-    for c in chars:
-        if c.get("role"):
-            out.append(f"{c['role']} ({c.get('gender') or '?'}, {c.get('age') or '?'})")
-        else:
-            out.append(c.get("who", "").split(",")[0])
-    return "; ".join(out)
-
-
 def _same(a: dict, b: dict) -> bool:
     """Two characters that would read as the same person: same role, gender and age band."""
     if not a.get("role") or not b.get("role"):

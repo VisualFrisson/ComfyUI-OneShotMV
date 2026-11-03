@@ -24,7 +24,6 @@ def _clean():
     graphs.use_models("auto")
     yield
     graphs.use_models("auto")
-    graphs.M.pop("artist_editor_test", None)
 
 
 def _direct(**kw):

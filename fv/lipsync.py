@@ -79,11 +79,6 @@ def _load(device: str):
         return _MODELS[device]
 
 
-def unload():
-    with _LOCK:
-        _MODELS.clear()
-
-
 def vocal_density(x: np.ndarray, sr: int, seek: float, seconds: float, ref: float | None = None) -> float:
     """Fraction of 25 fps frames in [seek, seek + seconds) where the vocal stem is clearly sung
     (RMS above half the stem's overall RMS). Sparse stretches (ad-libs, gaps) score low."""

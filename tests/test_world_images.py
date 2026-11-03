@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import fake_comfy as fc  # noqa: E402
-from fv import director, faces, graphs, world_images as wi  # noqa: E402
+from fv import director, faces, world_images as wi  # noqa: E402
 
 
 def _folder(spec):

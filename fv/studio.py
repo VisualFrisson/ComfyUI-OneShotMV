@@ -757,12 +757,6 @@ def _shot_images(d: str, p: dict) -> dict:
     return out
 
 
-def _remakable(d: str, p: dict) -> dict:
-    """{shot number: the still its held clip job reads} for every shot whose still can be made again,
-    sung or cutaway."""
-    return {n: v["image"] for n, v in _shot_images(d, p).items() if v["makes"]}
-
-
 ADDED = "oneshot-mv/added"  # under ComfyUI's input folder: images added during a review, one folder per run
 
 

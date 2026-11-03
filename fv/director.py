@@ -1,8 +1,9 @@
 """The Director: song -> analysis, stems, plan, casting -> a queue of ComfyUI jobs.
 
-Jobs are queued grouped by model so each model loads once per run:
-  Krea 2 portraits -> LTX lip-sync renders (A) -> twin keys -> LTX twin renders (B) -> assemble
-Every job is also written to <run>/jobs/ so a single shot can be re-rolled by re-queueing it."""
+Jobs are queued grouped by model so each model loads once per run: the images (Krea 2, and the
+image editor for Single Artist and World images), the vision check, the LTX lip-sync clips, the take
+check, the looks on the drop and the cutaways, then the cut. Every job is also written to <run>/jobs/,
+so a single shot can be made again by queueing it again."""
 from __future__ import annotations
 
 import datetime as _dt

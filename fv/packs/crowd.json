@@ -122,7 +122,7 @@
   }
  },
  "edit": {
-  "_note": "grammar 'hold' with cuts 'energy' (the user's rule, Oct 26): the song in three energies by its sections: low (intro, breaks, a quiet outro) a cut every shot_bars_quiet bars, medium (verses, the build_bars bars before a drop) every shot_bars_build bar, high (choruses, drops) a cut every drop_cut_seconds rounded to whole beats; every shot a new character (cast 'unique': its own portrait and its own singing clip, no looks edited from another shot), drop faces matched to one spot. Without 'cuts': the older hold grammar (drop groups of drop_looks pose-matched looks). cut_low / cut_medium / cut_high: every 2 bars, every bar, to the music (subtle: about every half bar) or to the music (intense: about every beat).",
+  "_note": "grammar 'hold' with cuts 'energy': the song in three energies by its sections: low (intro, breaks, a quiet outro) a cut every shot_bars_quiet bars, medium (verses, the build_bars bars before a drop) every shot_bars_build bar, high (choruses, drops) cut by cut_high on the beat; every shot a new character (cast 'unique': its own portrait and its own singing clip, no looks edited from another shot), drop faces matched to one spot. Without 'cuts': the older hold grammar (drop groups of drop_looks pose-matched looks). cut_low / cut_medium / cut_high: every 2 bars, every bar, to the music (subtle: about every half bar) or to the music (intense: about every beat).",
   "grammar": "hold",
   "shot_bars_quiet": 2,
   "shot_bars_build": 1,
@@ -149,7 +149,6 @@
   "insert_twin_share": 0.7,
   "cuts": "energy",
   "cast": "unique",
-  "drop_cut_seconds": 0.75,
   "medium_labels": [
    "verse",
    "build"
@@ -170,7 +169,7 @@
   "quiet_scale": 0.2,
   "insert_flash": 0.75,
   "build_scale": 0.6,
-  "_note": "level: none / subtle / intense (fx.level_cfg). intense = the first tests' hits with the 4 px shake swapped for an 8 px motion-blurred twitch; subtle (default) tones everything down, no twitch; the user's notes of Oct 26",
+  "_note": "level: none / subtle / intense (fx.level_cfg). intense: the drum hits with an 8 px motion-blurred twitch instead of a shake; subtle (default) tones everything down, no twitch",
   "level": "subtle"
  },
  "finish": {

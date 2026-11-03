@@ -1,11 +1,12 @@
-"""OneShot MV planner: song timeline + style pack -> renders + edit decision list.
+"""OneShot MV planner: song timeline + pack -> shots, renders and the edit decision list.
 
-  * The song is cut into shots on bar lines: `shot_bars_loud` bars in loud sections,
-    `shot_bars_quiet` in quiet ones (the reference AI edit: 2 bars loud, 1 bar quiet).
-  * Every shot gets a new performer (A) lip-synced to that stretch of the vocal stem.
-  * In loud sections a pose-matched twin (B: same pose, same vocals, new person) is rendered
-    too, and the edit flashes to B on every `insert_every_beats`-th beat for a few frames,
-    ghosting back to A. With probability `pingpong` the shot's second half switches to B.
+  * The song is split into low, medium and high energy by its sections, and each energy is cut its
+    own way (cut_low / cut_medium / cut_high: every 2 bars, every bar, or to the music on the beat).
+  * Every sung shot gets a performer (A) lip-synced to that stretch of the vocal stem. Single
+    Artist's drop adds looks (B: the same moment, the artist in another look); some shots become
+    cutaways (R).
+  * The older 'flash' grammar (shot_bars_loud, insert_every_beats, pingpong) is still here for a
+    pack that asks for it; neither shipped pack does.
 
 Times in the plan are seconds relative to the window start; `song_t0` maps back to the song."""
 from __future__ import annotations
@@ -146,14 +147,6 @@ def intense_beats(beat_len: float) -> int:
     return min((1, 2), key=lambda b: abs(b * beat_len - 0.6))
 
 
-def drop_beats(tempo: float, ed: dict) -> int:
-    """Beats per shot on the drop (the energy grammar's fast cuts on the rhythm): the whole number
-    of beats closest to `drop_cut_seconds` (0.75 s: one beat at 100 BPM, two at 128)."""
-    target = float(ed.get("drop_cut_seconds", 0.75))
-    beat_len = 60.0 / max(40.0, float(tempo or 120.0))
-    return max(1, int(round(target / beat_len)))
-
-
 def _split_drop(shots: list[dict], beats: list[float], k, min_len) -> list[dict]:
     """Each drop shot (or each shot of a phase in k, when k is {phase: beats}) cut every k beats:
     one new person per cut. A last piece shorter than min_len joins the one before it."""
@@ -186,7 +179,7 @@ def _hold_shots(bars: list[float], dur: float, secs: list[dict], ed: dict, bar_l
     one-bar groups in the drop (cut on the beat inside each group, see _hold_renders).
     The energy grammar (pack edit "cuts": "energy"): low energy
     (intro, breaks, quiet outro) a cut every `shot_bars_quiet` (2) bars, medium (verses, build)
-    every bar, high (choruses, drops) a cut every drop_beats() beats, each a new person."""
+    every bar, high (choruses, drops) cut by cut_high on the beat, each a new person."""
     energy = ed.get("cuts") == "energy"
     medium = tuple(ed.get("medium_labels", ("verse", "build"))) if energy else ()
     phase = _phases(secs, bar_len, ed.get("build_bars", 4), medium)
