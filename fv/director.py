@@ -102,17 +102,13 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     or "extend" (Qwen-Image 2.1 draws new edges on an image far off the video's shape).
     professional: Single Artist's portraits and looks by Qwen-Image-Edit 2511 (Apache-2.0) instead of
     the default editor, Qwen-Image 2.1 (reported research-only); World images are cropped, never extended.
-    world_images + artist_path (Single Artist in a World from the user's images): every image with one
-    person gets the artist (graphs.SWAP_FACE: face and hair), or the whole artist newly dressed for the
-    place where the image's person doesn't match them (another gender, a child, much older: the vision
-    model looks first, _swap_plan). Images with two people or nobody stay as they are.
     review (staged runs): only the stills are queued (and the vision check, which holds the clips as
     always); the rest is held in p["review"]["held"] until the Studio's Make the video queues it, after
     any stills the user picked are re-made (studio._remake / _release)."""
     if legacy.get("mode", "voice") != "voice" or legacy.get("dance_path"):
         raise ValueError("Motion mode was removed from OneShot MV. Restart ComfyUI to load the current Director "
                          "node, and use the main workflow (example_workflows/OneShotMV.json).")
-    imgs, swap_artist = None, ""
+    imgs = None
     if (world_images or "").strip():
         from . import world_images as wi
         image_fit = image_fit if image_fit in wi.FITS else "crop"
@@ -127,11 +123,6 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
             raise ValueError("None of the World images has a face big enough to sing. Add a few with a clear face, "
                              "or describe a World instead.")
         log("[OneShotMV] " + wi.summary(imgs))
-        if artist_path:  # Single Artist: the artist goes into the images (_swap_plan, graphs.world_image)
-            swap_artist = artist_path
-        elif (artist_description or "").strip():
-            log("[OneShotMV] A described artist can't go into your own images yet: upload a photo of them. "
-                "The images sing as they are.")
         theme, artist_path, artist_description = "", "", ""
     artist_description = " ".join((artist_description or "").split()) if not artist_path else ""
     pack = "artist" if (artist_path or artist_description) else "crowd"
@@ -143,8 +134,8 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
     # what this ComfyUI is missing, before minutes of planning (the run's own jobs are checked again
     # before they are queued)
     setup_check.check(setup_check.probe(preset=preset, fmt=fmt, render=bool(queue),
-                                        theme=bool(theme and theme.strip()) or bool(swap_artist),
-                                        artist=bool(artist_path or (artist_description or "").strip() or swap_artist),
+                                        theme=bool(theme and theme.strip()),
+                                        artist=bool(artist_path or (artist_description or "").strip()),
                                         images=imgs is not None, editor=editor,
                                         extend=any(it["fit"] == "extend" for it in imgs or [])), model_set,
                       lead="It can't start yet." if queue else "It can't write the plan yet.")
@@ -194,9 +185,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         raise ValueError("Single artist needs a photo of the artist or a description of a new one.")
     p = planner.plan_voice(tl, pk, fmt=fmt, preset=preset, seconds=seconds, start=start, seed=seed,
                            twins=None if twins == "auto" else twins)
-    p["artist_path"] = artist_path or swap_artist  # the take check compares every sung face with it
+    p["artist_path"] = artist_path
     p["professional"] = bool(professional)
-    if artist_path or artist_description or swap_artist:
+    if artist_path or artist_description:
         p["editor"] = editor
     if artist_description:
         p["artist_description"] = artist_description
@@ -285,13 +276,6 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
                                              for n, _ in list(staged_img.values())[::-1]]
     else:
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
-    swaps = {}
-    if swap_artist and staged_img:  # Single Artist: who gets the artist, and how (one person in the image)
-        swaps = _swap_plan([it for _, it in staged_img.values() if it.get("face") and not it.get("group")],
-                           swap_artist, log=log)
-        p["world_images"]["swap"] = {"artist": swap_artist, "items": [
-            dict(name=it["name"], **{k: v for k, v in swaps[it["path"]].items()})
-            for _, it in staged_img.values() if it["path"] in swaps]}
     port = {}
     # the Director's own language-model work (World, cast, crowd dress) and whatever ran before
     # stay loaded under --highvram: the first portrait then shares the card with them
@@ -301,12 +285,9 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
         jobs.append(ref_job)
     need_portrait = {r["performer"] for r in p["renders"] if r["role"] == "A"}
     for name, it in staged_img.values():
-        sw = swaps.get(it["path"])
         jobs.append((name, graphs.world_image(path=it["path"], prefix=f"{rel}/{name}", size=s2,
                                               crop=it.get("crop"), extend=it["fit"] == "extend",
-                                              seed=seed * 31 + len(jobs), artist=swap_artist if sw else None,
-                                              swap=graphs.swap_prompt(sw["how"], sw.get("outfit")) if sw else None,
-                                              editor=editor).nodes))
+                                              seed=seed * 31 + len(jobs)).nodes))
     for c in cast:
         if imgs is not None:  # the image's own staged copy (the looks too: each its own image)
             port[c["id"]] = os.path.join(run_dir, f"{staged_img[c['image']][0]}_00001_.png")
@@ -631,60 +612,6 @@ def _video_in(graph: dict) -> str | None:
         if node.get("class_type") == "FVLoadVideoPath":
             return node.get("inputs", {}).get("path")
     return None
-
-
-PERSON_Q = """Look at the main person in this picture. Answer with JSON only, no other text: {"gender": "man" or "woman" or "unclear", "age": "child" or "teen" or "young adult" or "adult" or "older adult", "outfit": "<the clothes a person would wear in this place, at most 12 words>"}"""
-AGES = ("child", "teen", "young adult", "adult", "older adult")
-
-
-def _mismatch(person: dict, artist: dict) -> str:
-    """Why an image's person can't simply take the artist's face and hair ("" when they can): another
-    gender, or an age two steps away (a child for an adult, an older adult for a young one)."""
-    g1, g2 = str(person.get("gender", "")).lower(), str(artist.get("gender", "")).lower()
-    if g1 in ("man", "woman") and g2 in ("man", "woman") and g1 != g2:
-        return f"a {g1} in the image"
-    a1, a2 = str(person.get("age", "")).lower(), str(artist.get("age", "")).lower()
-    if a1 in AGES and a2 in AGES and abs(AGES.index(a1) - AGES.index(a2)) >= 2:
-        return f"{'an' if a1[0] in 'aeiou' else 'a'} {a1} in the image"
-    return ""
-
-
-def _swap_plan(items: list, artist_path: str, log=print) -> dict:
-    """Single Artist in a World from the user's images: {image path: {"how": "face" or "body", "why",
-    "outfit"}} for each image with one person. The vision model (Gemma 3, about 7 s a picture) looks at
-    the artist's photo and each image: where the image's person is another gender, a child or much older,
-    the whole artist goes in, dressed for the place ("body"); elsewhere their face and hair ("face").
-    Without the vision model every image gets the face and hair."""
-    out = {it["path"]: {"how": "face", "why": "", "outfit": ""} for it in items}
-    if not items:
-        return out
-    from . import critic
-    try:
-        artist = critic.parse(critic.ask(artist_path, PERSON_Q)) or {}
-        if not artist:
-            raise RuntimeError("no answer about the artist's photo")
-        for it in items:
-            ans = critic.parse(critic.ask(it["path"], PERSON_Q)) or {}
-            why = _mismatch(ans, artist)
-            out[it["path"]] = {"how": "body" if why else "face", "why": why,
-                               "outfit": " ".join(str(ans.get("outfit") or "").split())[:120]}
-    except Exception as e:  # never let the check block a run: the face and hair go in everywhere
-        log(f"[OneShotMV] Single Artist: the vision check of your images was skipped ({e}); every image gets "
-            "the artist's face and hair")
-    finally:
-        critic.free()
-        try:
-            import gc
-            import comfy.model_management as mm  # type: ignore
-            mm.unload_all_models()
-            mm.soft_empty_cache()
-            gc.collect()
-        except Exception:
-            pass
-    body = [os.path.basename(k) + f" ({v['why']})" for k, v in out.items() if v["how"] == "body"]
-    log(f"[OneShotMV] Single Artist in your images: {len(out) - len(body)} get the artist's face and hair"
-        + (f", {len(body)} the whole artist in a new outfit: " + ", ".join(body) if body else ""))
-    return out
 
 
 def _job_file(run_dir: str, name: str) -> str | None:
