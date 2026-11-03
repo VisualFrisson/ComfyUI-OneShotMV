@@ -20,15 +20,20 @@ models.
 3. It plans the cut by energy. Each part of the song is low, medium or high energy, and each level
    is cut its own way: long shots in the quiet parts, a cut every bar in the verses, a new face on
    the beat in the chorus or drop.
-4. Krea 2 paints a portrait of every performer, each one a different person.
+4. Krea 2 paints a portrait of every performer, each one a different person. With Single Artist,
+   Krea 2 draws each shot with a look-alike and the image editor puts the artist's face in. With
+   your own images, this step is skipped and your images are used.
 5. A vision check looks at every portrait (one person, the right gender, the whole head in frame,
    no writing, nothing from after the World's period, the right outfit) and redoes the wrong ones.
+   Single Artist gets a face check against the photo instead.
 6. LTX-2.3 turns each portrait into a clip that sings the isolated vocal.
 7. A take check re-shoots missing, frozen or blown-out takes, dead mouths, takes that drift to
    another person or place, bad framing, and weak lip sync (scored with SyncNet).
-8. A few shots become b-roll: a World character in a candid moment, not singing.
-9. It cuts everything on the beat, adds audio-reactive FX driven by the drums, then a color grade,
-   grain at 1080p and a vignette. You get an MP4, an EDL and a Final Cut Pro XML.
+8. A few shots become cutaways: a World character in a candid moment, or for Single Artist, the
+   World's places with nobody in them.
+9. It cuts everything on the beat and adds audio-reactive FX driven by the drums. You pick the
+   color grade, grain and vignette, and can change them later without re-rendering anything. You
+   get an MP4, an EDL and a Final Cut Pro XML.
 
 ## Three ways to run it
 
