@@ -3,8 +3,10 @@
 Give OneShot MV a song and one line about the world it lives in ("the gladiator games in ancient
 Rome"). It listens to the song, invents a cast for that world, plans every shot around the song's
 energy, and renders a lip-synced music video where a different invented person sings each line,
-or one singer sings them all (Single Artist). Everything runs locally in ComfyUI on open-weights
-models.
+or one singer sings them all (Single Artist). Then it edits the whole video for you: every shot cut
+to the music, audio-reactive FX on the drums, and a finished MP4 at the end, with no timeline work.
+LTX-2.3 is the core video model: every clip in the video is made by LTX-2.3. Everything runs locally
+in ComfyUI on open-weights models.
 
 ![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
 
@@ -31,9 +33,28 @@ models.
    another person or place, bad framing, and weak lip sync (scored with SyncNet).
 8. A few shots become cutaways: a World character in a candid moment, or for Single Artist, the
    World's places with nobody in them.
-9. It cuts everything on the beat and adds audio-reactive FX driven by the drums. On the Result
-   screen you pick the FX for each energy level, the color grade, grain and vignette, as often as
-   you like, without re-rendering anything. You get an MP4, an EDL and a Final Cut Pro XML.
+9. It edits the whole video by itself: every shot cut on the beat, and audio-reactive FX driven by
+   the drums (flash, zoom punch, glow, color split). On the Result screen you pick the FX for each
+   energy level, the color grade, grain and vignette, as often as you like, without re-rendering
+   anything. You get an MP4, an EDL and a Final Cut Pro XML.
+
+## Built on LTX-2.3
+
+Every moving frame in the video comes from LTX-2.3; the image models only make each shot's first
+frame.
+
+- **Lip sync from the song itself.** Each singer is an LTX-2.3 audio-to-video clip driven by the
+  song's isolated vocal stem, so the lips follow the actual words. SyncNet scores every take, and
+  weak ones are shot again.
+- **Cutaways** are LTX-2.3 clips moved by the drum stem with no vocal, so nobody starts singing.
+- **Looks on the drop** (Single Artist) use LTX's IC-LoRA Union Control with a pose guide from the
+  lead clip, so the new look sings the same moment in the same pose, and the edit cuts between them
+  on the beat with the faces in one spot.
+- **Every clip** gets LTX's IC-LoRA Detailer, its distilled LoRA and the 2x spatial upscaler, at
+  50 fps in Quality.
+- **Your own images** are brought to life by LTX-2.3 the same way.
+- **Gemma 3**, LTX-2.3's own text encoder, also writes the World and runs the vision check, so no
+  other language model is loaded.
 
 ## Three ways to run it
 
