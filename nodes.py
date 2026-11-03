@@ -282,7 +282,9 @@ class FVDirector:
                                       "0 = off"}),
             "run_name": ("STRING", {"default": "", "tooltip": "Folder name for the run; empty = made from the settings"}),
             "artist_photo": ("IMAGE", {"tooltip": "Single artist: a photo of the singer (a Load Image node). Use "
-                                                  "only a photo of yourself or of someone who agreed to it."}),
+                                                  "only a photo of yourself or of someone who agreed to it. Best: one "
+                                                  "sharp photo of just them, facing the camera, in soft even light, "
+                                                  "the whole face showing"}),
             "artist_description": ("STRING", {"default": "", "multiline": True,
                                    "tooltip": "Single artist without a photo: describe a new person, e.g. 'a singer "
                                               "in her late twenties with a shaved head and gold hoops'. The tool "
