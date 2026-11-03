@@ -260,7 +260,7 @@ def _estimate(b: dict) -> dict:
     share = float(b.get("broll", 0.125))
     artist = b.get("cast") == "single artist"  # one singer: the World isn't extended to a character per shot
     n_sung = 0
-    if artist and not folder:  # Single Artist draws each main image with Krea 2 before the face goes in (~18 s each)
+    if artist and not folder and casting.DRAWN_SHOTS:  # Krea 2 draws each main image before the face goes in (~18 s)
         apk = casting.load_pack("artist")
         if cuts:
             apk["edit"] = dict(apk["edit"], **{f"cut_{lv}": m for lv, m in cuts.items()})
@@ -297,7 +297,7 @@ def _estimate(b: dict) -> dict:
         if llm:
             parts.append({"id": "gender", "name": "Checking every character", "s": T["gender"]})
     parts.append({"id": "stems", "name": "Separating the vocals", "s": round(T["stems"] + T["stems_per_s"] * win)})
-    if artist and not folder and _artist_of(b)[0]:
+    if artist and not folder and _artist_of(b)[0] and casting.DRAWN_SHOTS:
         parts.append({"id": "artist", "name": "Looking at the artist's photo", "s": T["artist_photo"]})
     if theme and b.get("crowd", "auto") != "off" and not artist:
         from . import theme as themes

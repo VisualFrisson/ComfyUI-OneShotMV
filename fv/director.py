@@ -277,10 +277,13 @@ def direct(*, audio: np.ndarray, sr: int, out_root: str, fmt: str = "16:9", pres
                                              for n, _ in list(staged_img.values())[::-1]]
     else:
         cast = casting.cast_voice(pk, p["performers"], seed, sizes, fmt=fmt, leads=leads, phases=phases)
-    # Single Artist: each main image drawn by Krea 2 with a look-alike, then the artist's face put in
-    # (casting.artist_drafts, graphs.FACE_IN); the look-alike needs the artist described first
+    # Single Artist: each main image edits the photo keeping only the face; with casting.DRAWN_SHOTS, drawn by
+    # Krea 2 with a look-alike first, then the artist's face put in (graphs.FACE_IN; the look-alike needs the
+    # artist described first)
     who = ""
-    if imgs is None and any(c.get("artist_edit") and c.get("draft") for c in cast):
+    if imgs is None and any(c.get("artist_edit") for c in cast):
+        p["artist_shots"] = "photo"
+    if imgs is None and casting.DRAWN_SHOTS and any(c.get("artist_edit") and c.get("draft") for c in cast):
         if artist_description:
             who = artist_description.rstrip(".")
             who = who[0].lower() + who[1:] if who[:1].isupper() and not who[1:2].isupper() else who
