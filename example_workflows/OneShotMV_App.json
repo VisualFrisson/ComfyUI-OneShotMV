@@ -25,7 +25,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## OneShot MV: app\n\nThis workflow opens as an **app**: the settings on the right, the results in the middle. **App / Graph** at the top left shows the graph behind it.\n\nLoad a song, write a World, turn **Preview only** on and click **Run** to see every shot without rendering anything. Then turn it off and run again. The video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`, and the Studio (the OneShot MV button) shows it as it renders.\n\n**Who sings**: Crowd, or Single Artist from a description (**New artist**). For a photo, switch to Graph and un-bypass **Artist photo**. **World images**: a folder of your own images instead of a World line. **For professional use**: for paid or client work (Qwen-Image-Edit 2511 instead of Qwen-Image 2.1, and your own images are always cropped).\n\nEvery other setting is on the Director in the graph; hover any of them for more. Use music you have the rights to."
+        "## OneShot MV: app\n\nThis workflow opens as an **app**: the settings on the right, the results in the middle. **App / Graph** at the top left shows the graph behind it.\n\nLoad a song, write a World, turn **Preview only** on and click **Run** to see every shot without rendering anything. Then turn it off and run again. The video lands in `output/oneshot-mv/runs/<run>/final_<format>.mp4`, and the Studio (the OneShot MV button) shows it as it renders.\n\n**Who sings**: Crowd, or Single Artist from a description (**New artist**). For a photo, switch to Graph and un-bypass **Artist photo**. **World images**: a folder of your own images instead of a World line.\n\nEvery other setting is on the Director in the graph; hover any of them for more. Use music you have the rights to."
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -263,16 +263,6 @@
           "link": null
         },
         {
-          "label": "For professional use",
-          "localized_name": "professional",
-          "name": "professional",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "professional"
-          },
-          "link": null
-        },
-        {
           "label": "Preview only",
           "localized_name": "preview_only",
           "name": "preview_only",
@@ -429,7 +419,6 @@
         "quality",
         "auto",
         false,
-        false,
         1,
         "fixed",
         "every 2 bars",
@@ -572,13 +561,6 @@
           {
             "height": 80,
             "description": "Single artist without a photo: describe a new person"
-          }
-        ],
-        [
-          "0a5e5a1d-0b3f-4c6e-9c51-0e5a7b0a9f01:4:professional",
-          "professional",
-          {
-            "description": "For paid or client work: Qwen-Image-Edit 2511 (Apache-2.0) instead of Qwen-Image 2.1"
           }
         ],
         [

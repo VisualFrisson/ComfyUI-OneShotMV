@@ -144,8 +144,6 @@ def main() -> int:
                     help="people behind the singers; auto: only when the World is a packed spectacle")
     ap.add_argument("--models", default="auto", choices=["auto", "24gb", "full"],
                     help="24gb: the fp8 model set; full: the bf16 set (48 GB+ GPUs); auto picks by GPU memory")
-    ap.add_argument("--professional", action="store_true",
-                    help="for paid or client work: world images are cropped, never extended (no Qwen-Image 2.1)")
     ap.add_argument("--broll", type=float, default=0.125, help="share of shots that become cutaways, 0 to 0.5")
     ap.add_argument("--qc", type=int, default=2,
                     help="take-check rounds, 0 to 3 (0 = off, and no cutaways or vision check)")
@@ -202,7 +200,7 @@ def main() -> int:
                      ("seconds", a.seconds), ("start", a.start), ("format", a.format),
                      ("quality", a.quality), ("seed", a.seed), ("audio_fx", a.fx), ("cuts_low", a.cuts_low),
                      ("cuts_medium", a.cuts_medium), ("cuts_high", a.cuts_high), ("cast_order", a.cast_order),
-                     ("crowd", a.crowd), ("models", a.models), ("professional", a.professional),
+                     ("crowd", a.crowd), ("models", a.models),
                      ("broll_share", a.broll), ("qc_retries", a.qc),
                      ("run_name", a.run_name), ("preview_only", a.preview)):
             wf.set_input(d, k, v)

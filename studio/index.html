@@ -962,8 +962,6 @@ async function viewBrief(){
       <h2 class="side-h" id="modelsh">Models</h2>
       <div class="seg" role="group" aria-label="Model set" id="mset"></div>
       <p class="tiny" id="mnote" style="margin:8px 0 0"></p>
-      <label class="check"><input type="checkbox" id="mpro">For professional use</label>
-      <p class="tiny" id="mpronote" style="margin:4px 0 0 27px">Qwen-Image-Edit 2511 (Apache-2.0) will be used instead of Qwen-Image 2.1, whose licence is reported to be research-only. Your own images are cropped, never extended.</p>
       <div class="mlist" id="mlist"></div>
     </section>
     <section class="card">
@@ -1047,10 +1045,6 @@ async function viewBrief(){
     $("#mset").innerHTML = [["24gb", "24 GB", "fp8, 24 GB+ GPU"], ["full", "Full", "bf16, 48 GB+ GPU"]].map(([k, n, d]) =>
       `<button type="button" class="opt" data-m="${k}" aria-pressed="${cur === k}">${n}<small>${d}</small></button>`).join("");
     $("#mset").querySelectorAll(".opt").forEach(el => el.onclick = () => { b.models = el.dataset.m; saveBrief(); drawModels(); loadSetup(); });
-    const pro = $("#mpro");
-    pro.checked = !!b.professional;
-    pro.onchange = () => { b.professional = pro.checked; saveBrief(); drawModels(); drawFit(); loadSetup(); refreshEstimate();
-      const al = $("#alicence"); if (al) al.classList.toggle("hide", pro.checked); };
     if (!r){ $("#mnote").textContent = "Checking your GPU…"; $("#mlist").innerHTML = ""; return; }
     const gpu = S.sys && S.sys.gpu ? gpuName(S.sys.gpu) + ", " : "";
     let t = r.vram_gb ? `${gpu}${Math.round(r.vram_gb)} GB${r.reserved_gb >= 1 ? ` usable (${Math.round(r.reserved_gb)} GB reserved)` : ""}. ` : "";
@@ -1094,7 +1088,7 @@ async function viewBrief(){
       <span class="tiny">${plan.length ? "Nothing can start until then." : "You can still preview the plan; the render needs these first."} Restart ComfyUI after installing, then reload this page.</span></div>`;
   };
   let setupN = 0;  // the newest check wins when the World or cast is switched quickly
-  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" + (worldOf(b).image_fit === "extend" ? "&extend=1" : "") : ""}${b.professional ? "&professional=1" : ""}`)
+  const loadSetup = (n = ++setupN) => api(`models?models=${encodeURIComponent(b.models || "auto")}&preset=${encodeURIComponent(b.preset || "quality")}&format=${encodeURIComponent(b.format || "16:9")}&cast=${encodeURIComponent(castOf(b).cast)}${b.world_mode === "images" ? "&images=1" + (worldOf(b).image_fit === "extend" ? "&extend=1" : "") : ""}`)
     .then(r => { if (n !== setupN) return; S.models = r; if ($("#mset")) drawModels(); }).catch(() => {});
   drawModels(); loadSetup();
 
@@ -1304,12 +1298,10 @@ function drawCast(){
     drawCast(); const f = $(`#amode [data-m="${m}"]`); if (f) f.focus();
   });
   const pane = $("#apane");
-  // Qwen-Image 2.1's licence, said where Single Artist is picked (For professional use swaps the editor)
-  const lic = `<p class="note${b.professional ? " hide" : ""}" id="alicence">Single Artist's images are made with Qwen-Image 2.1, whose licence is reported to be research-only. For paid or client work, tick For professional use on the Models card.</p>`;
   if (!photo){
     pane.innerHTML = `<label for="adesc" style="display:block;margin:0 0 8px;font-size:13px;color:var(--muted)">Describe the artist: their age and look</label>
       <textarea id="adesc" rows="3" placeholder="A singer in her late twenties with a shaved head and gold hoops"></textarea>
-      <p class="note">The tool invents this person and keeps them close to the same in every shot. <b>Experimental:</b> the likeness varies from shot to shot.</p>${lic}`;
+      <p class="note">The tool invents this person and keeps them close to the same in every shot. <b>Experimental:</b> the likeness varies from shot to shot.</p>`;
     const ta = $("#adesc"); ta.value = b.artist_description || "";
     ta.oninput = () => { b.artist_description = ta.value; saveBrief(); refreshEstimate(); };
     return;
@@ -1326,7 +1318,7 @@ function drawCast(){
     + `<input type="file" id="afile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" class="hide">
       <p class="note"><b>The best photo:</b> one sharp photo of just them, facing the camera with the head straight, in soft even light (facing a window works well), with the whole face showing: no sunglasses, hat brim or hair across it. Head and shoulders is ideal. Makeup and jewellery in the photo tend to carry over into the video.</p>
       <p class="note">Use only a photo of yourself or of someone who agreed to it.</p>
-      <p class="note"><b>Experimental:</b> the likeness varies from shot to shot, and the photo's clothes or jewellery can carry over. Generate images and review lets you fix any that miss.</p>${lic}`;
+      <p class="note"><b>Experimental:</b> the likeness varies from shot to shot, and the photo's clothes or jewellery can carry over. Generate images and review lets you fix any that miss.</p>`;
   const zone = $("#azone"), fi = $("#afile"), pick = () => fi.click();
   if (img){
     $("#areplace").onclick = pick;
@@ -1365,7 +1357,7 @@ const cleanPath = v => String(v || "").trim().replace(/^["']+|["']+$/g, "").trim
 function worldOf(b){
   return {world_mode: b.world_mode === "images" ? "images" : "describe", world_images: cleanPath(b.world_images),
           image_order: b.image_order === "random order" ? "random order" : "in order",
-          image_fit: b.image_fit === "extend" && !b.professional ? "extend" : "crop"};  // professional crops
+          image_fit: b.image_fit === "extend" ? "extend" : "crop"};
 }
 // the World note and the rights line follow both the World and who sings
 function drawNotes(){
@@ -1402,7 +1394,7 @@ function drawWorld(){
 // images that aren't the video's shape: cropped around the face (the default), or extended by Qwen-Image 2.1
 function drawFit(){
   const box = $("#wfit"); if (!box) return;
-  const pro = !!S.brief.professional, cur = worldOf(S.brief).image_fit;
+  const pro = false, cur = worldOf(S.brief).image_fit;
   box.innerHTML = [["crop", "Crop"], ["extend", "Extend"]].map(([k, n]) =>
     `<button type="button" class="opt" data-f="${k}" aria-pressed="${cur === k}"${k === "extend" && pro ? " disabled" : ""}>${n}</button>`).join("");
   $("#wfitnote").textContent = pro ? "Cropped around the face: Extend is off for professional use, since it draws with Qwen-Image 2.1."
@@ -1704,7 +1696,7 @@ async function viewRender(run){
 }
 // Images first is for drawn images: a described World's stills, or your own images when Extend draws their
 // missing sides (Qwen-Image 2.1; For professional use crops). Your own images only cropped are the stills.
-const reviewable = (im, brief) => !im || !!(brief && brief.image_fit === "extend" && !brief.professional);
+const reviewable = (im, brief) => !im || !!(brief && brief.image_fit === "extend");
 // Restart from Rendering (a made video): make it again from the same plan, straight or images first
 function restartRender(r){
   const brief = store.get("briefs", {})[r.run] || (r.form && r.form.song ? r.form : null);

@@ -445,8 +445,7 @@ def _director_graph(b: dict) -> dict:
          "cast": "single artist" if b.get("cast") == "single artist" else "crowd",
          "world_images": _images_of(b), "image_order": "random order" if b.get("image_order") == "random order"
          else "in order", "image_fit": "extend" if b.get("image_fit") == "extend" else "crop",
-         "review_images": bool(b.get("review")) and bool(b.get("render")),
-         "professional": bool(b.get("professional"))}
+         "review_images": bool(b.get("review")) and bool(b.get("render"))}
     if d["world_images"]:  # the images are the World and the cast
         d["world"], d["cast"] = "", "crowd"
     d.update({k: b[k] for k in ("cuts_low", "cuts_medium", "cuts_high") if b.get(k)})
@@ -465,7 +464,7 @@ def _director_graph(b: dict) -> dict:
 def _extends(b: dict) -> bool:
     """Whether a brief's World images are extended: Extend chosen, and not For professional use (Extend
     uses Qwen-Image 2.1, reported to be research-only, so professional runs crop)."""
-    return b.get("image_fit") == "extend" and not b.get("professional")
+    return b.get("image_fit") == "extend"
 
 
 def _images_of(b: dict) -> str:
@@ -513,7 +512,8 @@ def _restart_needed() -> list:
         import nodes as comfy_nodes  # type: ignore
         cls = comfy_nodes.NODE_CLASS_MAPPINGS.get("FVDirector")
         it = cls.INPUT_TYPES() if cls is not None else {}
-        if cls is not None and ("professional" not in (it.get("required") or {})
+        # a node from before 1.0.0: no review_images, or still the For professional use input
+        if cls is not None and ("professional" in (it.get("required") or {})
                                 or "review_images" not in (it.get("optional") or {})):
             return [RESTART]
     except Exception:
@@ -1814,7 +1814,7 @@ async def _api(request: web.Request, route: str) -> web.Response:
         # what this ComfyUI needs before it can plan or render (setup_check), as soon as the Brief opens
         def models():
             rep = _fv("graphs").models_report()
-            sc, pro = _fv("setup_check"), bool(q.get("professional"))
+            sc, pro = _fv("setup_check"), False  # Qwen-Image 2.1 for every edit since 1.0.0
             how = dict(artist=q.get("cast") == "single artist", images=bool(q.get("images")),
                        extend=bool(q.get("extend")) and not pro)
             try:
