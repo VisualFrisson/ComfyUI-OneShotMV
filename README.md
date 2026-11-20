@@ -2,7 +2,7 @@
 
 Give OneShot MV a song and one line about the world it lives in. It listens to the song, invents a cast for that world, plans every shot around the song's energy, and renders a lip-synced music video where a different invented person sings each line, or one singer sings them all (Single Artist). Then it edits the whole video for you: every shot cut to the music, audio-reactive FX on the drums, and a finished MP4 at the end, with no timeline work. LTX-2.3 is the core video model: every clip in the video is made by LTX-2.3. Everything runs locally in ComfyUI on open-weights models.
 
-![Sixteen invented singers from six Worlds: the gladiator games in Rome, a 1980s Florida retirement community, the 1813 London ball season, an 1880 Wild West town, a 1983 aerobics class and the night shift](media/cast_grid.jpg)
+https://github.com/user-attachments/assets/cec70d2e-2f26-4e48-86d6-dc7a579bf019
 
 > Made for Comfy's Open Source Higgsfield challenge. Every face in this repo is invented, and so is
 > everyone in the videos, unless you give Single Artist a photo of yourself or of someone who agreed
